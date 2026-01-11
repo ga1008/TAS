@@ -1,5 +1,7 @@
 <script>
-    // --- 全局状态 ---
+    // ===========================
+    // 1. 全局状态与基础逻辑
+    // ===========================
     let currentFileType = ''; // 'exam', 'std', 'direct_exam', 'direct_std'
     let selectedFileId = null;
     let selectedFileName = '';
@@ -17,64 +19,117 @@
         if (type === 'logic') {
             fLogic.classList.remove('hidden');
             fDirect.classList.add('hidden');
-
-            // Tab 样式激活
             tLogic.classList.add('text-indigo-600', 'border-indigo-600', 'bg-white');
             tLogic.classList.remove('text-slate-400', 'hover:bg-white');
             tDirect.classList.remove('text-sky-600', 'border-sky-600', 'bg-white');
             tDirect.classList.add('text-slate-400');
-
-            // Banner 样式
             bannerContainer.className = "bg-gradient-to-r from-indigo-600 to-purple-600 p-6 md:p-8 text-white transition-all duration-500 relative overflow-hidden";
             noteTitle.innerHTML = `<span class="bg-white/20 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 border border-white/30">1</span> 配置逻辑生成核心 <span class="ml-3 text-[10px] bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full font-bold shadow-sm">RECOMMENDED</span>`;
             noteContent.innerHTML = `<p class="mb-3 opacity-90">AI 阅读试卷后编写 Python 脚本，在本地运行批改。速度极快且免费。</p><div class="flex gap-4 text-xs"><span class="bg-white/10 px-2 py-1 rounded border border-white/10"><i class="fas fa-check text-emerald-300 mr-1"></i> 速度极快</span><span class="bg-white/10 px-2 py-1 rounded border border-white/10"><i class="fas fa-check text-emerald-300 mr-1"></i> 评分统一</span></div>`;
-
         } else {
             fLogic.classList.add('hidden');
             fDirect.classList.remove('hidden');
-
-            // Tab 样式激活
             tDirect.classList.add('text-sky-600', 'border-sky-600', 'bg-white');
             tDirect.classList.remove('text-slate-400');
             tLogic.classList.remove('text-indigo-600', 'border-indigo-600', 'bg-white');
             tLogic.classList.add('text-slate-400', 'hover:bg-white');
-
-            // Banner 样式
             bannerContainer.className = "bg-gradient-to-r from-sky-500 to-blue-600 p-6 md:p-8 text-white transition-all duration-500 relative overflow-hidden";
             noteTitle.innerHTML = `<span class="bg-white/20 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 border border-white/30">2</span> 配置 Direct AI 多模态核心`;
             noteContent.innerHTML = `<p class="mb-3 opacity-90">AI 直接批改，支持视频、图片和文档。消耗 Token，成本较高。</p><div class="flex gap-4 text-xs"><span class="bg-white/10 px-2 py-1 rounded border border-white/10"><i class="fas fa-video text-sky-200 mr-1"></i> 支持多模态</span><span class="bg-white/10 px-2 py-1 rounded border border-white/10"><i class="fas fa-exclamation-triangle text-amber-300 mr-1"></i> 成本较高</span></div>`;
         }
     }
 
+    // ===========================
+    // 2. UI 更新与交互 (修复版)
+    // ===========================
     function updateUI(type, name) {
-        const idMap = {
-            'exam': ['exam-display', 'exam-card'],
-            'std': ['std-display', 'std-card'],
-            'direct_exam': ['direct_exam-display', 'direct_exam-card'],
-            'direct_std': ['direct_std-display', 'direct_std-card']
-        };
+        const isDirect = type.startsWith('direct');
+        const themeColor = isDirect ? 'sky' : 'indigo';
 
-        const [displayId, cardId] = idMap[type] || [];
-        const container = document.getElementById(displayId);
-        const card = document.getElementById(cardId);
-        if (!container || !card) return;
+        // 智能映射 ID
+        const dropZoneId = type.includes('exam') && !isDirect ? 'drop-exam' :
+                           type.includes('std') && !isDirect ? 'drop-std' :
+                           `drop-${type}`;
 
-        const colorClass = type.startsWith('direct') ? 'text-sky-600' : (type === 'std' ? 'text-purple-600' : 'text-indigo-600');
-        const bgClass = type.startsWith('direct') ? 'bg-sky-50 border-sky-200' : (type === 'std' ? 'bg-purple-50 border-purple-200' : 'bg-indigo-50 border-indigo-200');
+        const displayId = type.includes('exam') && !isDirect ? 'exam-display' :
+                          type.includes('std') && !isDirect ? 'std-display' :
+                          `${type}-display`;
 
-        container.innerHTML = `
-            <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center ${colorClass}">
-                <i class="fas fa-check-circle text-lg"></i>
+        const dropZone = document.getElementById(dropZoneId);
+        const displayEl = document.getElementById(displayId);
+
+        if (!dropZone || !displayEl) return;
+
+        // 切换样式：虚线 -> 实线，背景高亮
+        dropZone.classList.remove('border-dashed', 'border-slate-200', 'bg-slate-50/50');
+        dropZone.classList.add('border-solid', `border-${themeColor}-400`, `bg-${themeColor}-50/30`);
+
+        // 渲染选中状态
+        displayEl.innerHTML = `
+            <div class="w-12 h-12 rounded-full bg-white border border-${themeColor}-200 flex items-center justify-center mb-2 shadow-sm animate-bounce-in">
+                <i class="fas fa-check text-xl text-emerald-500"></i>
             </div>
-            <div>
-                <p class="text-xs font-bold ${colorClass}">已选择文件</p>
-                <p class="text-[10px] text-slate-500 break-all">${name}</p>
+            <p class="text-xs font-bold text-slate-700 break-all px-2 line-clamp-2 text-center">${escapeJs(name)}</p>
+            <div class="mt-2 flex gap-2">
+                <span class="text-[10px] text-${themeColor}-500 bg-white px-2 py-0.5 rounded-full border border-${themeColor}-100 font-bold shadow-sm">已选择</span>
             </div>
+            <button type="button" onclick="event.stopPropagation(); clearSelection('${type}')" class="absolute top-2 right-2 text-slate-400 hover:text-rose-500 p-1 transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
         `;
-        card.className = `border border-dashed rounded-xl p-5 flex items-center justify-between gap-4 ${bgClass}`;
     }
 
-    // --- 文件模态框 ---
+    function clearSelection(type) {
+        const idMap = {
+            'exam': 'exam_file_id', 'std': 'standard_file_id',
+            'direct_exam': 'direct_exam_file_id', 'direct_std': 'direct_std_file_id'
+        };
+
+        if(document.getElementById(idMap[type])) {
+            document.getElementById(idMap[type]).value = '';
+        }
+
+        const isDirect = type.startsWith('direct');
+        const dropZoneId = type.includes('exam') && !isDirect ? 'drop-exam' :
+                           type.includes('std') && !isDirect ? 'drop-std' : `drop-${type}`;
+        const displayId = type.includes('exam') && !isDirect ? 'exam-display' :
+                          type.includes('std') && !isDirect ? 'std-display' : `${type}-display`;
+
+        const dropZone = document.getElementById(dropZoneId);
+        const displayEl = document.getElementById(displayId);
+
+        // 恢复样式
+        dropZone.classList.add('border-dashed', 'border-slate-200', 'bg-slate-50/50');
+        dropZone.classList.remove('border-solid', `border-sky-400`, `border-indigo-400`, `bg-sky-50/30`, `bg-indigo-50/30`);
+
+        // 恢复默认内容
+        let icon = 'fa-file-alt';
+        let text = '点击选择文件';
+        let sub = '';
+        let color = isDirect ? 'sky' : 'indigo';
+
+        if (type.includes('exam')) {
+            icon = isDirect ? 'fa-file-invoice' : 'fa-file-code';
+            text = '点击选择试卷';
+            sub = isDirect ? '支持多模态文档解析' : 'AI 将编写 Python 脚本';
+        } else {
+            icon = isDirect ? 'fa-clipboard-list' : 'fa-list-ol';
+            text = '点击选择评分标准';
+            sub = isDirect ? 'AI 自动提取关键得分点' : '';
+        }
+
+        displayEl.innerHTML = `
+            <div class="w-12 h-12 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center mb-3 group-hover:shadow-md transition-all">
+                <i class="fas ${icon} text-xl text-slate-300 group-hover:text-${color}-500 transition-colors"></i>
+            </div>
+            <p class="text-xs font-bold text-slate-600 mb-1">${text}</p>
+            <p class="text-[10px] text-slate-400">${sub}</p>
+        `;
+    }
+
+    // ===========================
+    // 3. 文件选择模态框
+    // ===========================
     function openFileModal(type) {
         currentFileType = type;
         document.getElementById('fileModal').classList.remove('hidden');
@@ -93,7 +148,7 @@
         .then(res => res.json())
         .then(files => {
             if(files.length === 0) {
-                list.innerHTML = `<div class="text-center text-slate-400 py-10 flex flex-col items-center"><i class="fas fa-folder-open text-3xl mb-2 opacity-30"></i><p>无相关文件</p></div>`;
+                list.innerHTML = `<div class="text-center text-slate-400 py-10 flex flex-col items-center"><i class="fas fa-folder-open text-3xl mb-2 opacity-30"></i><p class="text-xs">无相关文件</p></div>`;
                 return;
             }
             list.innerHTML = files.map(f => `
@@ -105,27 +160,33 @@
                         </div>
                         <div class="truncate">
                             <div class="font-bold text-slate-700 text-sm truncate" title="${f.original_name}">${f.original_name}</div>
-                            <div class="text-xs text-slate-400 font-mono">${(f.file_size/1024).toFixed(1)} KB</div>
+                            <div class="text-xs text-slate-400 font-mono flex gap-2">
+                                <span>${(f.file_size/1024).toFixed(1)} KB</span>
+                                <span class="text-slate-300">|</span>
+                                <span>${f.created_at ? f.created_at.substring(0,10) : ''}</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="check-icon hidden text-indigo-600 text-lg"><i class="fas fa-check-circle"></i></div>
+                    <div class="check-icon hidden text-indigo-600 text-lg animate-scale-in"><i class="fas fa-check-circle"></i></div>
                 </div>
             `).join('');
         });
     }
 
     function getFileIcon(name) {
+        name = name.toLowerCase();
         if(name.endsWith('.pdf')) return 'fa-file-pdf';
         if(name.endsWith('.doc') || name.endsWith('.docx')) return 'fa-file-word';
+        if(name.endsWith('.jpg') || name.endsWith('.png')) return 'fa-file-image';
         return 'fa-file-alt';
     }
 
     function selectFileItem(el, id, name) {
         document.querySelectorAll('.file-item').forEach(i => {
-            i.classList.remove('bg-indigo-50', 'border-indigo-200');
+            i.classList.remove('bg-indigo-50', 'border-indigo-200', 'ring-1', 'ring-indigo-200');
             i.querySelector('.check-icon').classList.add('hidden');
         });
-        el.classList.add('bg-indigo-50', 'border-indigo-200');
+        el.classList.add('bg-indigo-50', 'border-indigo-200', 'ring-1', 'ring-indigo-200');
         el.querySelector('.check-icon').classList.remove('hidden');
         selectedFileId = id;
         selectedFileName = name;
@@ -142,43 +203,73 @@
         };
 
         const hiddenId = idMap[currentFileType];
-        document.getElementById(hiddenId).value = selectedFileId;
-
-        updateUI(currentFileType, selectedFileName);
+        if(document.getElementById(hiddenId)) {
+            document.getElementById(hiddenId).value = selectedFileId;
+            updateUI(currentFileType, selectedFileName);
+        }
         closeFileModal();
     }
 
-    function escapeJs(str) { return str.replace(/'/g, "\\'"); }
+    function escapeJs(str) {
+        if(!str) return '';
+        return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
 
-    // --- 表单提交与轮询 (保持原有逻辑) ---
-    // (逻辑保持不变，确保 ID 匹配即可)
-    // 逻辑表单提交
+    // ===========================
+    // 4. 删除核心逻辑 (针对失败任务)
+    // ===========================
+    function deleteGrader(id) {
+        if(!confirm('确定要删除这个生成失败的任务记录吗？')) return;
+
+        fetch('/api/delete_grader', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.msg === '已移入回收站' || data.msg === '已移除') {
+                const card = document.getElementById('task-card-' + id);
+                if(card) {
+                    card.style.opacity = '0';
+                    setTimeout(() => card.remove(), 300);
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                alert(data.msg);
+            }
+        });
+    }
+
+    // ===========================
+    // 5. 表单提交与任务轮询
+    // ===========================
     document.getElementById('createForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const btn = document.getElementById('btnSubmit');
-        // ... (原有校验与 fetch 逻辑)
-        // 简写示例：
         const formData = new FormData(this);
         btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> 提交中...';
+        btn.disabled = true;
         fetch('/api/create_grader_task', { method: 'POST', body: formData })
             .then(res => res.json())
             .then(data => {
                  if(data.task_id) window.location.href = '/ai_generator';
-                 else { alert(data.msg); btn.innerHTML = '重试'; }
+                 else { alert(data.msg); btn.innerHTML = '重试'; btn.disabled = false; }
             });
     });
 
-    // 直连表单提交
     document.getElementById('createDirectForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const btn = document.getElementById('btnDirectSubmit');
         const formData = new FormData(this);
         btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> 解析中...';
+        btn.disabled = true;
         fetch('/api/create_direct_grader', { method: 'POST', body: formData })
             .then(res => res.json())
             .then(data => {
                 if(data.status === 'success') window.location.reload();
-                else { alert(data.msg); btn.innerHTML = '重试'; }
+                else { alert(data.msg); btn.innerHTML = '重试'; btn.disabled = false; }
             });
     });
 
@@ -191,36 +282,76 @@
             pendingCards.forEach(card => {
                 const tId = parseInt(card.dataset.taskId);
                 const task = allTasks.find(t => t.id === tId);
-                if(task && (task.status === 'success' || (task.status === 'failed' && !card.innerHTML.includes('失败')))) refresh = true;
+                // 如果任务成功，或者任务失败且不是当前显示的失败卡片(可能是刚失败的)，刷新
+                if(task && (task.status === 'success')) refresh = true;
                 if(task) card.querySelector('.task-log').textContent = task.log_info;
             });
             if(refresh) window.location.reload();
         });
     }, 2000);
 
-    // 回收站逻辑
+    // ===========================
+    // 6. 回收站逻辑 (之前遗漏的部分)
+    // ===========================
     const trashModal = document.getElementById('trashModal');
     const trashContent = document.getElementById('trashContent');
+
     function openTrash() {
-        trashModal.classList.remove('hidden');
-        setTimeout(() => trashContent.classList.remove('translate-x-full'), 10);
-        fetchTrash();
+        if(trashModal && trashContent) {
+            trashModal.classList.remove('hidden');
+            setTimeout(() => trashContent.classList.remove('translate-x-full'), 10);
+            fetchTrash();
+        }
     }
+
     function closeTrash() {
-        trashContent.classList.add('translate-x-full');
-        setTimeout(() => trashModal.classList.add('hidden'), 300);
+        if(trashModal && trashContent) {
+            trashContent.classList.add('translate-x-full');
+            setTimeout(() => trashModal.classList.add('hidden'), 300);
+        }
     }
+
     function fetchTrash() {
+        const trashList = document.getElementById('trashList');
+        trashList.innerHTML = '<div class="text-center py-4"><i class="fas fa-circle-notch fa-spin text-indigo-500"></i></div>';
+
         fetch('/api/get_recycled_graders').then(r=>r.json()).then(items => {
-            document.getElementById('trashList').innerHTML = items.length ? items.map(i => `
-                <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl flex justify-between items-center">
-                    <span class="font-bold text-slate-700 truncate mr-2">${i.original_name}</span>
-                    <button onclick="restore(${i.id})" class="text-xs bg-emerald-100 text-emerald-600 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-200">恢复</button>
-                </div>`).join('') : '<p class="text-center text-slate-400">空空如也</p>';
+            trashList.innerHTML = items.length ? items.map(i => `
+                <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl flex justify-between items-center group hover:bg-white hover:shadow-sm transition-all">
+                    <div class="min-w-0">
+                        <div class="font-bold text-slate-700 truncate text-sm">${escapeJs(i.original_name)}</div>
+                        <div class="text-[10px] text-slate-400 font-mono mt-1">${i.grader_id}</div>
+                    </div>
+                    <button onclick="restore(${i.id})" class="text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 hover:text-emerald-700 transition transform active:scale-95 ml-3 shrink-0">
+                        <i class="fas fa-trash-restore mr-1"></i> 恢复
+                    </button>
+                </div>`).join('') : '<div class="flex flex-col items-center justify-center py-12 text-slate-300"><i class="fas fa-trash-alt text-3xl mb-2 opacity-30"></i><p class="text-xs">回收站是空的</p></div>';
         });
     }
+
     function restore(id) {
-        if(confirm('恢复此核心？')) fetch('/api/restore_grader', { method:'POST', body:JSON.stringify({id}), headers:{'Content-Type':'application/json'} })
-        .then(r=>r.json()).then(()=> window.location.reload());
+        if(!confirm('确定要恢复此核心吗？')) return;
+        fetch('/api/restore_grader', {
+            method:'POST',
+            body:JSON.stringify({id}),
+            headers:{'Content-Type':'application/json'}
+        })
+        .then(r=>r.json())
+        .then(data => {
+            if(data.msg === '恢复成功') window.location.reload();
+            else alert(data.msg);
+        });
     }
+
+    // ===========================
+    // 7. 动画样式注入
+    // ===========================
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes bounceIn { 0% { transform: scale(0.3); opacity: 0; } 50% { transform: scale(1.05); } 70% { transform: scale(0.9); } 100% { transform: scale(1); opacity: 1; } }
+        .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        @keyframes scaleIn { from { transform: scale(0); } to { transform: scale(1); } }
+        .animate-scale-in { animation: scaleIn 0.2s ease-out; }
+    `;
+    document.head.appendChild(style);
 </script>

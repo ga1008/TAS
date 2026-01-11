@@ -26,6 +26,7 @@ from config import CREATOR_PROMPT, Config, BASE_CREATOR_PROMPT, STRICT_MODE_PROM
 from grading_core.direct_grader_template import DIRECT_GRADER_TEMPLATE
 from grading_core.factory import GraderFactory
 from ai_utils.volc_file_manager import VolcFileManager
+from utils.word_exporter import ExamWordExporter
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -295,22 +296,43 @@ def create_text_asset(content, title, user_id, ext=".md"):
 
 
 def extract_title_and_content(ai_text, doc_type=None):
+    """
+    增强版解析：从 AI 返回的文本中提取标题和正文。
+    支持纯文本，也支持 JSON 格式，自动去除 Markdown 代码块标记。
+    """
     if not ai_text:
         return generate_title_from_content("", doc_type), ""
 
     cleaned = ai_text.strip()
-    if cleaned.startswith("{") and cleaned.endswith("}"):
-        try:
-            payload = json.loads(cleaned)
+
+    # 1. 去除可能存在的 markdown 代码块标记
+    # 匹配 ```json ... ``` 或 ``` ... ```
+    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned, re.DOTALL)
+    if json_match:
+        cleaned = json_match.group(1)
+
+    # 2. 尝试解析 JSON
+    try:
+        # 预处理：有时候 AI 会在 JSON 外面加闲聊，尝试寻找 { 开头和 } 结尾
+        start = cleaned.find('{')
+        end = cleaned.rfind('}')
+        if start != -1 and end != -1:
+            potential_json = cleaned[start:end + 1]
+            payload = json.loads(potential_json)
+
             title = payload.get("title") or payload.get("name")
             content = payload.get("content") or payload.get("body")
-            if content:
-                return generate_title_from_content(content, doc_type) if not title else sanitize_filename(title), content
-        except Exception:
-            pass
 
-    title = generate_title_from_content(cleaned, doc_type)
-    return title, cleaned
+            # 如果内容为空，可能解析失败，回退
+            if content:
+                final_title = sanitize_filename(title) if title else generate_title_from_content(content, doc_type)
+                return final_title, content
+    except Exception as e:
+        print(f"[Extract JSON Error] {e}")
+
+    # 3. 如果不是 JSON，则视为纯文本
+    # 尝试提取首行作为标题
+    return generate_title_from_content(cleaned, doc_type), cleaned
 
 
 def is_content_garbage(text):
@@ -479,23 +501,31 @@ def smart_parse_file_content(file_id, doc_type=None):
     # 1. 命中缓存
     if record.get('parsed_content'):
         print(f"[SmartParse] Cache hit for file {file_id}")
-        return True, record['parsed_content']
+        return True, record['parsed_content'], False
 
     physical_path = record['physical_path']
     ext = os.path.splitext(physical_path)[1].lower()
 
-    print(f"[SmartParse] Parsing file {file_id} via AI Vision...")
+    print(f"[SmartParse] Parsing file {file_id} ...")
 
     # === 增强 System Prompt ===
-    system_prompt = """
-    你是一个文档结构化解析专家。请阅读用户上传的文件，提取其中的全部核心内容。
-    【重要执行规则】
-    1. 如果是试卷，提取所有题目、选项和分值。
-    2. 如果是评分标准，提取评分点和分数。
-    3. 输出格式：Markdown。
-    4. 严禁输出闲聊、寒暄或解释性文字。
-    5. 【关键】：如果文件损坏、无法读取或不是有效文档，请只输出唯一的错误标记：[PARSE_ERROR]
-    """
+    doc_label = "试卷" if doc_type == "exam" else "评分标准"
+    system_prompt = f"""
+        你是一个专业的教学资料结构化专家。请读取用户上传的【{doc_label}】文件，将其整理为清晰、规范的 Markdown 格式。
+
+        【核心原则】
+        1. **完整性**：严禁遗漏任何细节！所有的题目描述、选项、分值、评分细则的扣分点、逻辑判断条件必须全部保留。
+        2. **结构化**：
+           - 使用一级标题 `#` 表示文档标题。
+           - 使用二级标题 `##` 区分大题或主要模块（如“一、选择题”、“二、编程题”）。
+           - 对于试题，请清晰标记题号（如 `**1.**`）。
+           - 对于评分标准，请使用列表展示每一条得分点和扣分点。
+        3. **易读性**：
+           - 代码段请使用 ```code ... ``` 包裹。
+           - 关键分值请使用加粗（如 **(5分)**）。
+        4. **纯净输出**：直接输出 Markdown 内容，不要包含 "好的，这是解析结果" 等废话。
+        5. **异常处理**：如果文件无法识别或损坏，仅输出：[PARSE_ERROR]
+        """
 
     parsed_text = None
     parse_success = False
@@ -512,14 +542,12 @@ def smart_parse_file_content(file_id, doc_type=None):
         if is_media and vision_config and vision_config.get('api_key'):
             uploader = VolcFileManager(api_key=vision_config['api_key'], base_url=vision_config.get('base_url'))
             remote_file_id = uploader.upload_file(physical_path)
-
             if remote_file_id:
                 messages = [{
                     "role": "user",
                     "content": "请解析这份文档的全部内容。如果无法解析，请返回 [PARSE_ERROR]",
                     "file_ids": [remote_file_id]
                 }]
-
                 parsed_text = asyncio.run(call_ai_platform_chat(
                     system_prompt=system_prompt,
                     messages=messages,
@@ -528,11 +556,8 @@ def smart_parse_file_content(file_id, doc_type=None):
 
         # --- 分支 B: 调用 Standard 模型 (处理文本/代码文件) ---
         elif ext in ['.txt', '.py', '.java', '.c', '.md', '.json', '.html', '.js']:
-            parse_success, raw_text = extract_text_from_file(physical_path)
-            if not parse_success:
-                return False, raw_text  # 直接返回错误信息
-
-            if raw_text and len(raw_text) < 50000:  # 长度检查
+            parse_success_extract, raw_text = extract_text_from_file(physical_path)
+            if parse_success_extract and len(raw_text) < 50000:
                 standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
                 if standard_config:
                     parsed_text = asyncio.run(call_ai_platform_chat(
@@ -542,21 +567,10 @@ def smart_parse_file_content(file_id, doc_type=None):
                     ))
 
         # === 结果校验逻辑 ===
-        failure_keywords = [
-            "[PARSE_ERROR]",
-            "无法直接解析",
-            "无法解析其内容",
-            "provide the correct file",
-            "I cannot parse",
-            "不是有效的 Word 文档",
-            "openxmlformats"
-        ]
-
+        failure_keywords = ["[PARSE_ERROR]", "无法直接解析", "provide the correct file"]
         if parsed_text:
             is_failure = any(k in parsed_text for k in failure_keywords)
-            # 如果 AI 返回内容极短且包含道歉词，视为失败
             if is_failure or (len(parsed_text) < 50 and "无法" in parsed_text):
-                print(f"[SmartParse] AI Parsing Failed or Refused: {parsed_text[:100]}...")
                 parse_success = False
             else:
                 parse_success = True
@@ -668,7 +682,7 @@ def ai_generation_worker(task_id, exam_text, standard_text, strictness, extra_de
             response = httpx.post(
                 app.config['AI_ASSISTANT_CHAT_ENDPOINT'],
                 json=payload,
-                timeout=300.0
+                timeout=600.0
             )
         except httpx.ConnectError:
             raise Exception("无法连接到 AI 助手服务，请检查 ai_assistant.py 是否已启动 (端口9011)")
@@ -756,6 +770,50 @@ def auth_middleware():
     if not g.user:
         return redirect(url_for('login'))
     return None
+
+
+@app.route('/export_page/<int:file_id>')
+def export_page(file_id):
+    if not g.user: return redirect(url_for('login'))
+
+    record = db.get_file_by_id(file_id)
+    if not record: return "文件不存在", 404
+
+    # 尝试智能提取课程名 (如果原来的标题里有)
+    metadata = {"course_name": "", "class_name": ""}
+    if record['original_name']:
+        metadata['course_name'] = record['original_name'].replace('.txt', '').replace('.md', '')
+
+    return render_template('export.html', file=record, content=record.get('parsed_content', ''), metadata=metadata,
+                           user=g.user)
+
+
+@app.route('/api/export_word', methods=['POST'])
+def api_export_word():
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json
+    file_id = data.get('file_id')
+    template = data.get('template')
+
+    record = db.get_file_by_id(file_id)
+    if not record: return jsonify({"msg": "文件不存在"}), 404
+
+    content = record.get('parsed_content', '')
+    if not content: return jsonify({"msg": "文件内容为空，无法导出"}), 400
+
+    # 准备导出路径
+    filename = f"export_{uuid.uuid4().hex}.docx"
+    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+    try:
+        exporter = ExamWordExporter(template)
+        exporter.generate_guangwai_exam(content, data, save_path)
+
+        return send_file(save_path, as_attachment=True, download_name=f"{data.get('course_name', 'exam')}.docx")
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"msg": f"导出失败: {str(e)}"}), 500
 
 
 @app.route('/intro')
@@ -911,7 +969,11 @@ def ai_generator_page():
     for sid, sname in strategies:
         active_ids.add(sid)
         task = db.get_task_by_grader_id(sid)
-        is_owner = (task and task.get('creator_id') == g.user['id'])
+        # 只有 Admin 或者 创建者本人 才是 is_owner
+        is_owner = False
+        if task and task.get('creator_id') == g.user['id']:
+            is_owner = True
+
         creator_name = task.get('creator_name', 'System') if task else 'Built-in'
         info = {
             "type": "grader",
@@ -931,7 +993,14 @@ def ai_generator_page():
     for t in recent_tasks:
         if t['status'] == 'deleted':
             continue
+
         is_owner = (t.get('created_by') == g.user['id'])
+
+        # === 【修改点 1】: 过滤他人的失败/进行中任务，保持列表干净 ===
+        # 如果任务失败，且不是我创建的，则不显示
+        if t['status'] == 'failed' and not is_owner:
+            continue
+
         if t['status'] in ['pending', 'processing', 'failed']:
             display_list.append({
                 "type": "task",
@@ -940,11 +1009,13 @@ def ai_generator_page():
                 "status": t['status'],
                 "log_info": t['log_info'],
                 "created_at": t['created_at'],
-                "source": "正在生成...",
+                "source": "正在生成..." if t['status'] != 'failed' else "生成失败",
                 "creator": t.get('creator_name', 'Unknown'),
-                "is_owner": is_owner
+                "is_owner": is_owner,
+                "grader_id": t.get('grader_id')  # 确保传递 grader_id 以便删除
             })
         elif t['status'] == 'success' and t['grader_id'] and t['grader_id'] not in active_ids:
+            # 数据库显示成功，但内存没加载到，提示刷新
             expected_path = os.path.join(Config.GRADERS_DIR, f"{t['grader_id']}.py")
             if os.path.exists(expected_path):
                 display_list.append({
@@ -959,6 +1030,7 @@ def ai_generator_page():
                     "is_owner": is_owner
                 })
             else:
+                # 文件彻底丢了，标为 deleted
                 db.update_task_status_by_grader_id(t['grader_id'], "deleted")
                 continue
 
@@ -1095,26 +1167,62 @@ def save_grader_code():
 
 @app.route('/api/delete_grader', methods=['POST'])
 def delete_grader():
-    grader_id = request.json.get('id')
-    task = db.get_task_by_grader_id(grader_id)
-    if not task or task.get('creator_id') != g.user['id']:
+    # 前端可能传过来 grader_id (str) 或者 task_id (int/str)
+    raw_id = request.json.get('id')
+    if not raw_id:
+        return jsonify({"msg": "ID不能为空"}), 400
+
+    task = None
+
+    # 1. 尝试逻辑：先判断是不是 Task ID (数字)
+    # 失败的任务通常只剩下 Task ID，没有 grader_id
+    if str(raw_id).isdigit():
+        task = db.get_ai_task_by_id(int(raw_id))
+
+    # 2. 如果没找到，或者传来的明显是 grader_id (如 "direct_xxxx")
+    # 则尝试按 grader_id 查找
+    if not task:
+        task = db.get_task_by_grader_id(raw_id)
+
+    if not task:
+        # 如果既找不到任务，文件也不存在，可能是旧数据遗留
+        return jsonify({"msg": "任务记录不存在，无法删除"}), 404
+
+    # 3. 权限检查
+    # 必须是创建者或者管理员
+    if task.get('created_by') != g.user['id'] and not g.user.get('is_admin'):
         return jsonify({"msg": "您无权删除他人创建的核心"}), 403
 
-    file_path = os.path.join(Config.GRADERS_DIR, f"{grader_id}.py")
-    if os.path.exists(file_path):
-        timestamp = int(time.time())
-        backup_name = f"{grader_id}_{timestamp}.py.bak"
-        backup_path = os.path.join(Config.TRASH_DIR, backup_name)
-        shutil.move(file_path, backup_path)
+    # 4. 执行删除操作
 
-        GraderFactory.load_graders()
-        g_cls = GraderFactory._graders.get(grader_id)
-        name = g_cls.NAME if g_cls else grader_id
-        db.recycle_grader_record(grader_id, name, backup_name)
+    # A. 物理文件删除 (只有当 grader_id 存在时才需要删文件)
+    grader_id = task.get('grader_id')
+    if grader_id:
+        file_path = os.path.join(Config.GRADERS_DIR, f"{grader_id}.py")
+        # 即使文件不存在也不报错，继续删数据库记录
+        if os.path.exists(file_path):
+            timestamp = int(time.time())
+            backup_name = f"{grader_id}_{timestamp}.py.bak"
+            backup_path = os.path.join(Config.TRASH_DIR, backup_name)
+            try:
+                shutil.move(file_path, backup_path)
 
-    db.update_task_status_by_grader_id(grader_id, "deleted")
+                # 记录进回收站表
+                GraderFactory.load_graders()
+                g_cls = GraderFactory._graders.get(grader_id)
+                name = g_cls.NAME if g_cls else (task.get('name') or grader_id)
+                db.recycle_grader_record(grader_id, name, backup_name)
+            except Exception as e:
+                print(f"[Delete Error] Move file failed: {e}")
+
+    # B. 数据库状态软删除 (关键修复：使用 Task ID 更新)
+    # 这样即使 grader_id 为空，也能成功将状态置为 deleted
+    db.update_ai_task_status(task['id'], "deleted")
+
+    # C. 尝试热重载 (移除内存中的对象)
     GraderFactory._loaded = False
     GraderFactory.load_graders()
+
     return jsonify({"msg": "已移入回收站"})
 
 
@@ -1466,6 +1574,10 @@ def save_pasted_document():
 
 @app.route('/api/parse_and_save_pasted_document', methods=['POST'])
 def parse_and_save_pasted_document():
+    """
+    粘贴入库：先让 AI 整理成 JSON 结构，然后后端拆包存库。
+    解决：之前存入的是 raw json 导致的格式错误问题。
+    """
     if not g.user:
         return jsonify({"msg": "Unauthorized"}), 401
 
@@ -1478,27 +1590,40 @@ def parse_and_save_pasted_document():
 
     doc_label = "试卷" if doc_type == "exam" else "评分标准"
     standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
-    if not standard_config:
-        return jsonify({"msg": "未配置可用的标准模型"}), 500
 
+    if not standard_config:
+        # 如果没有 AI 配置，直接保存原始内容
+        title = generate_title_from_content(content, doc_type)
+        file_id, filename = create_text_asset(content, title, g.user['id'])
+        return jsonify({"status": "success", "file_id": file_id, "title": filename, "msg": "未配置AI，已原样保存"})
+
+    # Prompt 要求返回 JSON，以便分离标题和正文
     prompt = (
-        f"请对以下{doc_label}内容进行规整，仅保留试题或评分细则核心信息，去除无用表头页眉等杂讯。\n"
-        "输出 Markdown，并返回一个合理标题，不要遗漏重要信息。\n"
-        "请使用 JSON 格式返回：{\"title\": \"...\", \"content\": \"...\"}\n\n"
-        f"{content}"
+        f"请对以下{doc_label}内容进行深度规整。\n"
+        "1. 去除无用的页眉页脚、乱码。\n"
+        "2. 将内容整理为清晰的 Standard Markdown 格式。\n"
+        "3. 根据文档类型和内容为文档起一个合理的标题。\n"
+        "4. **必须以纯 JSON 格式返回**，不要使用代码块标记，格式如下：\n"
+        "{\"title\": \"文档标题\", \"content\": \"Markdown格式的正文内容...\"}\n\n"
+        f"原始内容：\n{content}"
     )
 
     try:
         ai_text = asyncio.run(call_ai_platform_chat(
-            system_prompt="你是教学资料整理助手，擅长规整试卷与评分标准。",
+            system_prompt="你是文档整理助手。你只输出 JSON。",
             messages=[{"role": "user", "content": prompt}],
             platform_config=standard_config
         ))
-        title, normalized_content = extract_title_and_content(ai_text, doc_type)
-        if not normalized_content:
-            return jsonify({"msg": "AI 未返回有效内容"}), 500
 
+        # 使用增强版工具函数提取
+        title, normalized_content = extract_title_and_content(ai_text, doc_type)
+
+        if not normalized_content:
+            return jsonify({"msg": "AI 解析内容为空"}), 500
+
+        # === 核心修正：这里存入的是 normalized_content (Markdown)，而不是 ai_text (JSON) ===
         file_id, filename = create_text_asset(normalized_content, title, g.user['id'])
+
         if not file_id:
             return jsonify({"msg": "保存失败"}), 500
 
@@ -1508,6 +1633,32 @@ def parse_and_save_pasted_document():
         return jsonify({"msg": f"解析保存失败: {str(e)}"}), 500
 
 
+@app.route('/api/update_file_content', methods=['POST'])
+def update_file_content():
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json or {}
+    file_id = data.get('id')
+    content = data.get('content')
+
+    if not file_id or content is None:
+        return jsonify({"msg": "参数错误"}), 400
+
+    record = db.get_file_by_id(file_id)
+    if not record:
+        return jsonify({"msg": "文件不存在"}), 404
+
+    # 权限检查：只能编辑自己的文件，或者是管理员
+    # 注意：record['uploaded_by'] 可能是 int，g.user['id'] 也是 int，建议强转比较
+    if int(record['uploaded_by']) != int(g.user['id']) and not g.user.get('is_admin'):
+        return jsonify({"msg": "无权编辑他人文档"}), 403
+
+    # 调用数据库更新方法
+    db.update_file_parsed_content(file_id, content)
+    return jsonify({"status": "success", "msg": "保存成功"})
+
+
 @app.route('/api/ai_generate_document', methods=['POST'])
 def ai_generate_document():
     if not g.user:
@@ -1515,22 +1666,26 @@ def ai_generate_document():
 
     prompt = (request.form.get('prompt') or '').strip()
     doc_type = request.form.get('doc_type') or 'exam'
-    files = request.files.getlist('files')
 
-    if not prompt and not files:
-        return jsonify({"msg": "请输入提示词或上传参考文件"}), 400
+    # 获取上传的新文件
+    uploaded_files = request.files.getlist('files')
+
+    # 获取用户选择的已有文件 ID (多选)
+    existing_file_ids = request.form.getlist('existing_file_ids')
+
+    if not prompt and not uploaded_files and not existing_file_ids:
+        return jsonify({"msg": "请输入提示词或提供参考素材"}), 400
 
     image_payloads = []
     doc_texts = []
     file_errors = []
 
     try:
-        for f in files:
-            if not f or not f.filename:
-                continue
+        # A. 处理新上传的文件
+        for f in uploaded_files:
+            if not f or not f.filename: continue
             physical_path, original_name = handle_file_upload_or_reuse(f, None, g.user['id'])
-            if not physical_path:
-                continue
+            if not physical_path: continue
 
             ext = os.path.splitext(physical_path)[1].lower()
             if ext in ['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.tiff']:
@@ -1545,16 +1700,33 @@ def ai_generate_document():
                 else:
                     file_errors.append(f"{original_name or f.filename}: {text}")
 
+        # B. 处理已选择的现有文件 (新增逻辑)
+        for eid in existing_file_ids:
+            if not eid: continue
+            record = db.get_file_by_id(eid)
+            if record and record.get('parsed_content'):
+                # 直接使用数据库中已解析好的纯文本
+                doc_texts.append({
+                    "name": f"[库]{record['original_name']}",
+                    "content": record['parsed_content']
+                })
+            elif record:
+                # 如果数据库里只有文件没解析内容，尝试现场解析（可选，这里为了性能暂只取已解析的）
+                pass
+
+        # C. 组装 Prompt (保持原有逻辑)
         prompt_parts = []
         doc_label = "试卷" if doc_type == "exam" else "评分标准"
-        prompt_parts.append(f"你正在生成一份{doc_label}文档，请输出 Markdown。请以一级标题作为标题。")
+        prompt_parts.append(f"你正在生成一份{doc_label}文档，请输出 Markdown。根据内容和类型拟定合理的标题。")
         if prompt:
             prompt_parts.append(f"用户提示词：{prompt}")
 
         if doc_texts:
             doc_section = ["参考文档内容："]
             for doc in doc_texts:
-                doc_section.append(f"--- {doc['name']} ---\n{doc['content']}")
+                # 截断过长的文档，防止 Token 溢出 (简单保护)
+                content_snippet = doc['content'][:50000]
+                doc_section.append(f"--- {doc['name']} ---\n{content_snippet}")
             prompt_parts.append("\n".join(doc_section))
 
         if file_errors:
@@ -1562,6 +1734,7 @@ def ai_generate_document():
 
         final_prompt = "\n\n".join(prompt_parts)
 
+        # D. 调用 AI
         payload = {
             "system_prompt": "你是教学资料的专业整理助手，擅长输出结构化的考试试卷与评分标准。",
             "messages": [],
@@ -1580,6 +1753,7 @@ def ai_generate_document():
             return jsonify({"msg": f"AI 助手返回错误: {response.status_code} - {response.text}"}), 500
 
         ai_text = response.json().get("response_text", "")
+        # 使用新的提取工具函数 (假设之前已更新 extract_title_and_content)
         title, content = extract_title_and_content(ai_text, doc_type)
 
         if not content:
@@ -1591,8 +1765,6 @@ def ai_generate_document():
 
         return jsonify({"status": "success", "file_id": file_id, "title": filename})
 
-    except httpx.ConnectError:
-        return jsonify({"msg": "无法连接到 AI 助手服务，请检查 ai_assistant.py 是否已启动"}), 500
     except Exception as e:
         traceback.print_exc()
         return jsonify({"msg": f"生成失败: {str(e)}"}), 500

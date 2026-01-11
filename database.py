@@ -194,6 +194,11 @@ class Database:
             conn.commit()
             print(f"[DB] 超级管理员已初始化: {admin_user}")
 
+    def update_ai_task_status(self, task_id, status):
+        conn = self.get_connection()
+        conn.execute("UPDATE ai_tasks SET status=? WHERE id=?", (status, task_id))
+        conn.commit()
+
     # [新增] 更新文件的解析内容
     def update_file_parsed_content(self, file_id, content):
         conn = self.get_connection()

@@ -1,77 +1,100 @@
-<div class="mt-12">
+<div class="mt-12 animate-fade-in-up" style="animation-delay: 0.1s;">
     <div class="flex items-center justify-between mb-6 px-2">
-        <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <span class="bg-indigo-100 text-indigo-600 w-7 h-7 rounded-lg flex items-center justify-center text-sm shadow-sm">2</span>
-            核心列表
+        <h2 class="text-lg font-bold text-slate-700 flex items-center gap-2">
+            <span class="bg-indigo-100 text-indigo-600 w-8 h-8 rounded-lg flex items-center justify-center text-sm shadow-sm">
+                <i class="fas fa-layer-group"></i>
+            </span>
+            核心任务列表
         </h2>
-        <button onclick="openTrash()" class="group text-slate-400 hover:text-rose-500 text-sm flex items-center transition-colors px-3 py-1.5 rounded-lg hover:bg-rose-50">
+        <button onclick="openTrash()" class="group text-slate-400 hover:text-rose-500 text-xs font-bold flex items-center transition-colors px-3 py-1.5 rounded-full hover:bg-rose-50 border border-transparent hover:border-rose-100">
             <i class="fas fa-trash-alt mr-2 group-hover:shake"></i> 回收站
         </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="graderGrid">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="graderGrid">
         {% for item in graders %}
-            {% if item.type == 'task' %}
-                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-soft relative overflow-hidden task-card group"
-                     data-task-id="{{ item.id }}" id="task-card-{{ item.id }}">
 
-                    <div class="absolute top-0 left-0 w-1 h-full bg-slate-200"></div>
-
-                    <div class="flex justify-between items-start mb-3">
-                        {% if item.status == 'failed' %}
-                            <span class="flex items-center text-rose-500 text-xs font-bold bg-rose-50 px-2 py-1 rounded border border-rose-100">
-                                <i class="fas fa-exclamation-circle mr-1"></i> 生成失败
-                            </span>
-                        {% else %}
-                            <span class="flex items-center text-indigo-600 text-xs font-bold bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
-                                <span class="pulse-dot mr-1.5 text-indigo-500">●</span> {{ '排队中...' if item.status == 'pending' else '正在生成...' }}
-                            </span>
-                        {% endif %}
-
-                        <span class="text-[10px] text-slate-400 font-mono">ID: {{ item.id }}</span>
-                    </div>
-
-                    <h3 class="font-bold text-slate-700 text-base mb-4 truncate" title="{{ item.task_name }}">{{ item.task_name }}</h3>
-
-                    <div class="bg-slate-50 rounded-lg p-3 border border-slate-100 h-24 overflow-hidden relative font-mono text-xs text-slate-500">
-                        <p class="task-log break-all">{{ item.log_info }}</p>
-                        <div class="absolute bottom-0 left-0 w-full h-10 bg-gradient-to-t from-slate-50 to-transparent"></div>
-                    </div>
-                </div>
-
+            {# --- 逻辑过滤：如果是他人的失败任务，直接跳过不显示 --- #}
+            {% if item.status == 'failed' and not item.is_owner %}
+                {# continue loop implicitly by rendering nothing #}
             {% else %}
-                <a href="/grader/{{ item.id }}" class="block group bg-white p-6 rounded-2xl border border-slate-200 shadow-soft hover:shadow-xl hover:shadow-indigo-100 hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden transform hover:-translate-y-1">
 
-                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                {% if item.type == 'task' %}
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-soft relative overflow-hidden task-card group transition-all hover:shadow-md"
+                         data-task-id="{{ item.id }}" id="task-card-{{ item.id }}">
 
-                    <div class="absolute top-4 right-4 flex flex-col items-end gap-1">
-                        {% if item.is_owner %}
-                            <span class="text-[10px] bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full border border-sky-100 font-bold">我</span>
-                        {% else %}
-                            <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200 flex items-center">
-                                <i class="fas fa-lock text-[8px] mr-1"></i> {{ item.creator }}
-                            </span>
+                        <div class="flex justify-between items-start mb-3 relative z-10">
+                            {% if item.status == 'failed' %}
+                                <span class="flex items-center text-rose-500 text-[10px] font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100">
+                                    <i class="fas fa-exclamation-circle mr-1"></i> 生成失败
+                                </span>
+                            {% else %}
+                                <span class="flex items-center text-indigo-600 text-[10px] font-bold bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
+                                    <i class="fas fa-circle-notch fa-spin mr-1.5"></i> {{ '排队中' if item.status == 'pending' else '生成中' }}
+                                </span>
+                            {% endif %}
+
+                            {% if item.status == 'failed' and item.is_owner %}
+                                <button onclick="deleteGrader('{{ item.grader_id or item.id }}')" class="text-rose-300 hover:text-rose-500 transition p-1" title="删除记录">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            {% endif %}
+                        </div>
+
+                        <h3 class="font-bold text-slate-700 text-sm mb-3 truncate pr-4" title="{{ item.task_name }}">{{ item.task_name }}</h3>
+
+                        <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 h-20 overflow-hidden relative font-mono text-[10px] text-slate-500 leading-relaxed">
+                            <p class="task-log break-all">{{ item.log_info }}</p>
+                            <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-slate-50 to-transparent"></div>
+                        </div>
+
+                        {% if item.status != 'failed' %}
+                        <div class="absolute bottom-0 left-0 h-0.5 bg-indigo-100 w-full">
+                            <div class="h-full bg-indigo-500 w-1/3 animate-[progress_2s_ease-in-out_infinite]"></div>
+                        </div>
                         {% endif %}
                     </div>
 
-                    <div class="flex items-center mb-3">
-                        <span class="text-[10px] font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{{ item.id }}</span>
-                    </div>
+                {% else %}
+                    <a href="/grader/{{ item.id }}" class="block group bg-white p-5 rounded-2xl border border-slate-200 shadow-soft hover:shadow-lg hover:shadow-indigo-500/10 hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden transform hover:-translate-y-1">
 
-                    <h3 class="font-bold text-slate-800 text-lg mb-2 group-hover:text-indigo-600 transition-colors line-clamp-2 min-h-[3.5rem] leading-tight">
-                        {{ item.name }}
-                    </h3>
+                        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
-                    <div class="flex items-center justify-between mt-4 pt-4 border-t border-slate-50 text-xs text-slate-400">
-                        <div class="flex items-center">
-                             <i class="fas fa-clock mr-1.5 opacity-70"></i> {{ item.created_at[:10] }}
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center text-xs border border-emerald-100">
+                                    <i class="fas fa-check"></i>
+                                </span>
+                                <span class="text-[10px] font-mono text-slate-400">{{ item.id }}</span>
+                            </div>
+
+                            {% if item.is_owner %}
+                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">我</span>
+                            {% else %}
+                                <span class="text-[10px] bg-slate-50 text-slate-400 px-2 py-0.5 rounded-full flex items-center">
+                                    <i class="fas fa-user mr-1 text-[8px]"></i> {{ item.creator }}
+                                </span>
+                            {% endif %}
                         </div>
-                        <span class="text-indigo-600 opacity-0 group-hover:opacity-100 transition-all font-bold translate-x-2 group-hover:translate-x-0">
-                            管理核心 <i class="fas fa-arrow-right ml-1"></i>
-                        </span>
-                    </div>
-                </a>
-            {% endif %}
+
+                        <h3 class="font-bold text-slate-800 text-sm mb-4 group-hover:text-indigo-600 transition-colors line-clamp-2 h-10 leading-snug">
+                            {{ item.name }}
+                        </h3>
+
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-50 text-[10px] text-slate-400">
+                            <div class="flex items-center">
+                                 <i class="fas fa-clock mr-1.5 opacity-70"></i> {{ item.created_at[:10] }}
+                            </div>
+                            <span class="text-indigo-500 opacity-0 group-hover:opacity-100 transition-all font-bold flex items-center gap-1 -translate-x-2 group-hover:translate-x-0">
+                                进入 <i class="fas fa-chevron-right text-[8px]"></i>
+                            </span>
+                        </div>
+                    </a>
+                {% endif %} {% endif %} {% else %}
+            <div class="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <i class="fas fa-inbox text-4xl mb-3 opacity-30"></i>
+                <p class="text-xs">暂无核心任务</p>
+            </div>
         {% endfor %}
     </div>
 </div>
