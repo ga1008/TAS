@@ -574,7 +574,7 @@ def smart_parse_file_content(file_id, doc_type=None):
             return False, fallback_text  # 直接返回错误信息
 
         if fallback_text and len(fallback_text.strip()) > 0:
-            print(f"### [系统提示：AI解析失败，已切换为纯文本提取模式]\n\n{fallback_text}")
+            print(f"### [系统提示：AI解析失败，已切换为纯文本提取模式]\n\n{fallback_text[:100]}")
         else:
             print(f"[SmartParse] [解析失败]\n无法从文件中提取有效文本，请检查文件是否损坏或已加密。")
 
