@@ -1,0 +1,10 @@
+*.env
+/grading.db
+/workspaces/*
+/uploads/*
+/data/*
+*_成绩单.xlsx
+.idea
+
+__pycache__
+grading_core/trash/*

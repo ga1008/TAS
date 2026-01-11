@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 自动化批改系统 - 工作流程</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            --secondary-bg: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-light: #6b7280;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            background-color: var(--secondary-bg);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            text-align: center;
+        }
+
+        header {
+            margin-bottom: 4rem;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+
+        p.subtitle {
+            color: var(--text-light);
+            font-size: 1.1rem;
+        }
+
+        /* 流程容器 */
+        .flow-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: relative;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* 连接线 (背景) */
+        .flow-wrapper::before {
+            content: '';
+            position: absolute;
+            top: 50px;
+            left: 50px;
+            right: 50px;
+            height: 4px;
+            background: #e5e7eb;
+            z-index: 0;
+            border-radius: 4px;
+        }
+
+        /* 步骤卡片 */
+        .step-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem 1.5rem;
+            width: 100%;
+            max-width: 220px;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: default;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0;
+            animation: fadeInUp 0.8s ease-out forwards;
+        }
+
+        .step-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        /* 步骤序号图标 */
+        .icon-box {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--card-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            border: 4px solid #fff;
+            box-shadow: 0 0 0 4px #e5e7eb; /* 外环 */
+            transition: all 0.3s ease;
+        }
+
+        .step-card:hover .icon-box {
+            box-shadow: 0 0 0 4px var(--accent-blue);
+            transform: scale(1.1);
+        }
+
+        .step-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 0.8rem;
+            color: var(--text-main);
+        }
+
+        .step-desc {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+
+        /* 特定步骤样式 */
+        .step-user .icon-box { color: #6b7280; }
+        .step-core .icon-box { color: var(--accent-purple); background: #f3e8ff; }
+        .step-task .icon-box { color: var(--accent-blue); background: #eff6ff; }
+        .step-audit .icon-box { color: #f59e0b; background: #fffbeb; }
+        .step-export .icon-box { color: var(--accent-green); background: #ecfdf5; }
+
+        /* 核心分叉展示 */
+        .core-badges {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+        .badge {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+        .badge-ai { background: #dbeafe; color: #1e40af; }
+        .badge-logic { background: #f3e8ff; color: #6b21a8; }
+
+        /* 动画延迟 */
+        .step-card:nth-child(1) { animation-delay: 0.1s; }
+        .step-card:nth-child(2) { animation-delay: 0.3s; }
+        .step-card:nth-child(3) { animation-delay: 0.5s; }
+        .step-card:nth-child(4) { animation-delay: 0.7s; }
+        .step-card:nth-child(5) { animation-delay: 0.9s; }
+
+        /* 响应式适配 */
+        @media (max-width: 900px) {
+            .flow-wrapper {
+                flex-direction: column;
+                align-items: center;
+                gap: 40px;
+            }
+            .flow-wrapper::before {
+                width: 4px;
+                height: 100%;
+                left: 50%;
+                top: 0;
+                transform: translateX(-50%);
+            }
+            .step-card {
+                max-width: 80%;
+                width: 100%;
+            }
+        }
+
+        /* 动画定义 */
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>智能批改全流程</h1>
+            <p class="subtitle">从核心构建到数据导出，一站式自动化解决方案</p>
+        </header>
+
+        <div class="flow-wrapper">
+
+            <div class="step-card step-user">
+                <div class="icon-box">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <div class="step-title">1. 用户登录</div>
+                <div class="step-desc">教师或管理员登录系统，进入仪表盘界面。</div>
+            </div>
+
+            <div class="step-card step-core">
+                <div class="icon-box">
+                    <i class="fas fa-microchip"></i>
+                </div>
+                <div class="step-title">2. 创建批改核心</div>
+                <div class="step-desc">上传试卷与评分标准，系统自动生成专属插件。</div>
+                <div class="core-badges">
+                    <span class="badge badge-ai"><i class="fas fa-eye"></i> AI 核心</span>
+                    <span class="badge badge-logic"><i class="fas fa-code"></i> 逻辑核心</span>
+                </div>
+            </div>
+
+            <div class="step-card step-task">
+                <div class="icon-box">
+                    <i class="fas fa-tasks"></i>
+                </div>
+                <div class="step-title">3. 创建任务 & 运行</div>
+                <div class="step-desc">新建班级任务，上传学生作业包，一键启动自动批改。</div>
+            </div>
+
+            <div class="step-card step-audit">
+                <div class="icon-box">
+                    <i class="fas fa-clipboard-check"></i>
+                </div>
+                <div class="step-title">4. 结果审核</div>
+                <div class="step-desc">查看学生详情，人工微调分数，或修改核心后热重载重批。</div>
+            </div>
+
+            <div class="step-card step-export">
+                <div class="icon-box">
+                    <i class="fas fa-file-excel"></i>
+                </div>
+                <div class="step-title">5. 下载报表</div>
+                <div class="step-desc">生成包含总分及扣分详情的 Excel 表格，完成归档。</div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,187 @@
+# grading_core/direct_grader_template.py
+
+
+DIRECT_GRADER_TEMPLATE = """
+import os
+import json
+import asyncio
+import re
+import base64
+import mimetypes
+from grading_core.base import BaseGrader, GradingResult
+from database import Database
+from ai_utils.volc_file_manager import VolcFileManager
+from ai_utils.ai_helper import call_ai_platform_chat
+
+db = Database()
+
+class {class_name}(BaseGrader):
+    ID = "{grader_id}"
+    NAME = "{display_name}"
+
+    # === 固化的核心知识库 (由 AI 预解析生成) ===
+    EXAM_CONTENT = \"\"\"
+{exam_content}
+    \"\"\"
+
+    GRADING_STANDARD = \"\"\"
+{std_content}
+    \"\"\"
+
+    EXTRA_INSTRUCTION = \"\"\"
+{extra_instruction}
+    \"\"\"
+
+    # 动态组装的系统 Prompt
+    @property
+    def system_prompt(self):
+        # 注意：这里的 f-string 是生成的代码的一部分，所以用单花括号
+        return f'''
+你是一名极其严格且专业的阅卷专家。你的任务是根据提供的【试卷内容】和【评分细则】，对学生提交的作业（视频、图片或文档）进行评分。
+
+【试卷内容】:
+{{self.EXAM_CONTENT}}
+
+【评分细则】:
+{{self.GRADING_STANDARD}}
+
+【额外指令】:
+{{self.EXTRA_INSTRUCTION}}
+
+【输出要求】:
+1. 仔细对比学生的作业与评分细则。
+2. 必须以合法的 JSON 格式输出，根对象包含:
+   - "total_score" (数字): 总得分
+   - "details" (数组): 每个得分项，包含 "name" (项目名) 和 "score" (得分)
+   - "comment" (字符串): 简短的评语和扣分原因
+3. 不要输出 Markdown 代码块标记（如 ```json），直接输出 JSON 字符串。
+'''
+
+    def grade(self, student_dir, student_info, *args, **kwargs) -> GradingResult:
+        self.res = GradingResult()
+
+        valid_files = []
+        text_content_buffer = ""
+        MAX_MEDIA_FILES = 5
+        media_count = 0
+
+        # 1. 扫描文件
+        for root, _, files in os.walk(student_dir):
+            for f in files:
+                if f.startswith('.'): continue
+                full_path = os.path.join(root, f)
+                ext = os.path.splitext(f)[1].lower()
+
+                # 文本类作业
+                if ext in ['.py', '.java', '.txt', '.md', '.c', '.cpp', '.html', '.css', '.js', '.doc', '.docx']:
+                    try:
+                        content = self.read_text_content(full_path)
+                        if content:
+                            # 注意：这里的双花括号是为了在 format 后保留单花括号
+                            text_content_buffer += f"\\n--- 学生作业文件: {{f}} ---\\n{{content}}\\n"
+                    except: pass
+
+                # 多媒体类作业
+                elif ext in ['.jpg', '.png', '.jpeg', '.mp4', '.pdf', '.avi', '.mov']:
+                    if media_count < MAX_MEDIA_FILES:
+                        valid_files.append(full_path)
+                        media_count += 1
+
+        # 2. 上传多媒体文件
+        uploaded_file_ids = []
+        try:
+            ai_config = db.get_best_ai_config("vision")
+            if not ai_config:
+                 ai_config = db.get_best_ai_config("standard")
+
+            if not ai_config:
+                self.res.add_deduction("系统配置错误: 无可用 AI 模型")
+                return self.res
+
+            # 3. 准备多媒体数据 (图片转 Base64，视频上传)
+            # 注意：OpenAI 兼容接口通常要求图片为 Base64 或 HTTP URL，不支持内部 file-id
+            if valid_files:
+                # 只有视频需要上传器
+                uploader = None
+                if any(f.endswith(('.mp4', '.avi', '.mov')) for f in valid_files) and ai_config.get('api_key'):
+                     uploader = VolcFileManager(api_key=ai_config['api_key'], base_url=ai_config.get('base_url'))
+
+                for vf in valid_files:
+                    vf_ext = os.path.splitext(vf)[1].lower()
+                    is_video = vf_ext in ['.mp4', '.avi', '.mov']
+                    
+                    if is_video and uploader:
+                        # 视频只能尝试上传
+                        fid = uploader.upload_file(vf)
+                        if fid:
+                            uploaded_file_ids.append({{
+                                "type": "video",
+                                "id": fid
+                            }})
+                    else:
+                        # 图片：转 Base64
+                        try:
+                            mime_type, _ = mimetypes.guess_type(vf)
+                            if not mime_type: mime_type = 'image/png'
+                            
+                            with open(vf, "rb") as image_file:
+                                b64_str = base64.b64encode(image_file.read()).decode('utf-8')
+                                
+                            uploaded_file_ids.append({{
+                                "type": "image",
+                                "data": f"data:{{mime_type}};base64,{{b64_str}}"
+                            }})
+                        except Exception as e:
+                            print(f"Error encoding image {{vf}}: {{e}}")
+
+            # 3. 构造 User Message
+            user_content = "请根据上述标准对本条作业进行批改。"
+            if text_content_buffer:
+                # 这里的双花括号是为了 format 后保留单花括号
+                user_content += f"\\n\\n【学生文本作业内容】:\\n{{text_content_buffer}}"
+
+            if not uploaded_file_ids and not text_content_buffer:
+                self.res.add_deduction("未检测到有效的作业文件(支持图片/视频/代码/文档)")
+                return self.res
+
+            messages = [
+                {{
+                    "role": "user",
+                    "content": user_content,
+                    "file_ids": uploaded_file_ids
+                }}
+            ]
+
+            # 4. 调用 AI
+            response_json_str = asyncio.run(call_ai_platform_chat(
+                system_prompt=self.system_prompt,
+                messages=messages,
+                platform_config=ai_config
+            ))
+
+            # 5. 解析结果
+            # 正则表达式中的花括号也需要转义
+            match = re.search(r'\{{.*\}}', response_json_str, re.DOTALL)
+            if match:
+                data = json.loads(match.group(0))
+                self.res.total_score = float(data.get('total_score', 0))
+
+                for d in data.get('details', []):
+                    self.res.add_sub_score(str(d.get('name', '评分项')), float(d.get('score', 0)))
+
+                if data.get('comment'):
+                    self.res.add_deduction(str(data['comment']))
+            else:
+                self.res.total_score = 0
+                self.res.add_deduction("AI 返回格式无法解析")
+                print(f"AI Raw Response: {{response_json_str}}")
+
+        except Exception as e:
+            self.res.total_score = 0
+            self.res.add_deduction(f"批改服务异常: {{str(e)}}")
+            import traceback
+            traceback.print_exc()
+
+        self.res.is_pass = self.res.total_score >= 60
+        return self.res
+"""

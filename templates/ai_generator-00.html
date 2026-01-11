@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 批改核心生成工坊</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .backdrop-blur { backdrop-filter: blur(4px); }
+        /* 隐藏滚动条但允许滚动 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 拖拽高亮样式 */
+        .drag-active { background-color: #f3e8ff !important; border-color: #a855f7 !important; }
+
+        /* 文件列表选中样式 */
+        .file-item.selected { border-color: #a855f7; background-color: #f3e8ff; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans flex flex-col">
+
+    <nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center">
+                <a href="/" class="text-gray-500 hover:text-gray-700 mr-4 transition"><i class="fas fa-arrow-left"></i> 返回首页</a>
+                <h1 class="text-xl font-bold text-gray-800"><i class="fas fa-magic text-purple-600 mr-2"></i>AI 核心生成工坊</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                {% if user %}
+                <div class="text-xs text-gray-500 flex items-center">
+                    <i class="fas fa-user-circle mr-1 text-gray-400"></i> {{ user.username }}
+                </div>
+                {% endif %}
+                <div class="text-xs text-gray-400">Powered by Thinking Models</div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex-1 max-w-6xl mx-auto w-full p-6 space-y-10">
+
+        <div class="bg-white rounded-2xl shadow-lg border border-purple-100 overflow-hidden relative">
+        <div class="flex border-b border-gray-100">
+            <button onclick="switchTab('logic')" id="tab-logic" class="flex-1 py-4 text-center font-bold text-purple-600 border-b-2 border-purple-600 bg-purple-50 transition">
+                <i class="fas fa-code mr-2"></i> 逻辑核心 (Python)
+            </button>
+            <button onclick="switchTab('direct')" id="tab-direct" class="flex-1 py-4 text-center font-bold text-gray-500 hover:text-blue-500 transition">
+                <i class="fas fa-eye mr-2"></i> AI 核心 (Multi-modal)
+            </button>
+        </div>
+
+        <div id="gen-notes-container" class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white transition-all duration-500">
+            <h2 class="text-lg font-bold mb-2 flex items-center" id="gen-notes-title">
+                <span class="bg-white/20 w-6 h-6 rounded-full flex items-center justify-center text-sm mr-2">1</span>
+                配置逻辑生成核心
+                <span class="ml-2 text-xs bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded-full shadow-sm">推荐</span>
+            </h2>
+            <div class="text-indigo-100 text-sm opacity-90 leading-relaxed" id="gen-note-content">
+                <p class="mb-1">AI 阅读试卷后编写 Python 脚本，在本地运行批改。</p>
+                <ul class="list-disc pl-4 space-y-1 text-xs opacity-80">
+                    <li><span class="font-bold text-white">优点：</span>批改速度极快，无需消耗 Token (免费)，评分标准绝对统一。</li>
+                    <li><span class="font-bold text-white">缺点：</span>仅支持文本/代码/文件存在性检查，难以理解视频/图片内容。</li>
+                </ul>
+            </div>
+        </div>
+
+            <form id="createForm" class="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        <i class="fas fa-tag mr-2 text-purple-500"></i>核心名称
+                    </label>
+                    <input type="text" name="task_name" required placeholder="例如：2026年春季期末-Java程序设计"
+                           value="{{ ref_task['name'] + ' (Regenerated)' if ref_task else '' }}"
+                           class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition">
+                </div>
+
+                <div class="md:col-span-1">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        <i class="fas fa-trophy mr-2 text-yellow-500"></i>试卷满分
+                    </label>
+                    <div class="relative">
+                        <input type="number" name="max_score" required value="{{ ref_task['max_score'] if ref_task else '100' }}"
+                               class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition font-mono font-bold text-gray-700">
+                        <span class="absolute right-4 top-3 text-gray-400 text-sm">分</span>
+                    </div>
+                </div>
+
+                <div class="md:col-span-1">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        <i class="fas fa-balance-scale mr-2 text-purple-500"></i>批改严格度
+                    </label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="strictness" value="loose" class="peer sr-only"
+                                {% if ref_task and ref_task['strictness'] == 'loose' %}checked{% endif %}>
+                            <div class="border border-gray-200 rounded-lg p-3 text-center hover:bg-green-50 peer-checked:bg-green-100 peer-checked:border-green-500 peer-checked:text-green-700 transition h-full flex flex-col justify-center">
+                                <div class="font-bold">宽松</div>
+                                <div class="text-xs text-gray-500 mt-1">捞分模式</div>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="strictness" value="standard" class="peer sr-only"
+                                {% if not ref_task or ref_task['strictness'] == 'standard' %}checked{% endif %}>
+                            <div class="border border-gray-200 rounded-lg p-3 text-center hover:bg-blue-50 peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-700 transition h-full flex flex-col justify-center">
+                                <div class="font-bold">标准</div>
+                                <div class="text-xs text-gray-500 mt-1">平衡模式</div>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="strictness" value="strict" class="peer sr-only"
+                                {% if ref_task and ref_task['strictness'] == 'strict' %}checked{% endif %}>
+                            <div class="border border-gray-200 rounded-lg p-3 text-center hover:bg-red-50 peer-checked:bg-red-100 peer-checked:border-red-500 peer-checked:text-red-700 transition h-full flex flex-col justify-center">
+                                <div class="font-bold">严格</div>
+                                <div class="text-xs text-gray-500 mt-1">严谨模式</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                {% if ref_task %}
+                    <div class="md:col-span-1 bg-blue-50 border border-blue-200 rounded-xl p-4 flex flex-col justify-center min-h-[200px]">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-history text-blue-500 text-xl mr-3"></i>
+                            <h3 class="font-bold text-blue-800 text-sm">使用历史文件再生</h3>
+                        </div>
+                        <p class="text-xs text-blue-600 ml-8 leading-relaxed">
+                            系统将自动读取原任务 [ID: {{ ref_task['id'] }}] 的试卷和评分标准。<br>
+                            无需重新上传文件，直接修改下方指令即可。<br>
+                            <span class="opacity-50">(如需更换文件，请返回列表重新创建)</span>
+                        </p>
+                    </div>
+                {% else %}
+                    <div class="md:col-span-1 flex flex-col space-y-4 h-full">
+                        <div class="space-y-2 flex-1 flex flex-col">
+
+                            <div class="flex justify-between items-center">
+                                <label class="block text-sm font-bold text-gray-700">上传试卷文档</label>
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="openPasteModal('exam')" class="text-xs text-orange-500 hover:text-orange-700 font-bold hover:underline transition">
+                                        <i class="fas fa-paste mr-1"></i>手动粘贴
+                                    </button>
+                                    <button type="button" onclick="openFileModal('exam')" class="text-xs text-purple-600 hover:text-purple-800 font-bold hover:underline transition">
+                                        <i class="fas fa-folder-open mr-1"></i>从文件库选择
+                                    </button>
+                                    <a href="/file_manager" class="text-xs text-gray-500 hover:text-gray-700 font-bold hover:underline transition">
+                                        <i class="fas fa-file-invoice mr-1"></i> 解析管理
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div id="drop-exam" class="upload-zone border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 transition cursor-pointer relative group flex-1 flex flex-col items-center justify-center min-h-[100px] bg-white">
+                                <input type="file" name="exam_file" accept=".pdf,.docx,.doc,.txt,.md"
+                                       class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                                       onchange="handleFileSelect(this, 'exam')">
+                                <input type="hidden" name="exam_file_id" id="exam_file_id">
+
+                                <div id="exam-display" class="flex flex-col items-center pointer-events-none">
+                                    <i class="fas fa-file-alt text-xl text-gray-400 mb-1 group-hover:text-purple-500 transition"></i>
+                                    <p class="text-xs text-gray-500">拖拽或点击上传</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2 flex-1 flex flex-col">
+
+                            <div class="flex justify-between items-center">
+                                <label class="block text-sm font-bold text-gray-700">上传评分标准</label>
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="openPasteModal('std')" class="text-xs text-orange-500 hover:text-orange-700 font-bold hover:underline transition">
+                                        <i class="fas fa-paste mr-1"></i>手动粘贴
+                                    </button>
+                                    <button type="button" onclick="openFileModal('std')" class="text-xs text-purple-600 hover:text-purple-800 font-bold hover:underline transition">
+                                        <i class="fas fa-folder-open mr-1"></i>从文件库选择
+                                    </button>
+                                    <a href="/file_manager" class="text-xs text-gray-500 hover:text-gray-700 font-bold hover:underline transition">
+                                        <i class="fas fa-file-invoice mr-1"></i> 解析管理
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div id="drop-std" class="upload-zone border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:bg-gray-50 transition cursor-pointer relative group flex-1 flex flex-col items-center justify-center min-h-[100px] bg-white">
+                                <input type="file" name="standard_file" accept=".pdf,.docx,.doc,.txt,.md"
+                                       class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                                       onchange="handleFileSelect(this, 'std')">
+                                <input type="hidden" name="standard_file_id" id="standard_file_id">
+
+                                <div id="std-display" class="flex flex-col items-center pointer-events-none">
+                                    <i class="fas fa-clipboard-check text-xl text-gray-400 mb-1 group-hover:text-purple-500 transition"></i>
+                                    <p class="text-xs text-gray-500">拖拽或点击上传</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="md:col-span-1 flex flex-col h-full">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        <i class="fas fa-comment-dots mr-2 text-purple-500"></i>额外生成指令 (可选)
+                    </label>
+                    <div class="flex-1 relative">
+                        <textarea name="extra_desc" placeholder="在此输入对 AI 的特殊指示，例如：&#10;1. 请重点检查代码注释，如果没有注释强制扣5分。&#10;2. 文件名匹配失败时，尝试查找 .txt 后缀。&#10;3. Task2 如果代码能运行但输出错误，给一半分数。"
+                                  class="w-full h-full border border-gray-300 rounded-lg p-4 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition resize-none leading-relaxed shadow-sm hover:shadow-md">{{ ref_task['extra_desc'] if ref_task else '' }}</textarea>
+                    </div>
+                </div>
+
+                <input type="hidden" name="ref_task_id" value="{{ ref_task['id'] if ref_task else '' }}">
+
+                <div class="md:col-span-2 pt-4">
+                    <button type="submit" id="btnSubmit" class="w-full bg-gray-800 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-black transition flex items-center justify-center transform hover:scale-[1.01]">
+                        <i class="fas fa-magic mr-2 text-purple-400"></i>
+                        {{ '开始重新生成' if ref_task else '开始生成核心' }}
+                    </button>
+                </div>
+            </form>
+
+            {% include 'partials/form_direct_ai.html' %}
+
+        </div>
+
+        <div class="mt-10">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                    <span class="bg-gray-200 text-gray-600 w-6 h-6 rounded-full flex items-center justify-center text-sm mr-2">2</span>
+                    核心列表
+                </h2>
+                <button onclick="openTrash()" class="text-gray-400 hover:text-red-500 text-sm flex items-center transition">
+                    <i class="fas fa-trash-alt mr-1"></i> 回收站
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="graderGrid">
+                {% for item in graders %}
+                    {% if item.type == 'task' %}
+                        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden task-card"
+                             data-task-id="{{ item.id }}" id="task-card-{{ item.id }}">
+
+                            <div class="absolute top-4 right-4 z-10">
+                                {% if item.is_owner %}
+                                    <span class="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100 font-bold">我</span>
+                                {% else %}
+                                    <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full border border-gray-200" title="创建者: {{ item.creator }}">
+                                        {{ item.creator[:1] | upper }}
+                                    </span>
+                                {% endif %}
+                            </div>
+
+                            {% if item.status == 'failed' %}
+                                <div class="flex items-center text-red-600 font-bold mb-2">
+                                    <i class="fas fa-exclamation-circle mr-2"></i> 生成失败
+                                </div>
+                                <h3 class="font-bold text-gray-400 text-lg mb-2 truncate pr-6" title="{{ item.task_name }}">{{ item.task_name }}</h3>
+                                <div class="bg-red-50 p-2 rounded max-h-32 overflow-y-auto no-scrollbar">
+                                    <p class="text-xs text-red-500">{{ item.log_info }}</p>
+                                </div>
+                            {% else %}
+                                <div class="flex items-center text-purple-600 font-bold mb-2 text-sm">
+                                    <span class="pulse-dot mr-2">●</span> {{ '排队中...' if item.status == 'pending' else '正在生成...' }}
+                                </div>
+                                <h3 class="font-bold text-gray-800 text-lg mb-4 truncate pr-6" title="{{ item.task_name }}">{{ item.task_name }}</h3>
+
+                                <div class="bg-gray-50 rounded-lg p-3 border border-gray-100 h-24 overflow-hidden relative">
+                                    <p class="text-xs text-gray-500 font-mono task-log break-all">{{ item.log_info }}</p>
+                                    <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-gray-50 to-transparent"></div>
+                                </div>
+                            {% endif %}
+
+                            <div class="text-xs text-gray-300 mt-4 pt-4 border-t border-gray-50 flex justify-between">
+                                <span>ID: {{ item.id }}</span>
+                                <span>{{ item.created_at[5:16] }}</span>
+                            </div>
+                        </div>
+
+                    {% else %}
+                        <a href="/grader/{{ item.id }}" class="block group bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-xl hover:border-purple-200 transition-all cursor-pointer relative overflow-hidden">
+
+                            <div class="absolute top-0 right-0 p-4 flex flex-col items-end gap-1">
+                                {% if item.is_owner %}
+                                    <span class="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100 font-bold mb-1">我的核心</span>
+                                    <div class="opacity-10 group-hover:opacity-100 transition-opacity">
+                                        <i class="fas fa-edit text-gray-400 group-hover:text-purple-500"></i>
+                                    </div>
+                                {% else %}
+                                    <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full border border-gray-200 flex items-center" title="创建者: {{ item.creator }}">
+                                        <i class="fas fa-lock text-[8px] mr-1"></i> {{ item.creator }}
+                                    </span>
+                                {% endif %}
+                            </div>
+
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="bg-purple-50 text-purple-700 px-3 py-1 rounded text-xs font-bold border border-purple-100 truncate max-w-[60%]">
+                                    {{ item.id }}
+                                </div>
+                                <span class="text-xs text-gray-400 mr-8">{{ item.created_at[:10] }}</span>
+                            </div>
+
+                            <h3 class="font-bold text-gray-800 text-lg mb-2 group-hover:text-purple-700 transition-colors line-clamp-2 h-14">
+                                {{ item.name }}
+                            </h3>
+
+                            <div class="flex items-center text-xs text-gray-500 mt-4 border-t border-gray-100 pt-4">
+                                <i class="fas fa-robot mr-2 text-gray-300"></i> {{ item.source }}
+                                <span class="ml-auto text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-sm">
+                                    {{ '查看代码 →' if item.is_owner else '查看详情 →' }}
+                                </span>
+                            </div>
+                        </a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div id="fileModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onclick="closeFileModal()"></div>
+        <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800"><i class="fas fa-folder-open text-purple-600 mr-2"></i>选择文件</h3>
+                <button onclick="closeFileModal()" class="text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center transition">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="p-4 border-b border-gray-100 bg-white">
+                <div class="relative">
+                    <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="fileSearch" placeholder="搜索文件名..."
+                           class="w-full border border-gray-200 rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition"
+                           oninput="fetchFiles(this.value)">
+                </div>
+            </div>
+
+            <div id="fileList" class="flex-1 overflow-y-auto p-4 space-y-2 bg-white min-h-[300px]">
+                <div class="text-center text-gray-400 py-10"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</div>
+            </div>
+
+            <div class="p-4 bg-gray-50 border-t border-gray-100 text-right flex justify-end gap-2">
+                <button onclick="closeFileModal()" class="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-200 transition">取消</button>
+                <button onclick="confirmFileSelection()" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold shadow-md text-sm transition">确定选择</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="trashModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity" onclick="closeTrash()"></div>
+        <div id="trashContent" class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg text-gray-800"><i class="fas fa-trash-alt mr-2 text-gray-400"></i>回收站</h3>
+                <button onclick="closeTrash()" class="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="trashList" class="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/50">
+                <div class="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+                    <i class="fas fa-spinner fa-spin text-2xl"></i>
+                    <p class="text-sm">加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="pasteModal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onclick="closePasteModal()"></div>
+        <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col h-[80vh]">
+            <div class="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800"><i class="fas fa-paste text-purple-600 mr-2"></i>手动粘贴内容</h3>
+                <button onclick="closePasteModal()" class="text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center transition">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 p-4 flex flex-col">
+                <div class="bg-yellow-50 text-yellow-800 text-xs p-3 rounded-lg mb-3 border border-yellow-100">
+                    <i class="fas fa-lightbulb mr-1"></i> 提示：请直接粘贴试卷题目或评分标准的文字内容。支持 Markdown 格式。
+                </div>
+                <textarea id="pasteContent" class="flex-1 w-full border border-gray-300 rounded-lg p-4 focus:ring-2 focus:ring-purple-500 outline-none resize-none font-mono text-sm leading-relaxed" placeholder="在此处粘贴文本..."></textarea>
+            </div>
+
+            <div class="p-4 bg-gray-50 border-t border-gray-100 text-right flex justify-between items-center">
+                <button onclick="document.getElementById('pasteContent').value=''" class="text-gray-400 hover:text-red-500 text-sm font-bold px-2">
+                    <i class="fas fa-eraser mr-1"></i>清空
+                </button>
+                <div class="space-x-2">
+                    <button onclick="closePasteModal()" class="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-200 transition">取消</button>
+                    <button onclick="savePastedText()" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold shadow-md text-sm transition">
+                        <i class="fas fa-save mr-1"></i> 保存并使用
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 核心变量 ---
+        let currentFileType = ''; // 'exam' or 'std'
+        let selectedFileId = null;
+        let selectedFileName = '';
+
+        // --- 拖拽与上传逻辑 ---
+        document.querySelectorAll('.upload-zone').forEach(zone => {
+            const input = zone.querySelector('input[type="file"]');
+
+            // 基础拖拽事件
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                zone.addEventListener(eventName, preventDefaults, false);
+            });
+            function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                zone.addEventListener(eventName, () => zone.classList.add('drag-active'), false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                zone.addEventListener(eventName, () => zone.classList.remove('drag-active'), false);
+            });
+        });
+
+        function switchTab(type) {
+            // 1. 获取 DOM 元素
+            const fLogic = document.getElementById('createForm');
+            const fDirect = document.getElementById('createDirectForm');
+
+            const tLogic = document.getElementById('tab-logic');
+            const tDirect = document.getElementById('tab-direct');
+
+            const bannerContainer = document.getElementById('gen-notes-container');
+            const noteTitle = document.getElementById('gen-notes-title');
+            const noteContent = document.getElementById('gen-note-content');
+
+            // 2. 定义文案配置
+            const config = {
+                logic: {
+                    // 样式
+                    tabActive: "flex-1 py-4 text-center font-bold text-purple-600 border-b-2 border-purple-600 bg-purple-50 transition",
+                    tabInactive: "flex-1 py-4 text-center font-bold text-gray-500 hover:text-blue-500 transition",
+                    bannerBg: "from-indigo-600 to-purple-600", // 紫色渐变
+
+                    // 内容
+                    titleHtml: `
+                        <span class="bg-white/20 w-6 h-6 rounded-full flex items-center justify-center text-sm mr-2">1</span>
+                        配置逻辑生成核心
+                        <span class="ml-2 text-xs bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded-full shadow-sm animate-pulse">推荐</span>
+                    `,
+                    descHtml: `
+                        <p class="mb-2 font-medium">AI 阅读试卷后编写 Python 脚本，在本地运行批改。</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs bg-white/10 p-2 rounded-lg border border-white/10">
+                            <div><i class="fas fa-check text-green-300 mr-1"></i> <strong>优点：</strong>速度极快、零成本、逻辑稳定</div>
+                            <div><i class="fas fa-times text-red-300 mr-1"></i> <strong>缺点：</strong>不支持视频/主观视觉判断</div>
+                        </div>
+                    `
+                },
+                direct: {
+                    // 样式
+                    tabActive: "flex-1 py-4 text-center font-bold text-blue-600 border-b-2 border-blue-600 bg-blue-50 transition",
+                    tabInactive: "flex-1 py-4 text-center font-bold text-gray-500 hover:text-purple-500 transition",
+                    bannerBg: "from-blue-600 to-cyan-600", // 蓝色渐变
+
+                    // 内容
+                    titleHtml: `
+                        <span class="bg-white/20 w-6 h-6 rounded-full flex items-center justify-center text-sm mr-2">1</span>
+                        配置 AI 直连多模态核心
+                    `,
+                    descHtml: `
+                        <p class="mb-2 font-medium">AI直接批改，支持视频、图片和文档。但是你懂的，消耗极高，推荐先使用左边的逻辑核心，不好用再用这个❤</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs bg-white/10 p-2 rounded-lg border border-white/10">
+                            <div><i class="fas fa-check text-green-300 mr-1"></i> <strong>优点：</strong>懂视频/图片、擅长主观题</div>
+                            <div><i class="fas fa-exclamation-triangle text-yellow-300 mr-1"></i> <strong>注意：</strong>批改速度慢、有 Token 成本</div>
+                        </div>
+                    `
+                }
+            };
+
+            // 3. 执行切换逻辑
+            if (type === 'logic') {
+                // 表单切换
+                fLogic.classList.remove('hidden');
+                fDirect.classList.add('hidden');
+
+                // Tab 样式
+                tLogic.className = config.logic.tabActive;
+                tDirect.className = config.logic.tabInactive;
+
+                // Banner 背景切换 (移除旧的，添加新的)
+                bannerContainer.classList.remove(...config.direct.bannerBg.split(' '));
+                bannerContainer.classList.add(...config.logic.bannerBg.split(' '));
+
+                // 文字内容更新
+                noteTitle.innerHTML = config.logic.titleHtml;
+                noteContent.innerHTML = config.logic.descHtml;
+
+            } else {
+                // 表单切换
+                fLogic.classList.add('hidden');
+                fDirect.classList.remove('hidden');
+
+                // Tab 样式
+                tDirect.className = config.direct.tabActive;
+                tLogic.className = config.direct.tabInactive;
+
+                // Banner 背景切换
+                bannerContainer.classList.remove(...config.logic.bannerBg.split(' '));
+                bannerContainer.classList.add(...config.direct.bannerBg.split(' '));
+
+                // 文字内容更新
+                noteTitle.innerHTML = config.direct.titleHtml;
+                noteContent.innerHTML = config.direct.descHtml;
+            }
+        }
+
+        // Direct Form 提交逻辑
+        document.getElementById('createDirectForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            // 类似原有的 fetch 逻辑，调用 /api/create_direct_grader
+            const formData = new FormData(this);
+            fetch('/api/create_direct_grader', {
+                method: 'POST',
+                body: formData // 注意后端接收 JSON 还是 FormData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    alert('核心创建成功！');
+                    window.location.reload();
+                } else {
+                    alert('失败: ' + data.msg);
+                }
+            });
+        });
+
+        // 处理从 input[type=file] 选择/拖入的文件
+        function handleFileSelect(input, type) {
+            if (input.files && input.files[0]) {
+                const name = input.files[0].name;
+
+                // 1. 更新 UI 为“新上传”样式
+                updateUI(type, name, true);
+
+                // 2. 清空可能存在的“库文件ID”，确保提交时后端知道是新文件
+                const hiddenInput = document.getElementById(type === 'exam' ? 'exam_file_id' : 'standard_file_id');
+                if (hiddenInput) hiddenInput.value = '';
+            }
+        }
+
+        // 统一更新 UI 的辅助函数
+        function updateUI(type, name, isUpload) {
+            let displayId = '';
+            let zoneId = '';
+
+            // 1. 映射 DOM ID
+            if (type === 'exam') {
+                displayId = 'exam-display';
+                zoneId = 'drop-exam';
+            } else if (type === 'std') {
+                displayId = 'std-display';
+                zoneId = 'drop-std';
+            } else if (type === 'direct_exam') {
+                displayId = 'direct_exam-display';
+                zoneId = 'drop-direct_exam';
+            } else if (type === 'direct_std') {
+                displayId = 'direct_std-display';
+                zoneId = 'drop-direct_std';
+            }
+
+            const container = document.getElementById(displayId);
+            const zone = document.getElementById(zoneId);
+
+            if (!container || !zone) return;
+
+            // 2. 确定样式配置
+            const icon = isUpload ? 'fa-cloud-upload-alt' : 'fa-check-circle';
+            let color, border, bg, statusText;
+
+            if (isUpload) {
+                statusText = '新上传文件';
+                // 根据核心类型区分上传颜色
+                if (type.startsWith('direct_')) {
+                    // 直连核心：蓝色风格
+                    color = 'text-blue-600';
+                    border = 'border-blue-300';
+                    bg = 'bg-blue-50';
+                } else {
+                    // 逻辑核心：紫色风格
+                    color = 'text-purple-600';
+                    border = 'border-purple-300';
+                    bg = 'bg-purple-50';
+                }
+            } else {
+                statusText = '已选择库文件';
+                // 库文件统一绿色
+                color = 'text-green-600';
+                border = 'border-green-300';
+                bg = 'bg-green-50';
+            }
+
+            // 3. 更新显示内容
+            container.innerHTML = `
+                <i class="fas ${icon} text-2xl ${color} mb-1"></i>
+                <span class="${color} font-bold text-sm text-center break-all px-2 line-clamp-2" title="${name}">${name}</span>
+                <span class="text-xs text-gray-400 mt-1">${statusText}</span>
+            `;
+
+            // 4. 更新区域样式 (保持原有的布局类，只替换颜色和高度)
+            // Direct 区域我们设置得稍微高一点 (min-h-[120px]) 以适应可能的更多文字
+            const minHeight = type.startsWith('direct_') ? 'min-h-[120px]' : 'min-h-[100px]';
+
+            zone.className = `upload-zone border-2 border-dashed rounded-xl p-4 text-center transition cursor-pointer relative group flex-1 flex flex-col items-center justify-center ${minHeight} ${bg} ${border}`;
+        }
+
+        // --- 文件选择模态框逻辑 ---
+        function openFileModal(type) {
+            currentFileType = type;
+            document.getElementById('fileModal').classList.remove('hidden');
+            fetchFiles(); // 打开时加载文件
+        }
+
+        function closeFileModal() {
+            document.getElementById('fileModal').classList.add('hidden');
+            // 重置临时选中状态
+            selectedFileId = null;
+            selectedFileName = '';
+        }
+
+        function fetchFiles(query='') {
+            const list = document.getElementById('fileList');
+            // 简单的防抖或直接请求，这里直接请求
+            fetch(`/api/files?q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(files => {
+                if(files.length === 0) {
+                    list.innerHTML = `
+                        <div class="text-center text-gray-400 py-10 flex flex-col items-center">
+                            <i class="fas fa-folder-open text-3xl mb-2 opacity-30"></i>
+                            <p>没有找到相关文件</p>
+                        </div>`;
+                    return;
+                }
+                list.innerHTML = files.map(f => `
+                    <div class="file-item border border-gray-100 rounded-lg p-3 hover:bg-gray-50 cursor-pointer transition flex justify-between items-center group"
+                         onclick="selectFileItem(this, ${f.id}, '${escapeJs(f.original_name)}')">
+                        <div class="flex items-center overflow-hidden">
+                            <div class="bg-blue-50 text-blue-600 w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mr-3 group-hover:bg-blue-100 transition">
+                                <i class="fas ${getFileIcon(f.original_name)}"></i>
+                            </div>
+                            <div class="truncate">
+                                <div class="font-bold text-gray-700 text-sm truncate" title="${f.original_name}">${f.original_name}</div>
+                                <div class="text-xs text-gray-400">
+                                    ${(f.file_size/1024).toFixed(1)} KB • ${f.created_at ? f.created_at.substring(0,10) : '未知日期'}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="check-icon hidden text-purple-600 text-xl"><i class="fas fa-check-circle"></i></div>
+                    </div>
+                `).join('');
+            })
+            .catch(err => {
+                list.innerHTML = '<div class="text-center text-red-400 py-10">加载文件列表失败</div>';
+            });
+        }
+
+        function getFileIcon(name) {
+            name = name.toLowerCase();
+            if(name.endsWith('.pdf')) return 'fa-file-pdf';
+            if(name.endsWith('.doc') || name.endsWith('.docx')) return 'fa-file-word';
+            if(name.endsWith('.txt') || name.endsWith('.md')) return 'fa-file-alt';
+            return 'fa-file';
+        }
+
+        function selectFileItem(el, id, name) {
+            // 清除其他选中状态
+            document.querySelectorAll('.file-item').forEach(i => {
+                i.classList.remove('selected');
+                i.querySelector('.check-icon').classList.add('hidden');
+            });
+            // 设置当前选中
+            el.classList.add('selected');
+            el.querySelector('.check-icon').classList.remove('hidden');
+
+            selectedFileId = id;
+            selectedFileName = name;
+        }
+
+        function confirmFileSelection() {
+            if (!selectedFileId) {
+                closeFileModal();
+                return;
+            }
+
+            let hiddenInputId = '';
+            let zoneId = '';
+
+            // 1. 根据当前操作类型，映射对应的 隐藏域ID 和 区域ID
+            if (currentFileType === 'exam') {
+                hiddenInputId = 'exam_file_id';
+                zoneId = 'drop-exam';
+            } else if (currentFileType === 'std') {
+                hiddenInputId = 'standard_file_id';
+                zoneId = 'drop-std';
+            } else if (currentFileType === 'direct_exam') {
+                hiddenInputId = 'direct_exam_file_id';
+                zoneId = 'drop-direct_exam';
+            } else if (currentFileType === 'direct_std') {
+                hiddenInputId = 'direct_std_file_id';
+                zoneId = 'drop-direct_std';
+            }
+
+            // 2. 设置隐藏域的值 (提交给后端的 ID)
+            const hiddenInput = document.getElementById(hiddenInputId);
+            if (hiddenInput) {
+                hiddenInput.value = selectedFileId;
+            }
+
+            // 3. 清空该区域内的文件 Input (防止同时提交文件流和ID)
+            const zone = document.getElementById(zoneId);
+            if (zone) {
+                const fileInput = zone.querySelector('input[type="file"]');
+                if (fileInput) fileInput.value = '';
+            }
+
+            // 4. 更新 UI 显示
+            updateUI(currentFileType, selectedFileName, false);
+
+            closeFileModal();
+        }
+
+        function escapeJs(str) {
+            return str.replace(/'/g, "\\'");
+        }
+
+        // --- 表单提交 ---
+        document.getElementById('createForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmit');
+            const originalText = btn.innerHTML;
+
+            // 校验逻辑
+            const refTask = document.querySelector('input[name="ref_task_id"]').value;
+            // 只有在非 Regenerate 模式下才校验文件
+            if (!refTask) {
+                const examId = document.getElementById('exam_file_id').value;
+                const stdId = document.getElementById('standard_file_id').value;
+                const examFile = document.querySelector('input[name="exam_file"]').files.length > 0;
+                const stdFile = document.querySelector('input[name="standard_file"]').files.length > 0;
+
+                if (!examId && !examFile) { alert('请上传试卷或从库中选择'); return; }
+                if (!stdId && !stdFile) { alert('请上传评分标准或从库中选择'); return; }
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> 正在提交任务...';
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            const formData = new FormData(this);
+
+            fetch('/api/create_grader_task', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.task_id) {
+                    window.location.href = '/ai_generator';
+                } else {
+                    alert(data.msg);
+                    resetBtn(btn, originalText);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('网络连接错误，请检查服务器日志');
+                resetBtn(btn, originalText);
+            });
+        });
+
+        function resetBtn(btn, text) {
+            btn.disabled = false;
+            btn.innerHTML = text;
+            btn.classList.remove('opacity-75', 'cursor-not-allowed');
+        }
+
+        // --- 轮询逻辑 (保持不变) ---
+        function pollTasks() {
+            const pendingCards = document.querySelectorAll('.task-card');
+            if (pendingCards.length === 0) return;
+
+            fetch('/api/get_ai_tasks')
+            .then(res => res.json())
+            .then(allTasks => {
+                let needsRefresh = false;
+                pendingCards.forEach(card => {
+                    const taskId = parseInt(card.dataset.taskId);
+                    const taskInfo = allTasks.find(t => t.id === taskId);
+                    if (taskInfo) {
+                        const logEl = card.querySelector('.task-log');
+                        if (logEl && logEl.textContent !== taskInfo.log_info) logEl.textContent = taskInfo.log_info;
+                        if (taskInfo.status === 'success' || (taskInfo.status === 'failed' && !card.innerHTML.includes('生成失败'))) {
+                            needsRefresh = true;
+                        }
+                    }
+                });
+                if (needsRefresh) window.location.reload();
+            }).catch(e=>{});
+        }
+        setInterval(pollTasks, 2000);
+
+        // --- 回收站逻辑 (保持不变) ---
+        const trashModal = document.getElementById('trashModal');
+        const trashContent = document.getElementById('trashContent');
+        function openTrash() { trashModal.classList.remove('hidden'); setTimeout(() => trashContent.classList.remove('translate-x-full'), 10); fetchTrash(); }
+        function closeTrash() { trashContent.classList.add('translate-x-full'); setTimeout(() => trashModal.classList.add('hidden'), 300); }
+        function fetchTrash() {
+            const list = document.getElementById('trashList');
+            fetch('/api/get_recycled_graders').then(res => res.json()).then(items => {
+                if (items.length === 0) {
+                    list.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-gray-400"><i class="fas fa-trash-alt text-4xl mb-3 opacity-20"></i><p class="text-sm">回收站是空的</p></div>`;
+                    return;
+                }
+                list.innerHTML = items.map(item => `
+                    <div class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm hover:shadow-md transition">
+                        <div class="font-bold text-gray-700 truncate mb-1">${item.original_name}</div>
+                        <button onclick="restoreGrader(${item.id})" class="w-full bg-green-50 text-green-600 py-2 rounded text-sm hover:bg-green-100 transition font-medium"><i class="fas fa-trash-restore mr-2"></i> 恢复此核心</button>
+                    </div>`).join('');
+            });
+        }
+        function restoreGrader(id) {
+            if(!confirm('确定要恢复吗？')) return;
+            fetch('/api/restore_grader', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: id}) })
+            .then(res => res.json()).then(data => { if(data.msg === '恢复成功') { fetchTrash(); setTimeout(() => window.location.reload(), 500); } });
+        }
+
+        // --- 手动粘贴逻辑 ---
+        let pasteTargetType = ''; // exam, std, direct_exam, direct_std
+
+        function openPasteModal(type) {
+            pasteTargetType = type;
+            document.getElementById('pasteContent').value = ''; // 清空旧内容
+            document.getElementById('pasteModal').classList.remove('hidden');
+            // 自动聚焦
+            setTimeout(() => document.getElementById('pasteContent').focus(), 100);
+        }
+
+        function closePasteModal() {
+            document.getElementById('pasteModal').classList.add('hidden');
+        }
+
+        function savePastedText() {
+            const content = document.getElementById('pasteContent').value;
+            if (!content.trim()) {
+                alert("内容不能为空");
+                return;
+            }
+
+            // 1. 生成一个虚拟的 .txt 文件对象
+            const timestamp = new Date().toISOString().replace(/[-:.]/g, '').substring(0, 14);
+            // 根据目标类型生成更友好的文件名
+            let prefix = 'manual_input';
+            if(pasteTargetType.includes('exam')) prefix = '手动粘贴_试卷';
+            if(pasteTargetType.includes('std')) prefix = '手动粘贴_标准';
+
+            const fileName = `${prefix}_${timestamp}.txt`;
+            const file = new File([content], fileName, { type: "text/plain" });
+
+            // 2. 映射 DOM ID
+            let zoneId = '';
+            let hiddenInputId = '';
+            let inputName = '';
+
+            if (pasteTargetType === 'exam') {
+                zoneId = 'drop-exam'; hiddenInputId = 'exam_file_id'; inputName = 'exam_file';
+            } else if (pasteTargetType === 'std') {
+                zoneId = 'drop-std'; hiddenInputId = 'standard_file_id'; inputName = 'standard_file';
+            } else if (pasteTargetType === 'direct_exam') {
+                zoneId = 'drop-direct_exam'; hiddenInputId = 'direct_exam_file_id'; inputName = 'exam_file'; // 注意 direct form 的 input name 也是 exam_file
+            } else if (pasteTargetType === 'direct_std') {
+                zoneId = 'drop-direct_std'; hiddenInputId = 'direct_std_file_id'; inputName = 'standard_file';
+            }
+
+            const zone = document.getElementById(zoneId);
+
+            // 3. 将 File 对象赋值给 input[type="file"]
+            // 这是一个关键技巧：使用 DataTransfer 模拟拖拽文件列表
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+
+            // 找到 input 并赋值
+            const fileInput = zone.querySelector(`input[name="${inputName}"]`);
+            if(fileInput) {
+                fileInput.files = dataTransfer.files;
+            }
+
+            // 4. 清空隐藏的 ID 域 (确保后端将其视为新上传文件，而不是使用库文件ID)
+            const hiddenInput = document.getElementById(hiddenInputId);
+            if(hiddenInput) hiddenInput.value = '';
+
+            // 5. 更新 UI
+            updateUI(pasteTargetType, fileName + " (文本内容)", true);
+
+            // 6. 关闭模态框
+            closePasteModal();
+        }
+
+    </script>
+</body>
+</html>

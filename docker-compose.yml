@@ -1,0 +1,40 @@
+services:
+  auto_app:
+    build: .
+    container_name: auto_app
+    command: gunicorn -w 4 -b 0.0.0.0:5010 --timeout 600 app:app
+    env_file:
+      - ./docker.env
+    environment:
+      - AI_ASSISTANT_ENDPOINT=http://auto_ai:9011
+    depends_on:
+      - auto_ai
+    ports:
+      - "5010:5010"
+    volumes:
+      - ./data:/auto_app/data  # 持久化数据存储
+      - ./:/auto_app           # 添加：挂载代码目录（关键修改）
+    networks:
+      - default
+    restart: always
+
+  auto_ai:
+    build: .
+    container_name: auto_ai
+    command: python ai_assistant.py
+    env_file:
+      - ./docker.env
+    ports:
+      - "9011:9011"
+    volumes:
+      - ./:/auto_app           # 添加：挂载代码目录（关键修改）
+    networks:
+      - default
+    restart: always
+
+volumes:
+  auto_app_data:
+    driver: local
+
+networks:
+  default:

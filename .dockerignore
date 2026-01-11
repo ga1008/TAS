@@ -1,0 +1,42 @@
+# .dockerignore
+# 排除不必要文件，但保留 requirements.txt
+
+# 排除数据目录
+/data/
+
+# 排除Python缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# 排除虚拟环境
+env/
+venv/
+.venv/
+
+# 排除环境文件
+.env
+.env.local
+.env.*.local
+
+# 排除版本控制
+.git/
+.gitignore
+
+# 排除IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 排除日志文件
+*.log
+logs/
+
+# 排除特定文件
+docker-compose.override.yml
+
+# 注意：不要排除 requirements.txt 和其他必要的配置文件

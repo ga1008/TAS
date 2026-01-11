@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验作业批改系统 - 首页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sky: { 50: '#f0f9ff', 100: '#e0f2fe', 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7' },
+                        indigo: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5' },
+                        slate: { 800: '#1e293b', 500: '#64748b', 400: '#94a3b8' }
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'card': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)',
+                        'glow': '0 0 15px rgba(14, 165, 233, 0.3)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: radial-gradient(circle at top left, #f0f9ff, #f8fafc 80%);
+            min-height: 100vh;
+        }
+
+        /* 磨砂玻璃通用类 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+        }
+
+        /* 帮助弹窗动画 */
+        .fade-enter-active, .fade-exit-active { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .fade-enter { opacity: 0; transform: translateY(-8px) scale(0.98); }
+        .fade-enter-active { opacity: 1; transform: translateY(0) scale(1); }
+        .fade-exit { opacity: 1; transform: translateY(0) scale(1); }
+        .fade-exit-active { opacity: 0; transform: translateY(-8px) scale(0.98); }
+
+        /* 引导箭头动画 */
+        .dash-draw {
+            stroke-dasharray: 10;
+            animation: dash 60s linear infinite;
+        }
+        @keyframes dash { to { stroke-dashoffset: -1000; } }
+    </style>
+</head>
+<body class="flex flex-col font-sans text-slate-800 relative selection:bg-sky-100 selection:text-sky-700">
+
+    {% if not classes %}
+    <svg class="fixed inset-0 w-full h-full z-0 pointer-events-none hidden lg:block opacity-30" style="min-width: 1024px;">
+        <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1"></polygon>
+            </marker>
+        </defs>
+        <path d="M 900 150 Q 1000 300 800 450" stroke="#cbd5e1" stroke-width="2" fill="none" marker-end="url(#arrowhead)" class="dash-draw"/>
+    </svg>
+    {% endif %}
+
+    <nav class="glass-panel sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3">
+                    <div class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white p-2 rounded-xl shadow-md shadow-indigo-200">
+                        <i class="fas fa-tasks text-sm"></i>
+                    </div>
+                    <span class="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 tracking-tight">
+                        作业批改系统
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-3 md:gap-5 relative">
+
+                    <div class="hidden md:flex gap-3">
+                        <a href="/ai_generator" id="btn-core"
+                           class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-full transition-all duration-300 group">
+                            <i class="fas fa-magic group-hover:scale-110 transition-transform"></i>
+                            <span>核心管理</span>
+                        </a>
+
+                        <a href="/new_class" id="btn-task"
+                           class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-sky-500 hover:bg-sky-600 rounded-full shadow-lg shadow-sky-200 hover:shadow-sky-300 transition-all duration-300 hover:-translate-y-0.5">
+                            <i class="fas fa-plus"></i>
+                            <span>新建任务</span>
+                        </a>
+                    </div>
+
+                    <div class="h-6 w-px bg-slate-200 hidden md:block"></div>
+
+                    <div class="relative" id="helpContainer">
+                        <button onclick="toggleHelp()" id="btn-help"
+                                class="w-9 h-9 flex items-center justify-center rounded-full transition-all focus:outline-none relative
+                                       {{ 'bg-indigo-100 text-indigo-600 animate-pulse' if not user.has_seen_help else 'bg-slate-100 text-slate-500 hover:bg-sky-100 hover:text-sky-600' }}">
+                            <i class="fas fa-question text-xs"></i>
+                            {% if not user.has_seen_help %}
+                                <span class="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3">
+                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                  <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                                </span>
+                            {% endif %}
+                        </button>
+
+                        <div id="helpModal" class="hidden absolute right-0 top-14 w-80 md:w-96 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white p-6 z-50 origin-top-right ring-1 ring-slate-900/5">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                                    <i class="fas fa-book-open text-sky-500"></i> 快速指南
+                                </h3>
+                                <button onclick="toggleHelp()" class="text-slate-400 hover:text-slate-600 w-6 h-6 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+
+                            <div class="space-y-4 text-sm text-slate-600">
+                                <div class="bg-indigo-50/50 p-3 rounded-xl border border-indigo-50">
+                                    <h4 class="font-bold text-indigo-700 text-xs uppercase mb-1">How it works</h4>
+                                    <p class="text-xs leading-relaxed text-indigo-900/70">
+                                        系统通过<b>“批改核心”</b>（AI生成的评分逻辑）来自动分析学生作业。您需要先生成核心，再创建班级任务。
+                                    </p>
+                                </div>
+
+                                <div class="grid grid-cols-3 gap-2 text-center text-[10px] text-slate-500">
+                                    <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                        <div class="text-indigo-500 font-bold text-lg mb-1">1</div>
+                                        生成核心
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                        <div class="text-sky-500 font-bold text-lg mb-1">2</div>
+                                        创建任务
+                                    </div>
+                                    <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                        <div class="text-emerald-500 font-bold text-lg mb-1">3</div>
+                                        自动评分
+                                    </div>
+                                </div>
+
+                                <div class="pt-4 border-t border-slate-100">
+                                    <a href="/intro" target="_blank"
+                                       class="flex items-center justify-center gap-2 w-full py-2 bg-gradient-to-r from-sky-500 to-indigo-500 text-white rounded-lg shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all font-bold text-xs group">
+                                        <span>查看完整图解教程</span>
+                                        <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3 pl-2">
+                        <div class="text-right hidden sm:block">
+                            <div class="text-sm font-bold text-slate-700">{{ user.username }}</div>
+                        </div>
+                        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 text-slate-600 flex items-center justify-center font-bold border border-white shadow-sm ring-2 ring-slate-50">
+                            {{ user.username[0] | upper }}
+                        </div>
+                        <a href="/logout" class="text-slate-400 hover:text-red-500 ml-1 transition-colors" title="退出">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full relative z-0">
+
+        <div class="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800 tracking-tight">批改任务板</h1>
+                <p class="text-slate-500 text-sm mt-1">管理您的所有教学班级及实验进度。</p>
+            </div>
+
+            <div class="flex md:hidden gap-2">
+                <a href="/new_class" class="flex-1 bg-sky-500 text-white text-center py-2 rounded-lg text-sm font-bold shadow-md">
+                    <i class="fas fa-plus mr-1"></i> 新任务
+                </a>
+            </div>
+        </div>
+
+        {% if classes %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+            {% for c in classes %}
+            <div onclick="location.href='/grading/{{c['id']}}'"
+                 class="group relative bg-white rounded-2xl border border-slate-100 shadow-card hover:shadow-xl hover:shadow-sky-100/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden">
+
+                <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 opacity-80 group-hover:h-2 transition-all"></div>
+
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="bg-sky-50 text-sky-700 text-[10px] font-bold px-2 py-1 rounded border border-sky-100 uppercase tracking-wide">
+                            {{ c['course'] }}
+                        </span>
+                        <div class="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-indigo-500 group-hover:text-white transition-colors duration-300">
+                            <i class="fas fa-chevron-right text-xs"></i>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-bold text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors">
+                        {{ c['name'] }}
+                    </h3>
+
+                    <div class="flex items-center text-xs text-slate-500 mb-6 bg-slate-50 p-2 rounded-lg border border-slate-50">
+                        <i class="fas fa-robot mr-2 text-indigo-400"></i>
+                        <span class="truncate max-w-[180px]">策略: {{ c['strategy'] }}</span>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-50 flex justify-between items-center mt-auto">
+                        <span class="text-xs font-medium text-slate-400 group-hover:text-sky-500 transition-colors">
+                            点击进入工作台
+                        </span>
+                        <div class="flex -space-x-2">
+                            <div class="w-6 h-6 rounded-full bg-slate-200 ring-2 ring-white"></div>
+                            <div class="w-6 h-6 rounded-full bg-slate-300 ring-2 ring-white"></div>
+                            <div class="w-6 h-6 rounded-full bg-slate-100 ring-2 ring-white flex items-center justify-center text-[8px] text-slate-500 font-bold">+</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <a href="/new_class" class="group border-2 border-dashed border-slate-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center hover:border-sky-400 hover:bg-sky-50/50 transition-all duration-300 min-h-[220px]">
+                <div class="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mb-4 group-hover:bg-sky-100 group-hover:scale-110 transition-all duration-300">
+                    <i class="fas fa-plus text-slate-400 group-hover:text-sky-600 text-lg"></i>
+                </div>
+                <h3 class="font-bold text-slate-600 group-hover:text-sky-700">创建新任务</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-[150px]">添加一个新的班级或实验项目</p>
+            </a>
+        </div>
+
+        {% else %}
+        <div class="flex flex-col items-center justify-center py-20 px-4">
+            <div class="relative mb-8">
+                <div class="absolute inset-0 bg-sky-200 rounded-full opacity-20 blur-xl animate-pulse"></div>
+                <div class="relative bg-white p-8 rounded-full shadow-lg shadow-sky-100">
+                    <i class="fas fa-clipboard-list text-6xl text-sky-400 bg-clip-text"></i>
+                </div>
+            </div>
+
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">暂无批改任务</h2>
+            <p class="text-slate-500 max-w-md text-center mb-10 text-sm leading-relaxed">
+                欢迎来到自动化批改系统！<br>看起来您还没有创建任何任务。请按照以下步骤开始：
+            </p>
+
+            <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                <a href="/ai_generator" class="flex items-center justify-center gap-2 px-8 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:border-indigo-300 hover:text-indigo-600 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
+                    <span class="bg-slate-100 text-slate-500 w-5 h-5 rounded-full flex items-center justify-center text-xs mr-1">1</span>
+                    核心管理
+                </a>
+                <a href="/new_class" class="flex items-center justify-center gap-2 px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-indigo-300 hover:-translate-y-0.5 transition-all duration-300">
+                    <span class="bg-indigo-500 text-white border border-indigo-400 w-5 h-5 rounded-full flex items-center justify-center text-xs mr-1">2</span>
+                    创建任务
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+    </main>
+
+    <footer class="mt-auto py-8 border-t border-slate-200/60 bg-white/50 backdrop-blur-sm relative z-10">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-xs text-slate-400">© 2026 数字科技学院 | Intelligent Grading System</p>
+        </div>
+    </footer>
+
+    <script>
+        function toggleHelp() {
+            const modal = document.getElementById('helpModal');
+            const btn = document.getElementById('btn-help');
+            const isHidden = modal.classList.contains('hidden');
+
+            if (isHidden) {
+                // 显示
+                modal.classList.remove('hidden');
+                modal.classList.add('fade-enter');
+                requestAnimationFrame(() => {
+                    modal.classList.remove('fade-enter');
+                    modal.classList.add('fade-enter-active');
+                });
+
+                // 移除高亮并调用 API
+                if (btn.classList.contains('animate-pulse')) {
+                    btn.classList.remove('animate-pulse', 'bg-indigo-100', 'text-indigo-600');
+                    btn.classList.add('bg-slate-100', 'text-slate-500'); // 恢复默认
+
+                    // 移除小红点
+                    const ping = btn.querySelector('.absolute');
+                    if(ping) ping.remove();
+
+                    // 标记已读
+                    fetch('/api/mark_help_read', { method: 'POST' }).catch(()=>{});
+                }
+
+            } else {
+                // 隐藏
+                modal.classList.remove('fade-enter-active');
+                modal.classList.add('fade-exit-active');
+
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('fade-exit-active');
+                }, 200);
+            }
+        }
+
+        // 点击外部关闭弹窗
+        document.addEventListener('click', function(event) {
+            const container = document.getElementById('helpContainer');
+            const modal = document.getElementById('helpModal');
+            if (!container.contains(event.target) && !modal.classList.contains('hidden')) {
+                toggleHelp();
+            }
+        });
+    </script>
+</body>
+</html>

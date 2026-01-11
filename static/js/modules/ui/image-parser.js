@@ -1,0 +1,200 @@
+/**
+ * static/js/modules/ui/image-parser.js
+ * 处理图片上传、预览、API 调用及结果填充
+ */
+
+import { fillQuestionFormData } from '../forms/question-form.js';
+
+export function initImageParser() {
+    const els = {
+        modal: document.getElementById('imageParseModal'),
+        openBtn: document.getElementById('openImageParseModal'),
+        uploadInput: document.getElementById('imageUploadInput'),
+        dropZone: document.getElementById('imageDropZone'),
+        previewList: document.getElementById('imagePreviewList'),
+        status: document.getElementById('imageParseStatus'),
+        parseBtn: document.getElementById('parseImagesBtn')
+    };
+
+    // 校验必要元素是否存在
+    if (!Object.values(els).every(el => el)) return;
+
+    // 检查 Bootstrap 依赖
+    if (typeof bootstrap === 'undefined') {
+        console.warn('Bootstrap 未加载，图片解析功能不可用');
+        return;
+    }
+
+    const modalInstance = new bootstrap.Modal(els.modal);
+    let pendingFiles = []; // 当前待解析的文件列表
+
+    // ================== 事件绑定 ==================
+
+    els.openBtn.addEventListener('click', () => {
+        reset();
+        modalInstance.show();
+    });
+
+    // 点击上传区
+    els.dropZone.addEventListener('click', () => els.uploadInput.click());
+
+    // 文件选择
+    els.uploadInput.addEventListener('change', (e) => addFiles(e.target.files));
+
+    // 拖拽支持
+    els.dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        els.dropZone.classList.add('dragover');
+    });
+    els.dropZone.addEventListener('dragleave', () => els.dropZone.classList.remove('dragover'));
+    els.dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        els.dropZone.classList.remove('dragover');
+        addFiles(e.dataTransfer.files);
+    });
+
+    // 粘贴支持 (监听全局粘贴，但仅在弹窗显示时生效)
+    document.addEventListener('paste', (e) => {
+        if (!els.modal.classList.contains('show')) return;
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        const files = [];
+        for (let item of items) {
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                files.push(item.getAsFile());
+            }
+        }
+        if (files.length > 0) {
+            e.preventDefault();
+            addFiles(files);
+        }
+    });
+
+    // 删除图片
+    els.previewList.addEventListener('click', (e) => {
+        const btn = e.target.closest('.image-preview-remove');
+        if (btn) {
+            const idx = parseInt(btn.dataset.index);
+            pendingFiles.splice(idx, 1);
+            renderPreviews();
+        }
+    });
+
+    // 执行解析
+    els.parseBtn.addEventListener('click', handleParse);
+
+    // 弹窗关闭时重置
+    els.modal.addEventListener('hidden.bs.modal', reset);
+
+
+    // ================== 逻辑函数 ==================
+
+    function reset() {
+        pendingFiles = [];
+        els.uploadInput.value = '';
+        renderPreviews();
+        updateStatus('', 'muted');
+        setLoading(false);
+    }
+
+    function addFiles(fileList) {
+        if (!fileList || fileList.length === 0) return;
+        const validFiles = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+
+        if (validFiles.length === 0) {
+            updateStatus('请选择有效的图片文件', 'error');
+            return;
+        }
+
+        pendingFiles.push(...validFiles);
+        renderPreviews();
+        updateStatus('', 'muted');
+    }
+
+    function renderPreviews() {
+        els.previewList.innerHTML = '';
+        if (pendingFiles.length === 0) {
+            els.previewList.innerHTML = '<li class="list-group-item text-muted text-center">尚未添加图片</li>';
+            return;
+        }
+
+        pendingFiles.forEach((file, index) => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            const size = (file.size / 1024).toFixed(1);
+
+            li.innerHTML = `
+                <span class="text-truncate" style="max-width: 80%;">${file.name} <small class="text-muted">(${size} KB)</small></span>
+                <button type="button" class="image-preview-remove btn btn-sm btn-link text-danger" data-index="${index}" title="删除">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            els.previewList.appendChild(li);
+        });
+    }
+
+    function updateStatus(msg, type = 'muted') {
+        els.status.textContent = msg;
+        els.status.className = 'small mt-3';
+        if (type === 'error') els.status.classList.add('text-danger');
+        else if (type === 'success') els.status.classList.add('text-success');
+        else els.status.classList.add('text-muted');
+    }
+
+    function setLoading(isLoading) {
+        els.parseBtn.disabled = isLoading;
+        const spinner = els.parseBtn.querySelector('.spinner-border');
+        const text = els.parseBtn.querySelector('.parse-btn-text');
+        if (spinner) spinner.classList.toggle('d-none', !isLoading);
+        if (text) text.textContent = isLoading ? '解析中...' : '解析';
+    }
+
+    async function handleParse() {
+        if (pendingFiles.length === 0) {
+            updateStatus('请先添加图片', 'error');
+            return;
+        }
+
+        setLoading(true);
+        updateStatus('正在智能识别题目内容...', 'muted');
+
+        try {
+            // 1. 转 Base64
+            const base64List = await Promise.all(pendingFiles.map(fileToDataURL));
+
+            // 2. API 调用
+            const response = await fetch('/ai/parse-question', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ images: base64List })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || result.status !== 'success') {
+                throw new Error(result.message || '解析服务响应异常');
+            }
+
+            // 3. 填充表单 (调用外部模块)
+            fillQuestionFormData(result.data);
+
+            // 4. 成功反馈
+            updateStatus('解析成功！数据已填入表单', 'success');
+            setTimeout(() => modalInstance.hide(), 1500);
+
+        } catch (err) {
+            console.error('Parse error:', err);
+            updateStatus(`解析失败: ${err.message}`, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function fileToDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('读取文件失败'));
+            reader.readAsDataURL(file);
+        });
+    }
+}

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>文件解析管理器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sky: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7' },
+                        slate: { 800: '#1e293b', 500: '#64748b', 400: '#94a3b8' }
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'glow': '0 0 15px rgba(14, 165, 233, 0.3)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background: radial-gradient(circle at top left, #f8fafc, #f1f5f9); min-height: 100vh; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* 预览内容的排版优化 */
+        .prose h1 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5em; color: #1e293b; }
+        .prose h2 { font-size: 1.25em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #334155; }
+        .prose p { margin-bottom: 0.8em; line-height: 1.6; color: #475569; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
+        .prose pre { background: #f1f5f9; padding: 1em; border-radius: 0.5em; overflow-x: auto; font-family: monospace; }
+        .prose code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25em; font-size: 0.9em; color: #0ea5e9; }
+    </style>
+</head>
+<body class="font-sans text-slate-800 selection:bg-sky-100 selection:text-sky-700">
+
+    <nav class="glass-panel sticky top-0 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="/ai_generator" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-sky-600 hover:border-sky-200 transition-all shadow-sm">
+                    <i class="fas fa-arrow-left text-sm"></i>
+                </a>
+                <h1 class="text-lg font-bold text-slate-800 flex items-center">
+                    <span class="bg-sky-100 text-sky-600 w-8 h-8 rounded-lg flex items-center justify-center mr-3 text-sm">
+                        <i class="fas fa-file-invoice"></i>
+                    </span>
+                    文档解析管理器
+                </h1>
+            </div>
+
+            <button onclick="loadFiles()" class="text-xs font-bold text-sky-600 bg-sky-50 px-3 py-1.5 rounded-full border border-sky-100 hover:bg-sky-100 hover:border-sky-200 transition-colors flex items-center gap-2">
+                <i class="fas fa-sync-alt"></i> 刷新列表
+            </button>
+        </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto p-4 md:p-8">
+        <div class="bg-white rounded-2xl shadow-soft border border-slate-100 overflow-hidden min-h-[500px] flex flex-col">
+
+            <div class="p-6 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                <div>
+                    <h2 class="font-bold text-slate-700 text-lg">已解析文档库</h2>
+                    <p class="text-xs text-slate-500 mt-1">存储了您上传并通过 AI 成功结构化解析的试卷或评分标准。</p>
+                </div>
+                <div class="hidden md:block text-slate-200 text-5xl opacity-20">
+                    <i class="fas fa-database"></i>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-x-auto">
+                <table class="w-full text-sm text-left text-slate-500">
+                    <thead class="text-xs text-slate-400 uppercase bg-slate-50/80 border-b border-slate-100">
+                        <tr>
+                            <th class="px-6 py-4 font-medium tracking-wider">文件名</th>
+                            <th class="px-6 py-4 font-medium tracking-wider w-32">大小</th>
+                            <th class="px-6 py-4 font-medium tracking-wider w-40">解析时间</th>
+                            <th class="px-6 py-4 font-medium tracking-wider text-center w-32">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileTableBody" class="divide-y divide-slate-50 bg-white">
+                        </tbody>
+                </table>
+
+                <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-slate-400">
+                    <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                        <i class="fas fa-box-open text-3xl opacity-30"></i>
+                    </div>
+                    <p>暂无已解析的文件</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="previewModal" class="fixed inset-0 z-50 hidden transition-opacity duration-300">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md transition-opacity" onclick="closePreview()"></div>
+
+        <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-slate-900/5 scale-95 opacity-0 transition-all duration-300" id="modalContent">
+
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 backdrop-blur-sm z-10">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <div class="bg-indigo-50 text-indigo-600 w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-eye text-sm"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-700 truncate" id="previewTitle">解析结果预览</h3>
+                </div>
+                <button onclick="closePreview()" class="w-8 h-8 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-8 bg-white prose max-w-none text-slate-600" id="previewContent">
+                </div>
+        </div>
+    </div>
+
+<script>
+    let fileCache = {};
+
+    document.addEventListener('DOMContentLoaded', loadFiles);
+
+    function loadFiles() {
+        const tbody = document.getElementById('fileTableBody');
+        const emptyDiv = document.getElementById('emptyState');
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-slate-400"><i class="fas fa-circle-notch fa-spin mr-2 text-sky-500"></i>正在加载文件库...</td></tr>';
+
+        fetch('/api/my_parsed_files')
+            .then(res => res.json())
+            .then(files => {
+                tbody.innerHTML = '';
+                fileCache = {};
+
+                if (files.length === 0) {
+                    emptyDiv.classList.remove('hidden');
+                    return;
+                }
+                emptyDiv.classList.add('hidden');
+
+                files.forEach(f => {
+                    fileCache[f.id] = f;
+                    const sizeStr = (f.file_size / 1024).toFixed(1) + ' KB';
+
+                    // 根据文件类型决定图标颜色
+                    const iconConfig = getFileIconConfig(f.original_name);
+
+                    const row = `
+                        <tr class="group hover:bg-slate-50/80 transition-colors duration-200">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center">
+                                    <div class="w-10 h-10 rounded-xl ${iconConfig.bg} ${iconConfig.text} flex items-center justify-center mr-4 shadow-sm group-hover:scale-110 transition-transform duration-200">
+                                        <i class="fas ${iconConfig.icon}"></i>
+                                    </div>
+                                    <div class="truncate max-w-xs font-medium text-slate-700" title="${escapeHtml(f.original_name)}">${escapeHtml(f.original_name)}</div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 font-mono text-xs text-slate-400">${sizeStr}</td>
+                            <td class="px-6 py-4 text-xs text-slate-400">${f.created_at ? f.created_at.substring(0, 16) : '刚刚'}</td>
+                            <td class="px-6 py-4 text-center">
+                                <div class="flex items-center justify-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                                    <button onclick="showPreview(${f.id})"
+                                            class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors flex items-center justify-center" title="查看">
+                                        <i class="fas fa-eye text-xs"></i>
+                                    </button>
+                                    <button onclick="deleteFile(${f.id})"
+                                            class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 hover:text-rose-600 transition-colors flex items-center justify-center" title="删除">
+                                        <i class="fas fa-trash-alt text-xs"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            })
+            .catch(err => {
+                console.error(err);
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-rose-500">加载失败，请刷新重试</td></tr>';
+            });
+    }
+
+    function getFileIconConfig(name) {
+        name = name.toLowerCase();
+        if(name.endsWith('.pdf')) return { icon: 'fa-file-pdf', bg: 'bg-rose-50', text: 'text-rose-500' };
+        if(name.endsWith('.doc') || name.endsWith('.docx')) return { icon: 'fa-file-word', bg: 'bg-blue-50', text: 'text-blue-600' };
+        if(name.endsWith('.jpg') || name.endsWith('.png')) return { icon: 'fa-file-image', bg: 'bg-purple-50', text: 'text-purple-500' };
+        if(name.endsWith('.txt') || name.endsWith('.md')) return { icon: 'fa-file-alt', bg: 'bg-slate-100', text: 'text-slate-500' };
+        return { icon: 'fa-file', bg: 'bg-slate-100', text: 'text-slate-500' };
+    }
+
+    function escapeHtml(text) {
+        if (!text) return text;
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function showPreview(fileId) {
+        const file = fileCache[fileId];
+        if (!file) return;
+
+        document.getElementById('previewTitle').innerText = file.original_name;
+
+        const content = file.parsed_content || "_暂无解析内容_";
+        const parser = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : (marked || (t => t));
+
+        document.getElementById('previewContent').innerHTML = parser(content);
+
+        // 动画显示
+        const modal = document.getElementById('previewModal');
+        const contentDiv = document.getElementById('modalContent');
+        modal.classList.remove('hidden');
+        // 强制重绘
+        void modal.offsetWidth;
+
+        contentDiv.classList.remove('scale-95', 'opacity-0');
+        contentDiv.classList.add('scale-100', 'opacity-100');
+    }
+
+    function closePreview() {
+        const modal = document.getElementById('previewModal');
+        const contentDiv = document.getElementById('modalContent');
+
+        contentDiv.classList.remove('scale-100', 'opacity-100');
+        contentDiv.classList.add('scale-95', 'opacity-0');
+
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 300);
+    }
+
+    function deleteFile(id) {
+        if(!confirm('确定要删除这个文件及其解析记录吗？')) return;
+        fetch('/api/delete_file_asset', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.msg === '删除成功') loadFiles();
+            else alert('删除失败: ' + data.msg);
+        });
+    }
+</script>
+</body>
+</html>

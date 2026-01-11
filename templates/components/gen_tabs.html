@@ -1,0 +1,31 @@
+<div class="flex border-b border-slate-100 bg-slate-50/50">
+    <button onclick="switchTab('logic')" id="tab-logic" class="flex-1 py-5 text-center text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 bg-white transition-all relative">
+        <i class="fas fa-code mr-2"></i> 逻辑生成核心
+        <span class="absolute top-3 right-[20%] w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
+    </button>
+    <button onclick="switchTab('direct')" id="tab-direct" class="flex-1 py-5 text-center text-sm font-bold text-slate-400 hover:text-sky-600 hover:bg-white transition-all">
+        <i class="fas fa-eye mr-2"></i> Direct AI 多模态核心
+    </button>
+</div>
+
+<div id="gen-notes-container" class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 md:p-8 text-white transition-all duration-500 relative overflow-hidden">
+    <div class="absolute top-0 right-0 p-4 opacity-10 transform translate-x-4 -translate-y-4">
+        <i class="fas fa-robot text-9xl"></i>
+    </div>
+
+    <div class="relative z-10">
+        <h2 class="text-lg font-bold mb-3 flex items-center" id="gen-notes-title">
+            <span class="bg-white/20 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 border border-white/30">1</span>
+            配置逻辑生成核心
+            <span class="ml-3 text-[10px] bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full font-bold shadow-sm">RECOMMENDED</span>
+        </h2>
+
+        <div class="text-indigo-50 text-sm leading-relaxed max-w-2xl" id="gen-note-content">
+            <p class="mb-3 opacity-90">AI 阅读试卷后编写 Python 脚本，在本地运行批改。速度极快且免费。</p>
+            <div class="flex gap-4 text-xs">
+                <span class="bg-white/10 px-2 py-1 rounded border border-white/10"><i class="fas fa-check text-emerald-300 mr-1"></i> 速度极快</span>
+                <span class="bg-white/10 px-2 py-1 rounded border border-white/10"><i class="fas fa-check text-emerald-300 mr-1"></i> 评分统一</span>
+            </div>
+        </div>
+    </div>
+</div>

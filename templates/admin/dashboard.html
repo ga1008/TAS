@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* 局部样式覆盖，模拟 Glass Effect */
+    .admin-card {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+    }
+
+    .badge-thinking {
+        background-color: #9b59b6;
+        color: white;
+    }
+
+    .badge-standard {
+        background-color: #3498db;
+        color: white;
+    }
+
+    .badge-vision {
+        background-color: #e67e22;
+        color: white;
+    }
+</style>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-black-50 fw-bold">AI 服务配置中心</h2>
+        <div>
+            <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#addProviderModal">
+                <i class="fas fa-server"></i> 新增服务商
+            </button>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        {% for provider in providers %}
+        <div class="col-12 mb-4">
+            <div class="card admin-card">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-3">
+                    <div class="d-flex align-items-center">
+                        <span class="badge {{ 'bg-success' if provider.is_enabled else 'bg-secondary' }} me-2">
+                            {{ '运行中' if provider.is_enabled else '已停用' }}
+                        </span>
+                        <h5 class="mb-0 fw-bold">{{ provider.name }}</h5>
+                        <small class="text-muted ms-2">({{ provider.provider_type }})</small>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary me-1"
+                                onclick="editProvider({{ provider|tojson }})">
+                            <i class="fas fa-edit"></i> 配置
+                        </button>
+                        {% if provider.is_enabled %}
+                        <a href="{{ url_for('admin.toggle_provider', p_id=provider.id, state=0) }}"
+                           class="btn btn-sm btn-outline-warning me-1">
+                            <i class="fas fa-pause"></i> 停用
+                        </a>
+                        {% else %}
+                        <a href="{{ url_for('admin.toggle_provider', p_id=provider.id, state=1) }}"
+                           class="btn btn-sm btn-outline-success me-1">
+                            <i class="fas fa-play"></i> 启用
+                        </a>
+                        {% endif %}
+                        <a href="{{ url_for('admin.delete_provider', p_id=provider.id) }}"
+                           class="btn btn-sm btn-outline-danger"
+                           onclick="return confirm('确定删除该厂商及其所有模型吗？')">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6"><small class="text-muted">Base URL:</small> <code class="text-dark">{{
+                            provider.base_url }}</code></div>
+                        <div class="col-md-3"><small class="text-muted">Max Concurrent:</small> <b>{{
+                            provider.max_concurrent_requests }}</b></div>
+                        <div class="col-md-3 text-end">
+                            <button class="btn btn-sm btn-primary"
+                                    onclick="addModel({{ provider.id }}, '{{ provider.name }}')">
+                                <i class="fas fa-plus"></i> 添加模型
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                            <tr>
+                                <th>模型名称 (Model Name)</th>
+                                <th>能力类型</th>
+                                <th>权重</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for model in provider.models %}
+                            <tr>
+                                <td>{{ model.model_name }}</td>
+                                <td>
+                                        <span class="badge badge-{{ model.capability }}">
+                                            {{ model.capability }}
+                                        </span>
+                                </td>
+                                <td>{{ model.weight }}</td>
+                                <td>
+                                    <i class="fas fa-circle {{ 'text-success' if model.is_enabled else 'text-secondary' }}"></i>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-link text-primary"
+                                            onclick='editModel({{ model|tojson }})'>编辑
+                                    </button>
+                                    {% if model.is_enabled %}
+                                    <a href="{{ url_for('admin.toggle_model', m_id=model.id, state=0) }}"
+                                       class="btn btn-sm btn-link text-warning">停用</a>
+                                    {% else %}
+                                    <a href="{{ url_for('admin.toggle_model', m_id=model.id, state=1) }}"
+                                       class="btn btn-sm btn-link text-success">启用</a>
+                                    {% endif %}
+                                    <a href="{{ url_for('admin.delete_model', m_id=model.id) }}"
+                                       class="btn btn-sm btn-link text-danger" onclick="return confirm('删除此模型？')">删除</a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">暂无配置模型</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="modal fade" id="addProviderModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="{{ url_for('admin.add_provider') }}" method="POST" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新增 AI 服务商</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">厂商名称 (自定义)</label>
+                    <input type="text" name="name" class="form-control" placeholder="例如: DeepSeek" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">协议类型</label>
+                    <select name="provider_type" class="form-select">
+                        <option value="openai">OpenAI Compatible</option>
+                        <option value="volcengine">Volcengine (火山引擎)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">API Key</label>
+                    <input type="text" name="api_key" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Base URL</label>
+                    <input type="text" name="base_url" class="form-control"
+                           placeholder="例如: https://api.deepseek.com/v1">
+                    <div class="form-text">OpenAI 协议必填，火山引擎通常不填</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="editProviderModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="{{ url_for('admin.edit_provider') }}" method="POST" class="modal-content">
+            <input type="hidden" name="id" id="edit_p_id">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑服务商配置</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">厂商名称</label>
+                    <input type="text" name="name" id="edit_p_name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">API Key</label>
+                    <input type="text" name="api_key" id="edit_p_key" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Base URL</label>
+                    <input type="text" name="base_url" id="edit_p_url" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">最大并发数 (Max Concurrent)</label>
+                    <input type="number" name="max_concurrent" id="edit_p_conn" class="form-control" min="1" max="100"
+                           required>
+                    <div class="form-text">动态控制该厂商同时处理的请求数量</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">更新</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="modelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="{{ url_for('admin.add_model') }}" method="POST" class="modal-content" id="modelForm">
+            <input type="hidden" name="provider_id" id="m_provider_id">
+            <input type="hidden" name="id" id="m_id">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modelModalTitle">添加模型</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">模型真实 ID (Model Name)</label>
+                    <input type="text" name="model_name" id="m_name" class="form-control"
+                           placeholder="例如: deepseek-chat" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">能力类型</label>
+                    <select name="capability" id="m_cap" class="form-select">
+                        <option value="standard">Standard (通用对话)</option>
+                        <option value="thinking">Thinking (深度思考)</option>
+                        <option value="vision">Vision (视觉识别)</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">调度权重 (1-100)</label>
+                    <input type="number" name="weight" id="m_weight" class="form-control" value="50">
+                    <div class="form-text">权重越高，被选中的概率越大</div>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="can_force_json" id="m_json">
+                    <label class="form-check-label" for="m_json">
+                        支持 JSON Mode (Force JSON)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // 填充编辑 Provider 模态框
+    function editProvider(data) {
+        document.getElementById('edit_p_id').value = data.id;
+        document.getElementById('edit_p_name').value = data.name;
+        document.getElementById('edit_p_key').value = data.api_key;
+        document.getElementById('edit_p_url').value = data.base_url || '';
+        document.getElementById('edit_p_conn').value = data.max_concurrent_requests;
+
+        var modal = new bootstrap.Modal(document.getElementById('editProviderModal'));
+        modal.show();
+    }
+
+    // 准备添加模型
+    function addModel(providerId, providerName) {
+        document.getElementById('modelForm').action = "{{ url_for('admin.add_model') }}";
+        document.getElementById('modelModalTitle').innerText = "添加模型 - " + providerName;
+        document.getElementById('m_provider_id').value = providerId;
+        document.getElementById('m_id').value = '';
+        document.getElementById('m_name').value = '';
+        document.getElementById('m_weight').value = 50;
+        document.getElementById('m_json').checked = false;
+
+        var modal = new bootstrap.Modal(document.getElementById('modelModal'));
+        modal.show();
+    }
+
+    // 准备编辑模型
+    function editModel(data) {
+        document.getElementById('modelForm').action = "{{ url_for('admin.edit_model') }}";
+        document.getElementById('modelModalTitle').innerText = "编辑模型";
+        document.getElementById('m_id').value = data.id;
+        document.getElementById('m_name').value = data.model_name;
+        document.getElementById('m_cap').value = data.capability;
+        document.getElementById('m_weight').value = data.weight;
+        document.getElementById('m_json').checked = data.can_force_json;
+
+        var modal = new bootstrap.Modal(document.getElementById('modelModal'));
+        modal.show();
+    }
+</script>
+{% endblock %}
