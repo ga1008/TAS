@@ -44,37 +44,3 @@
             </div>
     </div>
 </div>
-
-<div id="pasteModal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onclick="closePasteModal()"></div>
-    <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col h-[70vh]">
-        <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-            <h3 class="font-bold text-slate-800 flex items-center gap-2">
-                <i class="fas fa-paste text-amber-500"></i> 手动粘贴内容
-            </h3>
-            <button onclick="closePasteModal()" class="text-slate-400 hover:text-slate-600 w-8 h-8 rounded-full hover:bg-slate-200 flex items-center justify-center transition">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <div class="flex-1 p-4 flex flex-col">
-            <div class="bg-amber-50 text-amber-800 text-xs p-3 rounded-lg mb-3 border border-amber-100 flex items-start gap-2">
-                <i class="fas fa-lightbulb mt-0.5"></i>
-                <span>提示：请直接粘贴试卷题目或评分标准的文字内容。支持 Markdown 格式。系统将自动将其保存为 .txt 文件。</span>
-            </div>
-            <textarea id="pasteContent" class="flex-1 w-full border border-slate-200 bg-slate-50 rounded-lg p-4 focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 outline-none resize-none font-mono text-sm leading-relaxed transition-all" placeholder="在此处粘贴文本..."></textarea>
-        </div>
-
-        <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
-            <button onclick="document.getElementById('pasteContent').value=''" class="text-slate-400 hover:text-rose-500 text-sm font-bold px-2 transition-colors">
-                <i class="fas fa-eraser mr-1"></i>清空
-            </button>
-            <div class="space-x-2">
-                <button onclick="closePasteModal()" class="px-4 py-2 text-slate-500 hover:text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition">取消</button>
-                <button onclick="savePastedText()" class="px-6 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-bold shadow-md shadow-amber-200 text-sm transition transform active:scale-95">
-                    <i class="fas fa-save mr-1"></i> 保存并使用
-                </button>
-            </div>
-        </div>
-    </div>
-</div>

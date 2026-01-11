@@ -71,11 +71,8 @@
     {% else %}
         <div class="md:col-span-1 flex flex-col space-y-2">
             <div class="flex justify-between items-center px-1">
-                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">上传试卷</label>
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">选择试卷文档</label>
                 <div class="flex items-center gap-3">
-                    <button type="button" onclick="openPasteModal('exam')" class="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition flex items-center gap-1">
-                        <i class="fas fa-paste"></i> 粘贴
-                    </button>
                     <button type="button" onclick="openFileModal('exam')" class="text-[10px] text-indigo-500 hover:text-indigo-600 font-bold transition flex items-center gap-1">
                         <i class="fas fa-folder-open"></i> 选择
                     </button>
@@ -85,27 +82,25 @@
                 </div>
             </div>
 
-            <div id="drop-exam" class="upload-zone border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-indigo-50 hover:border-indigo-300 transition-all duration-300 cursor-pointer relative group flex-1 flex flex-col items-center justify-center min-h-[140px] bg-slate-50">
-                <input type="file" name="exam_file" accept=".pdf,.docx,.doc,.txt,.md" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onchange="handleFileSelect(this, 'exam')">
-                <input type="hidden" name="exam_file_id" id="exam_file_id">
-
-                <div id="exam-display" class="flex flex-col items-center pointer-events-none transition-transform group-hover:scale-105">
-                    <div class="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 text-slate-400 group-hover:text-indigo-500 transition-colors">
-                        <i class="fas fa-file-alt text-xl"></i>
+            <div id="exam-card" class="border border-dashed border-slate-200 rounded-xl p-5 bg-slate-50 flex items-center justify-between gap-4">
+                <div id="exam-display" class="flex items-center gap-3 text-slate-400">
+                    <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
+                        <i class="fas fa-file-alt text-lg"></i>
                     </div>
-                    <p class="text-xs font-bold text-slate-600">点击上传试卷</p>
-                    <p class="text-[10px] text-slate-400 mt-1">支持 PDF / Word / Markdown</p>
+                    <div>
+                        <p class="text-xs font-bold text-slate-600">尚未选择试卷</p>
+                        <p class="text-[10px] text-slate-400">从文档解析管理器选择已上传文件</p>
+                    </div>
                 </div>
+                <i class="fas fa-arrow-right text-slate-300 text-sm"></i>
             </div>
+            <input type="hidden" name="exam_file_id" id="exam_file_id">
         </div>
 
         <div class="md:col-span-1 flex flex-col space-y-2">
             <div class="flex justify-between items-center px-1">
-                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">上传评分标准</label>
+                <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">选择评分标准</label>
                 <div class="flex items-center gap-3">
-                    <button type="button" onclick="openPasteModal('std')" class="text-[10px] text-amber-500 hover:text-amber-600 font-bold transition flex items-center gap-1">
-                        <i class="fas fa-paste"></i> 粘贴
-                    </button>
                     <button type="button" onclick="openFileModal('std')" class="text-[10px] text-indigo-500 hover:text-indigo-600 font-bold transition flex items-center gap-1">
                         <i class="fas fa-folder-open"></i> 选择
                     </button>
@@ -115,17 +110,19 @@
                 </div>
             </div>
 
-            <div id="drop-std" class="upload-zone border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-purple-50 hover:border-purple-300 transition-all duration-300 cursor-pointer relative group flex-1 flex flex-col items-center justify-center min-h-[140px] bg-slate-50">
-                <input type="file" name="standard_file" accept=".pdf,.docx,.doc,.txt,.md" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onchange="handleFileSelect(this, 'std')">
-                <input type="hidden" name="standard_file_id" id="standard_file_id">
-
-                <div id="std-display" class="flex flex-col items-center pointer-events-none transition-transform group-hover:scale-105">
-                    <div class="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mb-3 text-slate-400 group-hover:text-purple-500 transition-colors">
-                        <i class="fas fa-clipboard-check text-xl"></i>
+            <div id="std-card" class="border border-dashed border-slate-200 rounded-xl p-5 bg-slate-50 flex items-center justify-between gap-4">
+                <div id="std-display" class="flex items-center gap-3 text-slate-400">
+                    <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
+                        <i class="fas fa-clipboard-check text-lg"></i>
                     </div>
-                    <p class="text-xs font-bold text-slate-600">点击上传标准</p>
+                    <div>
+                        <p class="text-xs font-bold text-slate-600">尚未选择评分标准</p>
+                        <p class="text-[10px] text-slate-400">请选择已解析的评分标准文件</p>
+                    </div>
                 </div>
+                <i class="fas fa-arrow-right text-slate-300 text-sm"></i>
             </div>
+            <input type="hidden" name="standard_file_id" id="standard_file_id">
         </div>
     {% endif %}
 
