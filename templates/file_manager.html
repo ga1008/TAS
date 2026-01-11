@@ -39,6 +39,13 @@
         .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
         .prose pre { background: #f1f5f9; padding: 1em; border-radius: 0.5em; overflow-x: auto; font-family: monospace; }
         .prose code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25em; font-size: 0.9em; color: #0ea5e9; }
+
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body class="font-sans text-slate-800 selection:bg-sky-100 selection:text-sky-700">
@@ -63,34 +70,136 @@
         </div>
     </nav>
 
-    <div class="max-w-6xl mx-auto p-4 md:p-8">
-        <div class="bg-white rounded-2xl shadow-soft border border-slate-100 overflow-hidden min-h-[500px] flex flex-col">
+    <div class="max-w-6xl mx-auto p-4 md:p-8 space-y-8">
+        <div class="bg-white rounded-3xl shadow-soft border border-slate-100 overflow-hidden">
+            <div class="p-6 border-b border-slate-50 bg-slate-50/50 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                <div>
+                    <h2 class="font-bold text-slate-700 text-lg">文档解析工作台</h2>
+                    <p class="text-xs text-slate-500 mt-1">集中上传、解析与管理试卷和评分标准内容。</p>
+                </div>
+                <div class="hidden md:block text-slate-200 text-5xl opacity-30">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+            </div>
 
+            <div class="px-6 pt-6">
+                <div class="flex flex-wrap gap-3 text-xs font-bold">
+                    <button onclick="switchPanel('upload')" id="tab-upload"
+                            class="px-4 py-2 rounded-full bg-sky-50 text-sky-600 border border-sky-100 shadow-sm transition">
+                        <i class="fas fa-cloud-upload-alt mr-1"></i> 上传解析
+                    </button>
+                    <button onclick="switchPanel('paste')" id="tab-paste"
+                            class="px-4 py-2 rounded-full bg-white text-slate-400 border border-slate-100 hover:text-slate-600 transition">
+                        <i class="fas fa-paste mr-1"></i> 粘贴入库
+                    </button>
+                    <button onclick="switchPanel('ai')" id="tab-ai"
+                            class="px-4 py-2 rounded-full bg-white text-slate-400 border border-slate-100 hover:text-slate-600 transition">
+                        <i class="fas fa-wand-magic-sparkles mr-1"></i> AI 辅助生成
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-6">
+                <div id="panel-upload" class="space-y-4">
+                    <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-700">上传文件并解析</h3>
+                            <p class="text-[11px] text-slate-400 mt-1">支持 PDF / Word / Markdown / 图片。</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+                            <span class="uppercase">类型</span>
+                            <select id="uploadDocType" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200">
+                                <option value="exam">试卷</option>
+                                <option value="standard">评分标准</option>
+                            </select>
+                        </div>
+                        <label class="flex-1 border-2 border-dashed border-slate-200 rounded-xl bg-white/70 p-6 text-center cursor-pointer hover:border-sky-300 hover:bg-sky-50 transition">
+                            <input id="uploadFileInput" type="file" class="hidden" accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp">
+                            <div id="uploadFileDisplay" class="text-slate-400 text-sm space-y-2">
+                                <div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto text-sky-500">
+                                    <i class="fas fa-file-upload"></i>
+                                </div>
+                                <p class="text-xs font-bold text-slate-600">点击选择文件</p>
+                                <p class="text-[10px] text-slate-400">将自动调用智能解析器</p>
+                            </div>
+                        </label>
+                        <button id="uploadParseBtn"
+                                class="mt-2 bg-sky-500 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-sky-600 transition">
+                            <i class="fas fa-bolt mr-1"></i> 解析并入库
+                        </button>
+                        <p id="uploadStatus" class="text-[11px] text-slate-400"></p>
+                    </div>
+                </div>
+
+                <div id="panel-paste" class="hidden space-y-4">
+                    <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-700">粘贴内容并保存</h3>
+                            <p class="text-[11px] text-slate-400 mt-1">适合纯文本或 Markdown 内容。</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+                            <span class="uppercase">类型</span>
+                            <select id="pasteDocType" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-amber-200">
+                                <option value="exam">试卷</option>
+                                <option value="standard">评分标准</option>
+                            </select>
+                        </div>
+                        <textarea id="pasteContent" class="min-h-[220px] border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 resize-none" placeholder="粘贴试卷题目或评分标准内容..."></textarea>
+                        <div class="flex items-center justify-between text-xs">
+                            <button id="pasteClearBtn" class="text-slate-400 hover:text-rose-500 font-bold">
+                                <i class="fas fa-eraser mr-1"></i> 清空
+                            </button>
+                            <button id="pasteSaveBtn" class="bg-amber-500 text-white font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-amber-600 transition">
+                                <i class="fas fa-save mr-1"></i> 保存入库
+                            </button>
+                        </div>
+                        <p id="pasteStatus" class="text-[11px] text-slate-400"></p>
+                    </div>
+                </div>
+
+                <div id="panel-ai" class="hidden space-y-4">
+                    <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-700">AI 辅助生成</h3>
+                            <p class="text-[11px] text-slate-400 mt-1">根据提示词与附件生成结构化内容。</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+                            <span class="uppercase">类型</span>
+                            <select id="aiDocType" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-200">
+                                <option value="exam">试卷</option>
+                                <option value="standard">评分标准</option>
+                            </select>
+                        </div>
+                        <textarea id="aiPrompt" class="min-h-[180px] border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 resize-none" placeholder="请输入生成要求，如题量、题型、评分维度等..."></textarea>
+                        <label class="border border-dashed border-slate-200 rounded-xl p-3 bg-white/70 text-center text-xs text-slate-500 cursor-pointer hover:border-purple-300 hover:bg-purple-50 transition">
+                            <input id="aiFiles" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp">
+                            <i class="fas fa-paperclip mr-1 text-purple-500"></i> 上传参考文件 (可多选)
+                        </label>
+                        <button id="aiGenerateBtn"
+                                class="bg-purple-600 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-purple-700 transition">
+                            <i class="fas fa-wand-magic-sparkles mr-1"></i> 开始生成
+                        </button>
+                        <p id="aiStatus" class="text-[11px] text-slate-400"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-3xl shadow-soft border border-slate-100 overflow-hidden">
             <div class="p-6 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                 <div>
                     <h2 class="font-bold text-slate-700 text-lg">已解析文档库</h2>
-                    <p class="text-xs text-slate-500 mt-1">存储了您上传并通过 AI 成功结构化解析的试卷或评分标准。</p>
+                    <p class="text-xs text-slate-500 mt-1">展示您解析或生成的文档内容，支持一键预览与删除。</p>
                 </div>
                 <div class="hidden md:block text-slate-200 text-5xl opacity-20">
                     <i class="fas fa-database"></i>
                 </div>
             </div>
 
-            <div class="flex-1 overflow-x-auto">
-                <table class="w-full text-sm text-left text-slate-500">
-                    <thead class="text-xs text-slate-400 uppercase bg-slate-50/80 border-b border-slate-100">
-                        <tr>
-                            <th class="px-6 py-4 font-medium tracking-wider">文件名</th>
-                            <th class="px-6 py-4 font-medium tracking-wider w-32">大小</th>
-                            <th class="px-6 py-4 font-medium tracking-wider w-40">解析时间</th>
-                            <th class="px-6 py-4 font-medium tracking-wider text-center w-32">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="fileTableBody" class="divide-y divide-slate-50 bg-white">
-                        </tbody>
-                </table>
+            <div class="p-6">
+                <div id="fileGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
 
-                <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20 text-slate-400">
+                <div id="emptyState" class="hidden flex flex-col items-center justify-center py-16 text-slate-400">
                     <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                         <i class="fas fa-box-open text-3xl opacity-30"></i>
                     </div>
@@ -125,17 +234,21 @@
 <script>
     let fileCache = {};
 
-    document.addEventListener('DOMContentLoaded', loadFiles);
+    document.addEventListener('DOMContentLoaded', () => {
+        loadFiles();
+        initActions();
+        switchPanel('upload');
+    });
 
     function loadFiles() {
-        const tbody = document.getElementById('fileTableBody');
+        const grid = document.getElementById('fileGrid');
         const emptyDiv = document.getElementById('emptyState');
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-slate-400"><i class="fas fa-circle-notch fa-spin mr-2 text-sky-500"></i>正在加载文件库...</td></tr>';
+        grid.innerHTML = '<div class="col-span-full text-center py-10 text-slate-400"><i class="fas fa-circle-notch fa-spin mr-2 text-sky-500"></i>正在加载文件库...</div>';
 
         fetch('/api/my_parsed_files')
             .then(res => res.json())
             .then(files => {
-                tbody.innerHTML = '';
+                grid.innerHTML = '';
                 fileCache = {};
 
                 if (files.length === 0) {
@@ -146,43 +259,47 @@
 
                 files.forEach(f => {
                     fileCache[f.id] = f;
-                    const sizeStr = (f.file_size / 1024).toFixed(1) + ' KB';
-
-                    // 根据文件类型决定图标颜色
+                    const snippet = f.parsed_content ? escapeHtml(f.parsed_content.replace(/\n/g, ' ')).slice(0, 120) : '暂无内容';
+                    const timeStr = f.created_at ? f.created_at.substring(0, 16) : '刚刚';
                     const iconConfig = getFileIconConfig(f.original_name);
+                    const deleteButton = f.is_owner ? `
+                        <button onclick="deleteFile(${f.id}); event.stopPropagation();"
+                                class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 hover:text-rose-600 transition-colors flex items-center justify-center" title="删除">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </button>` : '';
 
-                    const row = `
-                        <tr class="group hover:bg-slate-50/80 transition-colors duration-200">
-                            <td class="px-6 py-4">
-                                <div class="flex items-center">
-                                    <div class="w-10 h-10 rounded-xl ${iconConfig.bg} ${iconConfig.text} flex items-center justify-center mr-4 shadow-sm group-hover:scale-110 transition-transform duration-200">
+                    const card = `
+                        <div onclick="showPreview(${f.id})" class="group cursor-pointer rounded-2xl border border-slate-100 bg-white p-5 shadow-sm hover:shadow-lg hover:border-sky-100 transition-all">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-10 h-10 rounded-xl ${iconConfig.bg} ${iconConfig.text} flex items-center justify-center shadow-sm">
                                         <i class="fas ${iconConfig.icon}"></i>
                                     </div>
-                                    <div class="truncate max-w-xs font-medium text-slate-700" title="${escapeHtml(f.original_name)}">${escapeHtml(f.original_name)}</div>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-slate-700 truncate max-w-[220px]" title="${escapeHtml(f.original_name)}">${escapeHtml(f.original_name)}</h3>
+                                        <p class="text-xs text-slate-400 line-clamp-2 mt-1">${snippet}</p>
+                                    </div>
                                 </div>
-                            </td>
-                            <td class="px-6 py-4 font-mono text-xs text-slate-400">${sizeStr}</td>
-                            <td class="px-6 py-4 text-xs text-slate-400">${f.created_at ? f.created_at.substring(0, 16) : '刚刚'}</td>
-                            <td class="px-6 py-4 text-center">
-                                <div class="flex items-center justify-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                                    <button onclick="showPreview(${f.id})"
+                                <div class="flex items-center gap-2 opacity-70 group-hover:opacity-100 transition">
+                                    <button onclick="showPreview(${f.id}); event.stopPropagation();"
                                             class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors flex items-center justify-center" title="查看">
                                         <i class="fas fa-eye text-xs"></i>
                                     </button>
-                                    <button onclick="deleteFile(${f.id})"
-                                            class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 hover:text-rose-600 transition-colors flex items-center justify-center" title="删除">
-                                        <i class="fas fa-trash-alt text-xs"></i>
-                                    </button>
+                                    ${deleteButton}
                                 </div>
-                            </td>
-                        </tr>
+                            </div>
+                            <div class="mt-4 flex items-center justify-between text-[10px] text-slate-400">
+                                <span><i class="fas fa-clock mr-1"></i>${timeStr}</span>
+                                <span><i class="fas fa-user mr-1"></i>${escapeHtml(f.uploader_name || '')}</span>
+                            </div>
+                        </div>
                     `;
-                    tbody.innerHTML += row;
+                    grid.innerHTML += card;
                 });
             })
             .catch(err => {
                 console.error(err);
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-rose-500">加载失败，请刷新重试</td></tr>';
+                grid.innerHTML = '<div class="col-span-full text-center py-4 text-rose-500">加载失败，请刷新重试</div>';
             });
     }
 
@@ -245,6 +362,163 @@
         .then(data => {
             if(data.msg === '删除成功') loadFiles();
             else alert('删除失败: ' + data.msg);
+        });
+    }
+
+    function switchPanel(panel) {
+        const panels = ['upload', 'paste', 'ai'];
+        const colorMap = {
+            upload: ['bg-sky-50', 'text-sky-600', 'border-sky-100'],
+            paste: ['bg-amber-50', 'text-amber-600', 'border-amber-100'],
+            ai: ['bg-purple-50', 'text-purple-600', 'border-purple-100']
+        };
+
+        panels.forEach(p => {
+            document.getElementById(`panel-${p}`).classList.toggle('hidden', p !== panel);
+            const tab = document.getElementById(`tab-${p}`);
+            const activeClasses = colorMap[p];
+            if (p === panel) {
+                tab.classList.add(...activeClasses);
+                tab.classList.remove('text-slate-400', 'bg-white', 'border-slate-100');
+            } else {
+                tab.classList.remove(...activeClasses);
+                tab.classList.add('text-slate-400', 'bg-white', 'border-slate-100');
+            }
+        });
+    }
+
+    function initActions() {
+        const uploadInput = document.getElementById('uploadFileInput');
+        const uploadDisplay = document.getElementById('uploadFileDisplay');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const uploadBtn = document.getElementById('uploadParseBtn');
+
+        uploadInput.addEventListener('change', () => {
+            if (!uploadInput.files.length) return;
+            const file = uploadInput.files[0];
+            uploadDisplay.innerHTML = `
+                <div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto text-sky-500">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <p class="text-xs font-bold text-slate-600">${escapeHtml(file.name)}</p>
+                <p class="text-[10px] text-slate-400">已准备上传</p>
+            `;
+        });
+
+        uploadBtn.addEventListener('click', () => {
+            if (!uploadInput.files.length) {
+                uploadStatus.textContent = '请先选择需要解析的文件。';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', uploadInput.files[0]);
+            formData.append('doc_type', document.getElementById('uploadDocType').value);
+
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中...';
+            uploadStatus.textContent = '系统正在调用解析器，请稍候。';
+
+            fetch('/api/parse_file_asset', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        uploadStatus.textContent = '解析成功，已入库。';
+                        uploadInput.value = '';
+                        loadFiles();
+                    } else {
+                        uploadStatus.textContent = data.msg || '解析失败，请重试。';
+                    }
+                })
+                .catch(() => { uploadStatus.textContent = '解析失败，请检查网络连接。'; })
+                .finally(() => {
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="fas fa-bolt mr-1"></i> 解析并入库';
+                });
+        });
+
+        const pasteClearBtn = document.getElementById('pasteClearBtn');
+        const pasteSaveBtn = document.getElementById('pasteSaveBtn');
+        const pasteStatus = document.getElementById('pasteStatus');
+        const pasteContent = document.getElementById('pasteContent');
+
+        pasteClearBtn.addEventListener('click', () => {
+            pasteContent.value = '';
+            pasteStatus.textContent = '';
+        });
+
+        pasteSaveBtn.addEventListener('click', () => {
+            const content = pasteContent.value.trim();
+            if (!content) {
+                pasteStatus.textContent = '内容不能为空。';
+                return;
+            }
+            pasteSaveBtn.disabled = true;
+            pasteSaveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 保存中...';
+            pasteStatus.textContent = '正在保存内容...';
+
+            fetch('/api/save_pasted_document', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    content: content,
+                    doc_type: document.getElementById('pasteDocType').value
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    pasteStatus.textContent = `保存成功：${data.title}`;
+                    pasteContent.value = '';
+                    loadFiles();
+                } else {
+                    pasteStatus.textContent = data.msg || '保存失败，请重试。';
+                }
+            })
+            .catch(() => { pasteStatus.textContent = '保存失败，请检查网络连接。'; })
+            .finally(() => {
+                pasteSaveBtn.disabled = false;
+                pasteSaveBtn.innerHTML = '<i class="fas fa-save mr-1"></i> 保存入库';
+            });
+        });
+
+        const aiGenerateBtn = document.getElementById('aiGenerateBtn');
+        const aiStatus = document.getElementById('aiStatus');
+        const aiPrompt = document.getElementById('aiPrompt');
+        const aiFiles = document.getElementById('aiFiles');
+
+        aiGenerateBtn.addEventListener('click', () => {
+            const prompt = aiPrompt.value.trim();
+            if (!prompt && !aiFiles.files.length) {
+                aiStatus.textContent = '请输入提示词或上传参考文件。';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('prompt', prompt);
+            formData.append('doc_type', document.getElementById('aiDocType').value);
+            Array.from(aiFiles.files).forEach(f => formData.append('files', f));
+
+            aiGenerateBtn.disabled = true;
+            aiGenerateBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 生成中...';
+            aiStatus.textContent = 'AI 正在生成内容，请稍候。';
+
+            fetch('/api/ai_generate_document', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        aiStatus.textContent = `生成成功：${data.title}`;
+                        aiPrompt.value = '';
+                        aiFiles.value = '';
+                        loadFiles();
+                    } else {
+                        aiStatus.textContent = data.msg || '生成失败，请重试。';
+                    }
+                })
+                .catch(() => { aiStatus.textContent = '生成失败，请检查网络连接。'; })
+                .finally(() => {
+                    aiGenerateBtn.disabled = false;
+                    aiGenerateBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-1"></i> 开始生成';
+                });
         });
     }
 </script>

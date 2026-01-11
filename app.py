@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import hashlib
 import json
 import mimetypes
@@ -234,6 +235,59 @@ def handle_file_upload_or_reuse(file_obj, existing_file_id, user_id):
         return physical_path, file_obj.filename
 
     return None, None
+
+
+def sanitize_filename(name, fallback="未命名文档"):
+    clean = re.sub(r'[\\/*?:"<>|]', '', name or '').strip()
+    return clean or fallback
+
+
+def generate_title_from_content(content, doc_type=None):
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    if lines:
+        candidate = re.sub(r'^#+\s*', '', lines[0]).strip()
+        if candidate:
+            return sanitize_filename(candidate[:40])
+
+    prefix = "试卷" if doc_type == "exam" else "评分标准"
+    timestamp = time.strftime("%Y%m%d_%H%M")
+    return f"{prefix}_{timestamp}"
+
+
+def create_text_asset(content, title, user_id, ext=".md"):
+    encoded = content.encode('utf-8')
+    file_hash = hashlib.sha256(encoded).hexdigest()
+    safe_title = sanitize_filename(title)
+    filename = f"{safe_title}{ext}"
+    physical_path = os.path.normpath(os.path.join(app.config['FILE_REPO_FOLDER'], f"{file_hash}{ext}"))
+
+    if not os.path.exists(physical_path):
+        with open(physical_path, 'wb') as f:
+            f.write(encoded)
+
+    file_id = db.save_file_asset(file_hash, filename, len(encoded), physical_path, user_id)
+    if file_id:
+        db.update_file_parsed_content(file_id, content)
+    return file_id, filename
+
+
+def extract_title_and_content(ai_text, doc_type=None):
+    if not ai_text:
+        return generate_title_from_content("", doc_type), ""
+
+    cleaned = ai_text.strip()
+    if cleaned.startswith("{") and cleaned.endswith("}"):
+        try:
+            payload = json.loads(cleaned)
+            title = payload.get("title") or payload.get("name")
+            content = payload.get("content") or payload.get("body")
+            if content:
+                return generate_title_from_content(content, doc_type) if not title else sanitize_filename(title), content
+        except Exception:
+            pass
+
+    title = generate_title_from_content(cleaned, doc_type)
+    return title, cleaned
 
 
 def is_content_garbage(text):
@@ -1303,10 +1357,157 @@ def file_manager_page():
     return render_template('file_manager.html', user=g.user)
 
 
+@app.route('/api/parse_file_asset', methods=['POST'])
+def parse_file_asset():
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    file_obj = request.files.get('file')
+    if not file_obj or not file_obj.filename:
+        return jsonify({"msg": "请先选择文件"}), 400
+
+    try:
+        physical_path, _ = handle_file_upload_or_reuse(file_obj, None, g.user['id'])
+        if not physical_path:
+            return jsonify({"msg": "文件保存失败"}), 400
+
+        with open(physical_path, 'rb') as f:
+            record = db.get_file_by_hash(calculate_file_hash(f))
+
+        if not record:
+            return jsonify({"msg": "文件记录创建失败"}), 500
+
+        parse_success, parsed_text = smart_parse_file_content(record['id'])
+        if not parse_success:
+            return jsonify({"msg": parsed_text}), 400
+
+        return jsonify({
+            "status": "success",
+            "file_id": record['id'],
+            "title": record['original_name'],
+            "parsed_content": parsed_text
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"msg": f"解析失败: {str(e)}"}), 500
+
+
+@app.route('/api/save_pasted_document', methods=['POST'])
+def save_pasted_document():
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json or {}
+    content = (data.get('content') or '').strip()
+    doc_type = data.get('doc_type')
+
+    if not content:
+        return jsonify({"msg": "内容不能为空"}), 400
+
+    title = generate_title_from_content(content, doc_type)
+    file_id, filename = create_text_asset(content, title, g.user['id'])
+    if not file_id:
+        return jsonify({"msg": "保存失败"}), 500
+
+    return jsonify({"status": "success", "file_id": file_id, "title": filename})
+
+
+@app.route('/api/ai_generate_document', methods=['POST'])
+def ai_generate_document():
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    prompt = (request.form.get('prompt') or '').strip()
+    doc_type = request.form.get('doc_type') or 'exam'
+    files = request.files.getlist('files')
+
+    if not prompt and not files:
+        return jsonify({"msg": "请输入提示词或上传参考文件"}), 400
+
+    image_payloads = []
+    doc_texts = []
+    file_errors = []
+
+    try:
+        for f in files:
+            if not f or not f.filename:
+                continue
+            physical_path, original_name = handle_file_upload_or_reuse(f, None, g.user['id'])
+            if not physical_path:
+                continue
+
+            ext = os.path.splitext(physical_path)[1].lower()
+            if ext in ['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.tiff']:
+                with open(physical_path, 'rb') as img_f:
+                    b64 = base64.b64encode(img_f.read()).decode('utf-8')
+                mime_type = mimetypes.types_map.get(ext, 'image/png')
+                image_payloads.append({"type": "image", "data": f"data:{mime_type};base64,{b64}"})
+            else:
+                ok, text = extract_text_from_file(physical_path)
+                if ok:
+                    doc_texts.append({"name": original_name or f.filename, "content": text})
+                else:
+                    file_errors.append(f"{original_name or f.filename}: {text}")
+
+        prompt_parts = []
+        doc_label = "试卷" if doc_type == "exam" else "评分标准"
+        prompt_parts.append(f"你正在生成一份{doc_label}文档，请输出 Markdown。请以一级标题作为标题。")
+        if prompt:
+            prompt_parts.append(f"用户提示词：{prompt}")
+
+        if doc_texts:
+            doc_section = ["参考文档内容："]
+            for doc in doc_texts:
+                doc_section.append(f"--- {doc['name']} ---\n{doc['content']}")
+            prompt_parts.append("\n".join(doc_section))
+
+        if file_errors:
+            prompt_parts.append("以下文件解析失败，可忽略：\n" + "\n".join(file_errors))
+
+        final_prompt = "\n\n".join(prompt_parts)
+
+        payload = {
+            "system_prompt": "你是教学资料的专业整理助手，擅长输出结构化的考试试卷与评分标准。",
+            "messages": [],
+            "new_message": final_prompt,
+            "model_capability": "vision" if image_payloads else "standard"
+        }
+        if image_payloads:
+            payload["messages"].append({
+                "role": "user",
+                "content": "以下是参考图片，请结合内容完成生成。",
+                "file_ids": image_payloads
+            })
+
+        response = httpx.post(app.config['AI_ASSISTANT_CHAT_ENDPOINT'], json=payload, timeout=180.0)
+        if response.status_code != 200:
+            return jsonify({"msg": f"AI 助手返回错误: {response.status_code} - {response.text}"}), 500
+
+        ai_text = response.json().get("response_text", "")
+        title, content = extract_title_and_content(ai_text, doc_type)
+
+        if not content:
+            return jsonify({"msg": "AI 未返回有效内容"}), 500
+
+        file_id, filename = create_text_asset(content, title, g.user['id'])
+        if not file_id:
+            return jsonify({"msg": "保存 AI 生成内容失败"}), 500
+
+        return jsonify({"status": "success", "file_id": file_id, "title": filename})
+
+    except httpx.ConnectError:
+        return jsonify({"msg": "无法连接到 AI 助手服务，请检查 ai_assistant.py 是否已启动"}), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"msg": f"生成失败: {str(e)}"}), 500
+
+
 @app.route('/api/my_parsed_files')
 def my_parsed_files():
     if not g.user: return jsonify({"msg": "Unauthorized"}), 401
     files = db.get_user_parsed_files(g.user['id'])
+    for f in files:
+        f['is_owner'] = f.get('uploaded_by') == g.user['id']
     return jsonify(files)
 
 

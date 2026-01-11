@@ -295,13 +295,14 @@ class Database:
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
     def get_user_parsed_files(self, user_id):
-        """获取用户上传的、且parsed_content不为空的文件"""
+        """获取已解析的文件（附带作者信息）"""
         conn = self.get_connection()
         sql = '''
-              SELECT * \
+              SELECT file_assets.*, users.username AS uploader_name
               FROM file_assets
+              LEFT JOIN users ON file_assets.uploaded_by = users.id
               WHERE parsed_content IS NOT NULL
-              ORDER BY created_at DESC \
+              ORDER BY created_at DESC
               '''
         return [dict(row) for row in conn.execute(sql).fetchall()]
 

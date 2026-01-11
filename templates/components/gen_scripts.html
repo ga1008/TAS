@@ -46,58 +46,32 @@
         }
     }
 
-    // --- 拖拽与文件处理 ---
-    document.querySelectorAll('.upload-zone').forEach(zone => {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            zone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false);
-        });
-        ['dragenter', 'dragover'].forEach(eventName => {
-            zone.addEventListener(eventName, () => zone.classList.add('drag-active'), false);
-        });
-        ['dragleave', 'drop'].forEach(eventName => {
-            zone.addEventListener(eventName, () => zone.classList.remove('drag-active'), false);
-        });
-    });
-
-    function handleFileSelect(input, type) {
-        if (input.files && input.files[0]) {
-            const name = input.files[0].name;
-            updateUI(type, name, true);
-
-            // 清空对应的隐藏ID域，确保是新文件上传
-            const idMap = {
-                'exam': 'exam_file_id', 'std': 'standard_file_id',
-                'direct_exam': 'direct_exam_file_id', 'direct_std': 'direct_std_file_id'
-            };
-            const hiddenId = document.getElementById(idMap[type]);
-            if(hiddenId) hiddenId.value = '';
-        }
-    }
-
-    function updateUI(type, name, isUpload) {
+    function updateUI(type, name) {
         const idMap = {
-            'exam': ['exam-display', 'drop-exam'],
-            'std': ['std-display', 'drop-std'],
-            'direct_exam': ['direct_exam-display', 'drop-direct_exam'],
-            'direct_std': ['direct_std-display', 'drop-direct_std']
+            'exam': ['exam-display', 'exam-card'],
+            'std': ['std-display', 'std-card'],
+            'direct_exam': ['direct_exam-display', 'direct_exam-card'],
+            'direct_std': ['direct_std-display', 'direct_std-card']
         };
 
-        const [displayId, zoneId] = idMap[type];
+        const [displayId, cardId] = idMap[type] || [];
         const container = document.getElementById(displayId);
-        const zone = document.getElementById(zoneId);
-        if (!container || !zone) return;
+        const card = document.getElementById(cardId);
+        if (!container || !card) return;
 
-        const colorClass = type.startsWith('direct') ? 'text-sky-500' : (type === 'std' ? 'text-purple-500' : 'text-indigo-500');
-        const borderClass = type.startsWith('direct') ? 'border-sky-300 bg-sky-50' : (type === 'std' ? 'border-purple-300 bg-purple-50' : 'border-indigo-300 bg-indigo-50');
+        const colorClass = type.startsWith('direct') ? 'text-sky-600' : (type === 'std' ? 'text-purple-600' : 'text-indigo-600');
+        const bgClass = type.startsWith('direct') ? 'bg-sky-50 border-sky-200' : (type === 'std' ? 'bg-purple-50 border-purple-200' : 'bg-indigo-50 border-indigo-200');
 
         container.innerHTML = `
-            <i class="fas ${isUpload ? 'fa-cloud-upload-alt' : 'fa-check-circle'} text-3xl ${colorClass} mb-2"></i>
-            <span class="${colorClass} font-bold text-sm text-center break-all px-4 line-clamp-2">${name}</span>
-            <span class="text-[10px] text-slate-400 mt-1 bg-white px-2 py-0.5 rounded-full border border-slate-100 shadow-sm">${isUpload ? 'Ready to upload' : 'Selected from library'}</span>
+            <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center ${colorClass}">
+                <i class="fas fa-check-circle text-lg"></i>
+            </div>
+            <div>
+                <p class="text-xs font-bold ${colorClass}">已选择文件</p>
+                <p class="text-[10px] text-slate-500 break-all">${name}</p>
+            </div>
         `;
-
-        // 保持基础类名，只替换颜色
-        zone.className = `upload-zone border-2 border-dashed rounded-xl p-4 text-center transition cursor-pointer relative group flex-1 flex flex-col items-center justify-center min-h-[140px] ${borderClass}`;
+        card.className = `border border-dashed rounded-xl p-5 flex items-center justify-between gap-4 ${bgClass}`;
     }
 
     // --- 文件模态框 ---
@@ -161,61 +135,17 @@
         if (!selectedFileId) { closeFileModal(); return; }
 
         const idMap = {
-            'exam': ['exam_file_id', 'drop-exam', 'exam_file'],
-            'std': ['standard_file_id', 'drop-std', 'standard_file'],
-            'direct_exam': ['direct_exam_file_id', 'drop-direct_exam', 'exam_file'],
-            'direct_std': ['direct_std_file_id', 'drop-direct_std', 'standard_file']
+            'exam': 'exam_file_id',
+            'std': 'standard_file_id',
+            'direct_exam': 'direct_exam_file_id',
+            'direct_std': 'direct_std_file_id'
         };
 
-        const [hiddenId, zoneId, inputName] = idMap[currentFileType];
+        const hiddenId = idMap[currentFileType];
         document.getElementById(hiddenId).value = selectedFileId;
 
-        // 清空文件 input 防止冲突
-        const zone = document.getElementById(zoneId);
-        const fileInput = zone.querySelector(`input[name="${inputName}"]`);
-        if(fileInput) fileInput.value = '';
-
-        updateUI(currentFileType, selectedFileName, false);
+        updateUI(currentFileType, selectedFileName);
         closeFileModal();
-    }
-
-    // --- 粘贴模态框 ---
-    let pasteTargetType = '';
-    function openPasteModal(type) {
-        pasteTargetType = type;
-        document.getElementById('pasteContent').value = '';
-        document.getElementById('pasteModal').classList.remove('hidden');
-        setTimeout(() => document.getElementById('pasteContent').focus(), 100);
-    }
-    function closePasteModal() { document.getElementById('pasteModal').classList.add('hidden'); }
-
-    function savePastedText() {
-        const content = document.getElementById('pasteContent').value;
-        if (!content.trim()) return alert("内容不能为空");
-
-        const timestamp = new Date().toISOString().replace(/[-:.]/g, '').substring(0, 14);
-        const fileName = `manual_${pasteTargetType}_${timestamp}.txt`;
-        const file = new File([content], fileName, { type: "text/plain" });
-
-        const idMap = {
-            'exam': ['drop-exam', 'exam_file', 'exam_file_id'],
-            'std': ['drop-std', 'standard_file', 'standard_file_id'],
-            'direct_exam': ['drop-direct_exam', 'exam_file', 'direct_exam_file_id'],
-            'direct_std': ['drop-direct_std', 'standard_file', 'direct_std_file_id']
-        };
-
-        const [zoneId, inputName, hiddenId] = idMap[pasteTargetType];
-
-        // 赋值 File Input
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(file);
-        document.getElementById(zoneId).querySelector(`input[name="${inputName}"]`).files = dataTransfer.files;
-
-        // 清空 ID
-        document.getElementById(hiddenId).value = '';
-
-        updateUI(pasteTargetType, fileName + " (文本)", true);
-        closePasteModal();
     }
 
     function escapeJs(str) { return str.replace(/'/g, "\\'"); }
