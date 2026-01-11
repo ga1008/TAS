@@ -145,13 +145,18 @@
                             </select>
                         </div>
                         <textarea id="pasteContent" class="min-h-[220px] border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 resize-none" placeholder="粘贴试卷题目或评分标准内容..."></textarea>
-                        <div class="flex items-center justify-between text-xs">
+                        <div class="flex items-center justify-between gap-3 text-xs">
                             <button id="pasteClearBtn" class="text-slate-400 hover:text-rose-500 font-bold">
                                 <i class="fas fa-eraser mr-1"></i> 清空
                             </button>
-                            <button id="pasteSaveBtn" class="bg-amber-500 text-white font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-amber-600 transition">
-                                <i class="fas fa-save mr-1"></i> 保存入库
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <button id="pasteSaveBtn" class="bg-amber-500 text-white font-bold px-4 py-2 rounded-lg shadow-sm hover:bg-amber-600 transition">
+                                    <i class="fas fa-save mr-1"></i> 保存入库
+                                </button>
+                                <button id="pasteParseSaveBtn" class="bg-amber-100 text-amber-700 font-bold px-4 py-2 rounded-lg border border-amber-200 shadow-sm hover:bg-amber-200 transition">
+                                    <i class="fas fa-magic mr-1"></i> 解析并保存
+                                </button>
+                            </div>
                         </div>
                         <p id="pasteStatus" class="text-[11px] text-slate-400"></p>
                     </div>
@@ -170,11 +175,20 @@
                                 <option value="standard">评分标准</option>
                             </select>
                         </div>
-                        <textarea id="aiPrompt" class="min-h-[180px] border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 resize-none" placeholder="请输入生成要求，如题量、题型、评分维度等..."></textarea>
-                        <label class="border border-dashed border-slate-200 rounded-xl p-3 bg-white/70 text-center text-xs text-slate-500 cursor-pointer hover:border-purple-300 hover:bg-purple-50 transition">
-                            <input id="aiFiles" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp">
-                            <i class="fas fa-paperclip mr-1 text-purple-500"></i> 上传参考文件 (可多选)
-                        </label>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="md:col-span-2 space-y-2">
+                                <label class="text-[11px] text-slate-400 font-bold">提示词</label>
+                                <textarea id="aiPrompt" class="min-h-[180px] border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 resize-none" placeholder="请输入生成要求，如题量、题型、评分维度等..."></textarea>
+                            </div>
+                            <div class="md:col-span-1 space-y-2">
+                                <label class="text-[11px] text-slate-400 font-bold">参考文件</label>
+                                <label class="border border-dashed border-slate-200 rounded-xl p-3 bg-white/70 text-center text-xs text-slate-500 cursor-pointer hover:border-purple-300 hover:bg-purple-50 transition">
+                                    <input id="aiFiles" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp">
+                                    <i class="fas fa-paperclip mr-1 text-purple-500"></i> 上传参考文件 (可多选)
+                                </label>
+                                <div id="aiFileList" class="text-[11px] text-slate-500 space-y-1"></div>
+                            </div>
+                        </div>
                         <button id="aiGenerateBtn"
                                 class="bg-purple-600 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-purple-700 transition">
                             <i class="fas fa-wand-magic-sparkles mr-1"></i> 开始生成
@@ -387,6 +401,19 @@
         });
     }
 
+    function setStatus(element, message, state = 'info') {
+        if (!element) return;
+        element.textContent = message;
+        element.classList.remove('text-slate-400', 'text-emerald-600', 'text-rose-500');
+        if (state === 'success') {
+            element.classList.add('text-emerald-600');
+        } else if (state === 'error') {
+            element.classList.add('text-rose-500');
+        } else {
+            element.classList.add('text-slate-400');
+        }
+    }
+
     function initActions() {
         const uploadInput = document.getElementById('uploadFileInput');
         const uploadDisplay = document.getElementById('uploadFileDisplay');
@@ -407,7 +434,7 @@
 
         uploadBtn.addEventListener('click', () => {
             if (!uploadInput.files.length) {
-                uploadStatus.textContent = '请先选择需要解析的文件。';
+                setStatus(uploadStatus, '请先选择需要解析的文件。', 'error');
                 return;
             }
             const formData = new FormData();
@@ -416,20 +443,20 @@
 
             uploadBtn.disabled = true;
             uploadBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中...';
-            uploadStatus.textContent = '系统正在调用解析器，请稍候。';
+            setStatus(uploadStatus, '系统正在调用解析器，请稍候。');
 
             fetch('/api/parse_file_asset', { method: 'POST', body: formData })
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        uploadStatus.textContent = '解析成功，已入库。';
+                        setStatus(uploadStatus, '解析成功，已入库。', 'success');
                         uploadInput.value = '';
                         loadFiles();
                     } else {
-                        uploadStatus.textContent = data.msg || '解析失败，请重试。';
+                        setStatus(uploadStatus, data.msg || '解析失败，请重试。', 'error');
                     }
                 })
-                .catch(() => { uploadStatus.textContent = '解析失败，请检查网络连接。'; })
+                .catch(() => { setStatus(uploadStatus, '解析失败，请检查网络连接。', 'error'); })
                 .finally(() => {
                     uploadBtn.disabled = false;
                     uploadBtn.innerHTML = '<i class="fas fa-bolt mr-1"></i> 解析并入库';
@@ -438,23 +465,24 @@
 
         const pasteClearBtn = document.getElementById('pasteClearBtn');
         const pasteSaveBtn = document.getElementById('pasteSaveBtn');
+        const pasteParseSaveBtn = document.getElementById('pasteParseSaveBtn');
         const pasteStatus = document.getElementById('pasteStatus');
         const pasteContent = document.getElementById('pasteContent');
 
         pasteClearBtn.addEventListener('click', () => {
             pasteContent.value = '';
-            pasteStatus.textContent = '';
+            setStatus(pasteStatus, '');
         });
 
         pasteSaveBtn.addEventListener('click', () => {
             const content = pasteContent.value.trim();
             if (!content) {
-                pasteStatus.textContent = '内容不能为空。';
+                setStatus(pasteStatus, '内容不能为空。', 'error');
                 return;
             }
             pasteSaveBtn.disabled = true;
             pasteSaveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 保存中...';
-            pasteStatus.textContent = '正在保存内容...';
+            setStatus(pasteStatus, '正在保存内容，AI 正在生成标题...');
 
             fetch('/api/save_pasted_document', {
                 method: 'POST',
@@ -467,17 +495,52 @@
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    pasteStatus.textContent = `保存成功：${data.title}`;
+                    setStatus(pasteStatus, `保存成功：${data.title}`, 'success');
                     pasteContent.value = '';
                     loadFiles();
                 } else {
-                    pasteStatus.textContent = data.msg || '保存失败，请重试。';
+                    setStatus(pasteStatus, data.msg || '保存失败，请重试。', 'error');
                 }
             })
-            .catch(() => { pasteStatus.textContent = '保存失败，请检查网络连接。'; })
+            .catch(() => { setStatus(pasteStatus, '保存失败，请检查网络连接。', 'error'); })
             .finally(() => {
                 pasteSaveBtn.disabled = false;
                 pasteSaveBtn.innerHTML = '<i class="fas fa-save mr-1"></i> 保存入库';
+            });
+        });
+
+        pasteParseSaveBtn.addEventListener('click', () => {
+            const content = pasteContent.value.trim();
+            if (!content) {
+                setStatus(pasteStatus, '内容不能为空。', 'error');
+                return;
+            }
+            pasteParseSaveBtn.disabled = true;
+            pasteParseSaveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中...';
+            setStatus(pasteStatus, 'AI 正在解析并规整内容，请稍候。');
+
+            fetch('/api/parse_and_save_pasted_document', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    content: content,
+                    doc_type: document.getElementById('pasteDocType').value
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    setStatus(pasteStatus, `解析保存成功：${data.title}`, 'success');
+                    pasteContent.value = '';
+                    loadFiles();
+                } else {
+                    setStatus(pasteStatus, data.msg || '解析保存失败，请重试。', 'error');
+                }
+            })
+            .catch(() => { setStatus(pasteStatus, '解析保存失败，请检查网络连接。', 'error'); })
+            .finally(() => {
+                pasteParseSaveBtn.disabled = false;
+                pasteParseSaveBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> 解析并保存';
             });
         });
 
@@ -485,11 +548,26 @@
         const aiStatus = document.getElementById('aiStatus');
         const aiPrompt = document.getElementById('aiPrompt');
         const aiFiles = document.getElementById('aiFiles');
+        const aiFileList = document.getElementById('aiFileList');
+
+        aiFiles.addEventListener('change', () => {
+            if (!aiFiles.files.length) {
+                aiFileList.innerHTML = '';
+                return;
+            }
+            const items = Array.from(aiFiles.files).map(file => `
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-file text-purple-400 text-[10px]"></i>
+                    <span class="truncate">${escapeHtml(file.name)}</span>
+                </div>
+            `);
+            aiFileList.innerHTML = items.join('');
+        });
 
         aiGenerateBtn.addEventListener('click', () => {
             const prompt = aiPrompt.value.trim();
             if (!prompt && !aiFiles.files.length) {
-                aiStatus.textContent = '请输入提示词或上传参考文件。';
+                setStatus(aiStatus, '请输入提示词或上传参考文件。', 'error');
                 return;
             }
 
@@ -500,21 +578,22 @@
 
             aiGenerateBtn.disabled = true;
             aiGenerateBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 生成中...';
-            aiStatus.textContent = 'AI 正在生成内容，请稍候。';
+            setStatus(aiStatus, 'AI 正在生成内容，请稍候。');
 
             fetch('/api/ai_generate_document', { method: 'POST', body: formData })
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        aiStatus.textContent = `生成成功：${data.title}`;
+                        setStatus(aiStatus, `生成成功：${data.title}`, 'success');
                         aiPrompt.value = '';
                         aiFiles.value = '';
+                        aiFileList.innerHTML = '';
                         loadFiles();
                     } else {
-                        aiStatus.textContent = data.msg || '生成失败，请重试。';
+                        setStatus(aiStatus, data.msg || '生成失败，请重试。', 'error');
                     }
                 })
-                .catch(() => { aiStatus.textContent = '生成失败，请检查网络连接。'; })
+                .catch(() => { setStatus(aiStatus, '生成失败，请检查网络连接。', 'error'); })
                 .finally(() => {
                     aiGenerateBtn.disabled = false;
                     aiGenerateBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-1"></i> 开始生成';

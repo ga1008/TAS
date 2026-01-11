@@ -254,6 +254,29 @@ def generate_title_from_content(content, doc_type=None):
     return f"{prefix}_{timestamp}"
 
 
+def generate_title_with_ai(content, doc_type=None):
+    doc_label = "试卷" if doc_type == "exam" else "评分标准"
+    standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
+    if not standard_config:
+        return generate_title_from_content(content, doc_type)
+
+    prompt = (
+        f"请为以下{doc_label}内容生成一个简洁准确的中文标题，20字以内。\n"
+        "只返回标题文字，不要附加说明或标点。\n"
+        f"内容：\n{content}\n"
+    )
+    try:
+        ai_title = asyncio.run(call_ai_platform_chat(
+            system_prompt="你是教学资料命名助手，擅长总结试卷或评分细则的标题。",
+            messages=[{"role": "user", "content": prompt}],
+            platform_config=standard_config
+        ))
+        ai_title = sanitize_filename((ai_title or "").strip())
+        return ai_title or generate_title_from_content(content, doc_type)
+    except Exception:
+        return generate_title_from_content(content, doc_type)
+
+
 def create_text_asset(content, title, user_id, ext=".md"):
     encoded = content.encode('utf-8')
     file_hash = hashlib.sha256(encoded).hexdigest()
@@ -417,7 +440,30 @@ def extract_text_from_file(file_path):
 
 # === 核心业务逻辑 ===
 
-def smart_parse_file_content(file_id):
+def normalize_document_with_ai(content, doc_type=None):
+    doc_label = "试卷" if doc_type == "exam" else "评分标准"
+    standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
+    if not standard_config:
+        return None
+
+    prompt = (
+        f"请对以下{doc_label}内容进行规范化整理，仅保留试题或评分细则等核心内容。\n"
+        "去除无用的表头、页眉、页脚、目录、页码等杂讯。\n"
+        "输出 Markdown，并且不要遗漏任何主要信息。\n\n"
+        f"{content}"
+    )
+    try:
+        ai_text = asyncio.run(call_ai_platform_chat(
+            system_prompt="你是文档规范化整理助手，擅长清理试卷与评分标准内容。",
+            messages=[{"role": "user", "content": prompt}],
+            platform_config=standard_config
+        ))
+        return ai_text.strip() if ai_text else None
+    except Exception:
+        return None
+
+
+def smart_parse_file_content(file_id, doc_type=None):
     """
     智能解析文件内容 (V2.1 增强版)：
     1. 缓存优先。
@@ -453,6 +499,7 @@ def smart_parse_file_content(file_id):
 
     parsed_text = None
     parse_success = False
+    used_fallback = False
 
     try:
         # 尝试获取 Vision 模型 (优先) 或 Standard 模型
@@ -532,12 +579,17 @@ def smart_parse_file_content(file_id):
             print(f"[SmartParse] [解析失败]\n无法从文件中提取有效文本，请检查文件是否损坏或已加密。")
 
         parsed_text = fallback_text
+        used_fallback = True
+
+        normalized_text = normalize_document_with_ai(fallback_text, doc_type)
+        if normalized_text:
+            parsed_text = normalized_text
 
     # 存入数据库
     if parsed_text:
         db.update_file_parsed_content(file_id, parsed_text)
 
-    return parse_success, parsed_text
+    return parse_success, parsed_text, used_fallback
 
 
 def ai_generation_worker(task_id, exam_text, standard_text, strictness, extra_desc, max_score):
@@ -738,8 +790,8 @@ def create_direct_grader():
         std_record = db.get_file_by_hash(calculate_file_hash(open(std_path, 'rb')))
 
         # 智能解析 (AI Parsing)
-        exam_sta, parsed_exam = smart_parse_file_content(exam_record['id'])
-        std_sta, parsed_std = smart_parse_file_content(std_record['id'])
+        exam_sta, parsed_exam, _ = smart_parse_file_content(exam_record['id'])
+        std_sta, parsed_std, _ = smart_parse_file_content(std_record['id'])
 
         if not exam_sta:
             return jsonify({"msg": f"试卷解析失败: {parsed_exam}"}), 400
@@ -1377,7 +1429,7 @@ def parse_file_asset():
         if not record:
             return jsonify({"msg": "文件记录创建失败"}), 500
 
-        parse_success, parsed_text = smart_parse_file_content(record['id'])
+        parse_success, parsed_text, _ = smart_parse_file_content(record['id'], request.form.get('doc_type'))
         if not parse_success:
             return jsonify({"msg": parsed_text}), 400
 
@@ -1404,12 +1456,56 @@ def save_pasted_document():
     if not content:
         return jsonify({"msg": "内容不能为空"}), 400
 
-    title = generate_title_from_content(content, doc_type)
+    title = generate_title_with_ai(content, doc_type)
     file_id, filename = create_text_asset(content, title, g.user['id'])
     if not file_id:
         return jsonify({"msg": "保存失败"}), 500
 
     return jsonify({"status": "success", "file_id": file_id, "title": filename})
+
+
+@app.route('/api/parse_and_save_pasted_document', methods=['POST'])
+def parse_and_save_pasted_document():
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json or {}
+    content = (data.get('content') or '').strip()
+    doc_type = data.get('doc_type')
+
+    if not content:
+        return jsonify({"msg": "内容不能为空"}), 400
+
+    doc_label = "试卷" if doc_type == "exam" else "评分标准"
+    standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
+    if not standard_config:
+        return jsonify({"msg": "未配置可用的标准模型"}), 500
+
+    prompt = (
+        f"请对以下{doc_label}内容进行规整，仅保留试题或评分细则核心信息，去除无用表头页眉等杂讯。\n"
+        "输出 Markdown，并返回一个合理标题，不要遗漏重要信息。\n"
+        "请使用 JSON 格式返回：{\"title\": \"...\", \"content\": \"...\"}\n\n"
+        f"{content}"
+    )
+
+    try:
+        ai_text = asyncio.run(call_ai_platform_chat(
+            system_prompt="你是教学资料整理助手，擅长规整试卷与评分标准。",
+            messages=[{"role": "user", "content": prompt}],
+            platform_config=standard_config
+        ))
+        title, normalized_content = extract_title_and_content(ai_text, doc_type)
+        if not normalized_content:
+            return jsonify({"msg": "AI 未返回有效内容"}), 500
+
+        file_id, filename = create_text_asset(normalized_content, title, g.user['id'])
+        if not file_id:
+            return jsonify({"msg": "保存失败"}), 500
+
+        return jsonify({"status": "success", "file_id": file_id, "title": filename})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"msg": f"解析保存失败: {str(e)}"}), 500
 
 
 @app.route('/api/ai_generate_document', methods=['POST'])
