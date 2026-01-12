@@ -48,6 +48,11 @@ except Exception as e:
 if not os.path.exists(app.config['FILE_REPO_FOLDER']):
     os.makedirs(app.config['FILE_REPO_FOLDER'])
 
+# 配置增加
+app.config['SIGNATURES_FOLDER'] = Config.SIGNATURES_FOLDER
+if not os.path.exists(app.config['SIGNATURES_FOLDER']):
+    os.makedirs(app.config['SIGNATURES_FOLDER'])
+
 
 @app.before_request
 def load_logged_in_user():
@@ -788,21 +793,107 @@ def export_page(file_id):
                            user=g.user)
 
 
+# ================= 签名集 API =================
+
+@app.route('/api/signatures/list')
+def list_signatures():
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    search = request.args.get('q', '')
+    sigs = db.get_signatures(search)
+    # 标记 ownership
+    for s in sigs:
+        s['is_owner'] = (s['uploaded_by'] == g.user['id']) or (g.user.get('is_admin'))
+    return jsonify(sigs)
+
+
+@app.route('/api/signatures/upload', methods=['POST'])
+def upload_signature():
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+
+    file = request.files.get('file')
+    name = request.form.get('name', '').strip()
+
+    if not file: return jsonify({"msg": "请选择文件"}), 400
+    if not name: name = file.filename
+
+    # 格式校验
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ['.png', '.jpg', '.jpeg']:
+        return jsonify({"msg": "仅支持 PNG/JPG 格式"}), 400
+
+    # 物理保存 (Hash去重)
+    f_hash = calculate_file_hash(file)  # 复用已有的hash函数
+    save_name = f"{f_hash}{ext}"
+    save_path = os.path.join(app.config['SIGNATURES_FOLDER'], save_name)
+
+    if not os.path.exists(save_path):
+        file.save(save_path)
+
+    # 数据库记录
+    db.add_signature(name, f_hash, save_path, g.user['id'])
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/signatures/delete', methods=['POST'])
+def delete_signature():
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    sig_id = request.json.get('id')
+
+    sig = db.get_signature_by_id(sig_id)
+    if not sig: return jsonify({"msg": "记录不存在"}), 404
+
+    # 权限检查
+    if sig['uploaded_by'] != g.user['id'] and not g.user.get('is_admin'):
+        return jsonify({"msg": "无权删除他人上传的签名"}), 403
+
+    # 逻辑删除：先删DB记录，再检查是否还有其他记录引用同一物理文件
+    db.delete_signature(sig_id)
+
+    # 清理物理文件 (只有当引用计数为0时)
+    usage = db.get_signature_usage_count(sig['file_hash'])
+    if usage == 0 and os.path.exists(sig['file_path']):
+        try:
+            os.remove(sig['file_path'])
+        except Exception as e:
+            print(f"Failed to remove signature file: {e}")
+
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/signatures/image/<int:sig_id>')
+def get_signature_image(sig_id):
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    sig = db.get_signature_by_id(sig_id)
+    if not sig or not os.path.exists(sig['file_path']):
+        return "Image not found", 404
+    return send_file(sig['file_path'])
+
+# ================= 修改 Export 逻辑以支持从库引用 =================
+
 @app.route('/api/export_word', methods=['POST'])
 def api_export_word():
     if not g.user: return jsonify({"msg": "Unauthorized"}), 401
 
-    data = request.json
-    file_id = data.get('file_id')
-    template = data.get('template')
+    file_id = request.form.get('file_id')
+    template = request.form.get('template')
+    data = request.form.to_dict()
+
+    # [NEW] 处理签名集引用
+    # 前端传来的字段可能是 sig_id，需要转换成 path
+    sig_keys = ['teacher_sig', 'head_sig', 'leader_sig']
+    for key in sig_keys:
+        sig_id_val = data.get(f"{key}_select")  # 获取下拉框的值 (Signature ID)
+        if sig_id_val and sig_id_val.isdigit():
+            sig_rec = db.get_signature_by_id(int(sig_id_val))
+            if sig_rec:
+                data[f"{key}_path"] = sig_rec['file_path']  # 写入 Exporter 识别的 path key
 
     record = db.get_file_by_id(file_id)
     if not record: return jsonify({"msg": "文件不存在"}), 404
 
     content = record.get('parsed_content', '')
-    if not content: return jsonify({"msg": "文件内容为空，无法导出"}), 400
+    if not content: return jsonify({"msg": "文件内容为空"}), 400
 
-    # 准备导出路径
     filename = f"export_{uuid.uuid4().hex}.docx"
     save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
@@ -810,7 +901,9 @@ def api_export_word():
         exporter = ExamWordExporter(template)
         exporter.generate_guangwai_exam(content, data, save_path)
 
-        return send_file(save_path, as_attachment=True, download_name=f"{data.get('course_name', 'exam')}.docx")
+        dl_name = data.get('course_name', 'document')
+        # 简单转义防止乱码
+        return send_file(save_path, as_attachment=True, download_name=f"{dl_name}.docx")
     except Exception as e:
         traceback.print_exc()
         return jsonify({"msg": f"导出失败: {str(e)}"}), 500

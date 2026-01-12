@@ -155,6 +155,36 @@ class Database:
                        )
                        ''')
 
+        # 8. 签名集表 [NEW]
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS signatures
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           name
+                           TEXT
+                           NOT
+                           NULL,    -- 签名名称 (如: 张三-楷体)
+                           file_hash
+                           TEXT
+                           NOT
+                           NULL,    -- 文件哈希 (去重)
+                           file_path
+                           TEXT
+                           NOT
+                           NULL,    -- 物理存储路径
+                           uploaded_by
+                           INTEGER, -- 上传者ID
+                           created_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
+
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_capability ON ai_models (capability)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_file_hash ON file_assets (file_hash)')
@@ -193,6 +223,44 @@ class Database:
                            (admin_user, pwd_hash))
             conn.commit()
             print(f"[DB] 超级管理员已初始化: {admin_user}")
+
+    # ================= 签名集管理 [NEW] =================
+    def add_signature(self, name, file_hash, file_path, user_id):
+        conn = self.get_connection()
+        conn.execute("INSERT INTO signatures (name, file_hash, file_path, uploaded_by) VALUES (?, ?, ?, ?)",
+                     (name, file_hash, file_path, user_id))
+        conn.commit()
+
+    def get_signatures(self, search=None, user_id=None):
+        conn = self.get_connection()
+        sql = '''
+              SELECT s.*, u.username as uploader_name
+              FROM signatures s
+                       LEFT JOIN users u ON s.uploaded_by = u.id
+              WHERE 1 = 1
+              '''
+        params = []
+        if search:
+            sql += " AND s.name LIKE ?"
+            params.append(f"%{search}%")
+
+        sql += " ORDER BY s.created_at DESC"
+        return [dict(row) for row in conn.execute(sql, params).fetchall()]
+
+    def get_signature_by_id(self, sig_id):
+        conn = self.get_connection()
+        row = conn.execute("SELECT * FROM signatures WHERE id=?", (sig_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_signature_usage_count(self, file_hash):
+        """检查物理文件被引用的次数"""
+        conn = self.get_connection()
+        row = conn.execute("SELECT COUNT(*) as cnt FROM signatures WHERE file_hash=?", (file_hash,)).fetchone()
+        return row['cnt']
+
+    def delete_signature(self, sig_id):
+        conn = self.get_connection()
+        conn.execute("DELETE FROM signatures WHERE id=?", (sig_id,)).commit()
 
     def update_ai_task_status(self, task_id, status):
         conn = self.get_connection()

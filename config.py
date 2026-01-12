@@ -25,6 +25,8 @@ class Config:
     FILE_REPO_FOLDER = os.path.join(base_dir, 'uploads', 'file_repo')
     WORKSPACE_FOLDER = os.path.join(base_dir, 'workspaces')
 
+    SIGNATURES_FOLDER = os.path.join(UPLOAD_FOLDER, 'signatures')
+
 
 # === 基础 Prompt (保持不变的部分) ===
 BASE_CREATOR_PROMPT = """
