@@ -194,6 +194,31 @@ def _grade_single_student_internal(class_id, student_id):
         return False, err_msg, matched_file
 
 
+# === [新增] 路径修复工具函数 ===
+def get_corrected_path(db_path, folder_path):
+    """
+    智能修复路径：
+    1. 如果数据库里的路径在当前服务器存在，直接用。
+    2. 如果不存在（比如是从 Windows 迁移到 Linux），则提取文件名，拼接到当前的 folder_path 下再找一次。
+    """
+    if not db_path:
+        return None
+
+    # 情况A: 路径有效 (本地创建或路径一致)
+    if os.path.exists(db_path):
+        return db_path
+
+    # 情况B: 路径无效 (跨平台迁移导致)
+    # 提取文件名 (同时兼容 Windows 的 \ 和 Linux 的 /)
+    filename = os.path.basename(db_path.replace('\\', '/'))
+    corrected_path = os.path.join(folder_path, filename)
+
+    if os.path.exists(corrected_path):
+        return corrected_path
+
+    return None
+
+
 def handle_file_upload_or_reuse(file_obj, existing_file_id, user_id):
     """
     处理文件上传逻辑：
@@ -822,7 +847,7 @@ def upload_signature():
         return jsonify({"msg": "仅支持 PNG/JPG 格式"}), 400
 
     # 物理保存 (Hash去重)
-    f_hash = calculate_file_hash(file)  # 复用已有的hash函数
+    f_hash = calculate_file_hash(file)
     save_name = f"{f_hash}{ext}"
     save_path = os.path.join(app.config['SIGNATURES_FOLDER'], save_name)
 
@@ -846,14 +871,18 @@ def delete_signature():
     if sig['uploaded_by'] != g.user['id'] and not g.user.get('is_admin'):
         return jsonify({"msg": "无权删除他人上传的签名"}), 403
 
-    # 逻辑删除：先删DB记录，再检查是否还有其他记录引用同一物理文件
+    # 逻辑删除：先删DB记录
     db.delete_signature(sig_id)
 
-    # 清理物理文件 (只有当引用计数为0时)
+    # [修复] 清理物理文件 (使用路径修复逻辑)
     usage = db.get_signature_usage_count(sig['file_hash'])
-    if usage == 0 and os.path.exists(sig['file_path']):
+
+    # 获取真实路径
+    real_path = get_corrected_path(sig['file_path'], app.config['SIGNATURES_FOLDER'])
+
+    if usage == 0 and real_path and os.path.exists(real_path):
         try:
-            os.remove(sig['file_path'])
+            os.remove(real_path)
         except Exception as e:
             print(f"Failed to remove signature file: {e}")
 
@@ -864,9 +893,18 @@ def delete_signature():
 def get_signature_image(sig_id):
     if not g.user: return jsonify({"msg": "Unauthorized"}), 401
     sig = db.get_signature_by_id(sig_id)
-    if not sig or not os.path.exists(sig['file_path']):
-        return "Image not found", 404
-    return send_file(sig['file_path'])
+
+    if not sig:
+        return "Record not found", 404
+
+    # [修复] 核心修复点：获取真实路径
+    real_path = get_corrected_path(sig['file_path'], app.config['SIGNATURES_FOLDER'])
+
+    if not real_path:
+        # 如果还是找不到，说明文件可能真的没上传到服务器
+        return "Image file not found on server", 404
+
+    return send_file(real_path)
 
 # ================= 修改 Export 逻辑以支持从库引用 =================
 
@@ -882,11 +920,14 @@ def api_export_word():
     # 前端传来的字段可能是 sig_id，需要转换成 path
     sig_keys = ['teacher_sig', 'head_sig', 'leader_sig']
     for key in sig_keys:
-        sig_id_val = data.get(f"{key}_select")  # 获取下拉框的值 (Signature ID)
+        sig_id_val = data.get(f"{key}_select")
         if sig_id_val and sig_id_val.isdigit():
             sig_rec = db.get_signature_by_id(int(sig_id_val))
             if sig_rec:
-                data[f"{key}_path"] = sig_rec['file_path']  # 写入 Exporter 识别的 path key
+                # 获取修复后的路径，确保 Word Exporter 能读取到
+                real_path = get_corrected_path(sig_rec['file_path'], app.config['SIGNATURES_FOLDER'])
+                if real_path:
+                    data[f"{key}_path"] = real_path
 
     record = db.get_file_by_id(file_id)
     if not record: return jsonify({"msg": "文件不存在"}), 404
@@ -902,7 +943,14 @@ def api_export_word():
         exporter.generate_guangwai_exam(content, data, save_path)
 
         dl_name = data.get('course_name', 'document')
-        # 简单转义防止乱码
+        try:
+            # 尝试简单转义防止 header 中文乱码
+            dl_name.encode('latin-1')
+        except UnicodeEncodeError:
+            # 如果包含中文，flask send_file 在某些环境下自动处理，或者使用 urlquote
+            from urllib.parse import quote
+            dl_name = quote(dl_name)
+
         return send_file(save_path, as_attachment=True, download_name=f"{dl_name}.docx")
     except Exception as e:
         traceback.print_exc()
