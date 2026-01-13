@@ -150,6 +150,13 @@ class Database:
                            file_size     INTEGER,              -- 字节数
                            physical_path TEXT,                 -- 磁盘物理路径
                            parsed_content TEXT,                -- 存储AI解析后的纯文本/结构化数据
+                           meta_info   TEXT,                 -- 存储文件的元信息，如页数、作者等（JSON格式）
+                           version       INTEGER   DEFAULT 1,  -- 版本号，便于未来扩展
+                           doc_category  TEXT    DEFAULT 'exam', -- 文档类别，如 exam, course_material 等
+                           academic_year TEXT,                 -- 学年，如 2023-2024
+                           semester      TEXT,                 -- 学期，如 Fall, Spring
+                           course_name   TEXT,                 -- 课程名称
+                           cohort_tag    TEXT,                 -- 批次标签，如 2401, 240
                            uploaded_by   INTEGER,              -- 上传者ID
                            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                        )
@@ -238,6 +245,12 @@ class Database:
         self._migrate_table(cursor, conn, "users", "has_seen_help", "BOOLEAN DEFAULT 0")
         self._migrate_table(cursor, conn, "file_assets", "parsed_content", "TEXT")
         self._migrate_table(cursor, conn, "file_assets", "meta_info", "TEXT")
+        self._migrate_table(cursor, conn, "file_assets", "version", "INTEGER DEFAULT 1")
+        self._migrate_table(cursor, conn, "file_assets", "doc_category", "TEXT DEFAULT 'exam'")
+        self._migrate_table(cursor, conn, "file_assets", "academic_year", "TEXT")
+        self._migrate_table(cursor, conn, "file_assets", "semester", "TEXT")
+        self._migrate_table(cursor, conn, "file_assets", "course_name", "TEXT")
+        self._migrate_table(cursor, conn, "file_assets", "cohort_tag", "TEXT")  # 关键：用于区分 2401 和 2406
 
     def _migrate_table(self, cursor, conn, table, column, type_def):
         """辅助函数：检查列是否存在，不存在则添加"""
@@ -260,6 +273,58 @@ class Database:
                            (admin_user, pwd_hash))
             conn.commit()
             print(f"[DB] 超级管理员已初始化: {admin_user}")
+
+    def get_document_library_tree(self, user_id):
+        """
+        获取文档库的目录树结构：学年 -> 学期 -> 课程 -> 适用人群
+        """
+        conn = self.get_connection()
+        # 聚合查询，找出所有存在的组合
+        sql = '''
+              SELECT DISTINCT academic_year, \
+                              semester, \
+                              course_name, \
+                              cohort_tag
+              FROM file_assets
+              WHERE uploaded_by = ? \
+                AND academic_year IS NOT NULL
+              ORDER BY academic_year DESC, semester ASC, course_name \
+              '''
+        return [dict(row) for row in conn.execute(sql, (user_id,)).fetchall()]
+
+    def get_files_by_filter(self, user_id, doc_category=None, year=None, course=None, cohort=None, search=None):
+        """
+        [增强版] 高级筛选接口
+        """
+        conn = self.get_connection()
+        sql = "SELECT f.*, u.username as uploader_name FROM file_assets f LEFT JOIN users u ON f.uploaded_by = u.id WHERE f.parsed_content IS NOT NULL"
+        params = []
+
+        # 权限控制：只能看自己的，或者管理员看全部 (根据业务需求调整，这里暂时只查自己的)
+        # 如果需要看全部，请移除下面这行或根据 user_id 逻辑调整
+        sql += " AND f.uploaded_by = ?"
+        params.append(user_id)
+
+        if doc_category:
+            sql += " AND f.doc_category = ?"
+            params.append(doc_category)
+        if year:
+            sql += " AND f.academic_year = ?"
+            params.append(year)
+        if course:
+            sql += " AND f.course_name = ?"
+            params.append(course)
+        if cohort:
+            sql += " AND f.cohort_tag = ?"
+            params.append(cohort)
+
+        # [新增] 模糊搜索
+        if search:
+            sql += " AND f.original_name LIKE ?"
+            params.append(f"%{search}%")
+
+        sql += " ORDER BY f.created_at DESC"
+        return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
     # ================= 签名集管理 [NEW] =================
     def add_signature(self, name, file_hash, file_path, user_id):

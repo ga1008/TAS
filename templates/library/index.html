@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>文档资产库</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { sky: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7' }, slate: { 800: '#1e293b', 500: '#64748b', 400: '#94a3b8' }, indigo: { 50: '#eef2ff', 500: '#6366f1', 600: '#4f46e5' } }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background: #f8fafc; height: 100vh; display: flex; flex-direction: column; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+
+        .glass-sidebar { background: rgba(255,255,255,0.8); backdrop-filter: blur(10px); border-right: 1px solid #e2e8f0; }
+
+        /* Markdown 样式 */
+        .prose h1 { font-size: 1.4em; font-weight: bold; margin-bottom: 0.5em; color: #1e293b; }
+        .prose h2 { font-size: 1.2em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #334155; }
+        .prose ul { list-style-type: disc; padding-left: 1.2em; margin-bottom: 0.8em; }
+        .prose p { margin-bottom: 0.8em; line-height: 1.6; }
+        .prose pre { background: #f1f5f9; padding: 1em; border-radius: 0.5em; overflow-x: auto; font-family: monospace; font-size: 0.9em; }
+
+        .active-filter { background-color: #e0f2fe; color: #0284c7; border-right: 3px solid #0284c7; }
+    </style>
+</head>
+<body class="font-sans text-slate-800">
+
+    <nav class="bg-white border-b border-slate-200 h-16 flex-none flex items-center justify-between px-6 z-20 shadow-sm">
+        <div class="flex items-center gap-4">
+            <a href="/file_manager" class="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 hover:text-sky-600 transition-colors border border-slate-100">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i class="fas fa-database text-sky-500"></i> 已解析文档库
+            </h1>
+        </div>
+        <div class="flex items-center gap-3">
+             <div class="relative group">
+                <input type="text" id="searchInput" placeholder="搜索文档标题..."
+                       class="w-64 pl-9 pr-4 py-2 rounded-full bg-slate-100 border border-transparent text-sm focus:bg-white focus:border-sky-200 focus:ring-2 focus:ring-sky-100 transition-all outline-none">
+                <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs group-focus-within:text-sky-500 transition-colors"></i>
+            </div>
+            <a href="/file_manager" class="bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold px-4 py-2.5 rounded-full transition shadow-sm hover:shadow-md flex items-center">
+                <i class="fas fa-plus mr-1.5"></i> 新增文档
+            </a>
+        </div>
+    </nav>
+
+    <div class="flex flex-1 overflow-hidden">
+        <aside class="w-64 glass-sidebar flex-none flex flex-col overflow-y-auto custom-scrollbar pb-4">
+            <div class="p-4">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 pl-2">智能筛选</h3>
+                <div id="filterTree" class="space-y-1">
+                    <div class="text-center py-4 text-slate-400"><i class="fas fa-circle-notch fa-spin"></i></div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0 bg-slate-50/50">
+            <div class="px-8 pt-6 flex-none bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+                <div class="flex items-center gap-8 border-b border-slate-200" id="categoryTabs">
+                    <button onclick="setCategory('all')" class="tab-btn active-tab pb-3 text-sm font-bold text-sky-600 border-b-2 border-sky-600 transition-colors" data-cat="all">全部</button>
+                    <button onclick="setCategory('exam')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="exam">试卷</button>
+                    <button onclick="setCategory('standard')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="standard">评分细则</button>
+                    <button onclick="setCategory('syllabus')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="syllabus">教学大纲</button>
+                    <button onclick="setCategory('other')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="other">其他资料</button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div id="fileGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+                    </div>
+
+                <div id="emptyState" class="hidden flex flex-col items-center justify-center h-full min-h-[400px] text-slate-400">
+                    <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                        <i class="fas fa-folder-open text-3xl opacity-30"></i>
+                    </div>
+                    <p class="text-sm font-medium">没有找到符合条件的文档</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="previewModal" class="fixed inset-0 z-50 hidden transition-opacity duration-300">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onclick="closePreview()"></div>
+
+        <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-slate-900/5 scale-95 opacity-0 transition-all duration-300" id="modalContent">
+
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 backdrop-blur-md z-10">
+                <div class="flex items-center gap-4 overflow-hidden flex-1 mr-4">
+                    <div class="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border border-indigo-100">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="font-bold text-slate-700 truncate text-base" id="previewTitle">文档预览</h3>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <span class="text-[10px] bg-slate-200 text-slate-500 px-1.5 rounded" id="previewOwnerBadge">Owner</span>
+                            <span class="text-[10px] text-slate-400 truncate" id="previewMeta">Read Only</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div id="previewActionGroup" class="hidden flex items-center gap-2 mr-2 border-r border-slate-200 pr-4">
+                        <button id="btnEdit" onclick="toggleEditMode(true)" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-sky-600 transition border border-transparent">
+                            <i class="fas fa-edit mr-1"></i> 编辑
+                        </button>
+
+                        <div id="editControls" class="hidden flex items-center gap-2">
+                            <button id="btnCancel" onclick="toggleEditMode(false)" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-rose-500 hover:bg-rose-50 transition">
+                                取消
+                            </button>
+                            <button id="btnSave" onclick="saveFileContent()" class="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center shadow-indigo-200">
+                                <i class="fas fa-save mr-1.5"></i> 保存
+                            </button>
+                        </div>
+
+                        <button onclick="goToExportPage()" class="px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 transition border border-transparent">
+                            <i class="fas fa-file-word mr-1"></i> 导出 Word
+                        </button>
+                    </div>
+
+                    <button onclick="closePreview()" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-hidden relative bg-white">
+                <div class="absolute inset-0 overflow-y-auto p-8 prose max-w-none text-slate-600 transition-opacity duration-200" id="previewContent"></div>
+
+                <textarea id="editContent" class="absolute inset-0 w-full h-full p-8 font-mono text-sm text-slate-700 resize-none focus:outline-none bg-slate-50 hidden opacity-0 transition-opacity duration-200 leading-relaxed"></textarea>
+
+                <div id="modalLoading" class="absolute inset-0 bg-white/80 z-20 hidden flex items-center justify-center backdrop-blur-[1px]">
+                    <div class="flex flex-col items-center">
+                        <i class="fas fa-circle-notch fa-spin text-indigo-500 text-2xl mb-2"></i>
+                        <span class="text-xs text-slate-500 font-bold">处理中...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="imgPreviewModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center bg-black/90 backdrop-blur-sm" onclick="this.classList.add('hidden')">
+        <img id="imgPreviewSrc" src="" class="max-w-[90vw] max-h-[90vh] rounded shadow-2xl bg-white p-1">
+    </div>
+
+    <script>
+        // --- 状态管理 ---
+        let currentFilter = { category: 'all', year: '', course: '', q: '' };
+        let fileCache = {};
+        let currentPreviewId = null;
+
+        // --- 初始化 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFilters();
+            loadFiles();
+
+            // 搜索防抖
+            let timeout = null;
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    currentFilter.q = e.target.value.trim();
+                    loadFiles();
+                }, 300);
+            });
+        });
+
+        // --- 筛选逻辑 ---
+        function setCategory(cat) {
+            currentFilter.category = cat;
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                if(b.dataset.cat === cat) {
+                    b.classList.remove('text-slate-500', 'border-transparent');
+                    b.classList.add('text-sky-600', 'border-sky-600');
+                } else {
+                    b.classList.add('text-slate-500', 'border-transparent');
+                    b.classList.remove('text-sky-600', 'border-sky-600');
+                }
+            });
+            loadFiles();
+        }
+
+        function setSideFilter(year, course, el) {
+            document.querySelectorAll('.filter-item').forEach(i => i.classList.remove('active-filter'));
+            if(el) el.classList.add('active-filter');
+            currentFilter.year = year || '';
+            currentFilter.course = course || '';
+            loadFiles();
+        }
+
+        // --- 数据加载 ---
+        async function loadFilters() {
+            try {
+                const res = await fetch('/api/library/filters');
+                const tree = await res.json();
+                const container = document.getElementById('filterTree');
+
+                if(!tree.length) {
+                    container.innerHTML = '<div class="px-4 text-xs text-slate-400">暂无归档记录</div>';
+                    return;
+                }
+
+                const groups = {};
+                tree.forEach(item => {
+                    if(!groups[item.academic_year]) groups[item.academic_year] = [];
+                    groups[item.academic_year].push(item);
+                });
+
+                let html = `
+                    <div class="filter-item px-4 py-2.5 text-sm cursor-pointer hover:bg-slate-100 rounded-lg active-filter transition-colors font-medium mb-2" onclick="setSideFilter('','', this)">
+                        <i class="fas fa-layer-group w-5 text-slate-400"></i> 所有文档
+                    </div>
+                `;
+
+                for (const [year, items] of Object.entries(groups)) {
+                    if(!year) continue;
+                    html += `<div class="mt-4 px-4 text-[10px] font-bold text-slate-400 uppercase mb-1 tracking-wider">${year} 学年</div>`;
+                    const uniqueCourses = [...new Set(items.map(i => i.course_name))];
+
+                    uniqueCourses.forEach(course => {
+                        if(!course) return;
+                        html += `
+                            <div class="filter-item px-4 py-2 text-sm cursor-pointer hover:bg-sky-50 hover:text-sky-700 rounded-lg flex items-center justify-between group transition-colors text-slate-600"
+                                 onclick="setSideFilter('${year}', '${course}', this)">
+                                <div class="flex items-center gap-2 truncate">
+                                    <i class="fas fa-book w-4 text-slate-300 group-hover:text-sky-400 transition-colors text-xs"></i>
+                                    <span class="truncate">${escapeHtml(course)}</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                container.innerHTML = html;
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function loadFiles() {
+            const grid = document.getElementById('fileGrid');
+            const empty = document.getElementById('emptyState');
+            grid.innerHTML = '<div class="col-span-full py-20 text-center text-slate-400"><i class="fas fa-circle-notch fa-spin mr-2"></i> 加载中...</div>';
+
+            const params = new URLSearchParams();
+            if(currentFilter.category !== 'all') params.append('category', currentFilter.category);
+            if(currentFilter.year) params.append('year', currentFilter.year);
+            if(currentFilter.course) params.append('course', currentFilter.course);
+            if(currentFilter.q) params.append('q', currentFilter.q);
+
+            try {
+                const res = await fetch(`/api/library/files?${params.toString()}`);
+                const files = await res.json();
+
+                grid.innerHTML = '';
+                fileCache = {};
+
+                if(!files.length) {
+                    empty.classList.remove('hidden');
+                    return;
+                }
+                empty.classList.add('hidden');
+
+                files.forEach(f => {
+                    fileCache[f.id] = f;
+                    const icon = getIcon(f.doc_category);
+                    const date = f.created_at ? f.created_at.split(' ')[0] : '未知';
+
+                    // 所有者标签和删除按钮逻辑
+                    const ownerTag = f.is_owner
+                        ? `<span class="text-[10px] bg-sky-100 text-sky-600 px-1.5 py-0.5 rounded ml-2 font-bold">Me</span>`
+                        : `<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded ml-2">${escapeHtml(f.uploader_name)}</span>`;
+
+                    const deleteBtn = f.is_owner ? `
+                        <button onclick="deleteFile(${f.id}); event.stopPropagation();"
+                                class="w-7 h-7 rounded-lg bg-rose-50 text-rose-400 hover:bg-rose-100 hover:text-rose-600 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100" title="删除">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </button>` : '';
+
+                    const card = `
+                        <div class="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-xl hover:border-sky-200 hover:-translate-y-1 transition-all duration-300 cursor-pointer group flex flex-col h-52 relative"
+                             onclick="openPreview(${f.id})">
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="w-10 h-10 rounded-xl ${icon.bg} ${icon.color} flex items-center justify-center text-lg shadow-sm">
+                                    <i class="fas ${icon.fa}"></i>
+                                </div>
+                                <span class="text-[10px] bg-slate-50 text-slate-400 px-2 py-1 rounded-md border border-slate-100 font-mono">
+                                    ${date}
+                                </span>
+                            </div>
+
+                            <div class="mb-auto">
+                                <div class="flex items-center mb-1">
+                                    <h4 class="font-bold text-slate-700 text-sm truncate mr-1" title="${escapeHtml(f.original_name)}">
+                                        ${escapeHtml(f.original_name)}
+                                    </h4>
+                                    ${ownerTag}
+                                </div>
+                                <p class="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                                    ${f.parsed_content ? f.parsed_content.slice(0, 100).replace(/[#*`]/g, '') : '暂无预览内容'}
+                                </p>
+                            </div>
+
+                            <div class="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-xs h-6">
+                                <span class="text-slate-400 font-medium">${f.course_name || '未分类课程'}</span>
+                                ${deleteBtn}
+                            </div>
+                        </div>
+                    `;
+                    grid.innerHTML += card;
+                });
+            } catch(e) {
+                console.error(e);
+                grid.innerHTML = '<div class="text-rose-500 text-center col-span-full">加载失败</div>';
+            }
+        }
+
+        // --- 核心功能 ---
+
+        function openPreview(fileId) {
+            const file = fileCache[fileId];
+            if (!file) return;
+            currentPreviewId = fileId;
+
+            // 填充头部信息
+            document.getElementById('previewTitle').innerText = file.original_name;
+            document.getElementById('previewMeta').innerText = `上传于: ${file.created_at || '未知'}`;
+
+            const ownerBadge = document.getElementById('previewOwnerBadge');
+            if(file.is_owner) {
+                ownerBadge.className = "text-[10px] bg-sky-100 text-sky-600 px-1.5 rounded font-bold";
+                ownerBadge.innerText = "上传者";
+            } else {
+                ownerBadge.className = "text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded";
+                ownerBadge.innerText = file.uploader_name || "未知";
+            }
+
+            // 填充内容
+            const content = file.parsed_content || "";
+            document.getElementById('editContent').value = content;
+            const parser = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : (t => t);
+            document.getElementById('previewContent').innerHTML = content ? parser(content) : '<div class="text-center mt-20 text-slate-300">暂无内容</div>';
+
+            // 按钮权限控制
+            const actionGroup = document.getElementById('previewActionGroup');
+            if (file.is_owner || {{ 'true' if user.is_admin else 'false' }}) { // 假设后端注入了user对象，如果没有请移除后面条件
+                actionGroup.classList.remove('hidden');
+            } else {
+                actionGroup.classList.add('hidden');
+            }
+
+            // 重置为阅读模式
+            toggleEditMode(false);
+
+            // 显示弹窗动画
+            const modal = document.getElementById('previewModal');
+            const contentDiv = document.getElementById('modalContent');
+            modal.classList.remove('hidden');
+            // 强制重绘
+            void modal.offsetWidth;
+            contentDiv.classList.remove('scale-95', 'opacity-0');
+            contentDiv.classList.add('scale-100', 'opacity-100');
+        }
+
+        function closePreview() {
+            const modal = document.getElementById('previewModal');
+            const contentDiv = document.getElementById('modalContent');
+            contentDiv.classList.remove('scale-100', 'opacity-100');
+            contentDiv.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function toggleEditMode(isEdit) {
+            const previewEl = document.getElementById('previewContent');
+            const editEl = document.getElementById('editContent');
+            const btnEdit = document.getElementById('btnEdit');
+            const editControls = document.getElementById('editControls');
+
+            if (isEdit) {
+                previewEl.classList.add('hidden');
+                editEl.classList.remove('hidden');
+                setTimeout(() => editEl.classList.remove('opacity-0'), 10);
+
+                btnEdit.classList.add('hidden');
+                editControls.classList.remove('hidden');
+                editControls.classList.add('flex');
+            } else {
+                editEl.classList.add('opacity-0');
+                setTimeout(() => editEl.classList.add('hidden'), 200);
+                previewEl.classList.remove('hidden');
+
+                btnEdit.classList.remove('hidden');
+                editControls.classList.add('hidden');
+                editControls.classList.remove('flex');
+            }
+        }
+
+        function saveFileContent() {
+            if (!currentPreviewId) return;
+            const newContent = document.getElementById('editContent').value;
+            const loadingEl = document.getElementById('modalLoading');
+            loadingEl.classList.remove('hidden');
+
+            fetch('/api/update_file_content', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    id: currentPreviewId,
+                    content: newContent
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    if (fileCache[currentPreviewId]) {
+                        fileCache[currentPreviewId].parsed_content = newContent;
+                    }
+                    const parser = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : (t => t);
+                    document.getElementById('previewContent').innerHTML = parser(newContent);
+                    toggleEditMode(false);
+                    loadFiles(); // 刷新列表以更新预览摘要
+                    alert('保存成功');
+                } else {
+                    alert('保存失败: ' + data.msg);
+                }
+            })
+            .catch(err => alert('网络错误: ' + err))
+            .finally(() => {
+                loadingEl.classList.add('hidden');
+            });
+        }
+
+        function deleteFile(id) {
+            if(!confirm('确定要删除这个文件及其解析记录吗？此操作不可恢复。')) return;
+
+            fetch('/api/delete_file_asset', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: id})
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.msg === '删除成功') {
+                    loadFiles();
+                } else {
+                    alert('删除失败: ' + data.msg);
+                }
+            })
+            .catch(err => alert('删除请求出错'));
+        }
+
+        function goToExportPage() {
+            if(currentPreviewId) window.location.href = `/export_page/${currentPreviewId}`;
+        }
+
+        // --- 工具函数 ---
+        function getIcon(cat) {
+            if(cat === 'exam') return { bg: 'bg-purple-50', color: 'text-purple-500', fa: 'fa-file-signature' };
+            if(cat === 'standard') return { bg: 'bg-emerald-50', color: 'text-emerald-500', fa: 'fa-list-check' };
+            if(cat === 'syllabus') return { bg: 'bg-amber-50', color: 'text-amber-600', fa: 'fa-book-open' };
+            return { bg: 'bg-slate-100', color: 'text-slate-500', fa: 'fa-file-alt' };
+        }
+
+        function escapeHtml(text) {
+             if (!text) return text;
+             return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>

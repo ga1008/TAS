@@ -221,7 +221,25 @@
                     if (field.auto_fill_key === 'uploader_name') {
                         value = currentUserName || '';
                         isAutoFilled = true;
+                    } else if (field.auto_fill_key.includes('.')) {
+                        // [新增] 支持 "hours_info.total" 这种嵌套 key
+                        const keys = field.auto_fill_key.split('.');
+                        let temp = currentFileMeta;
+                        let found = true;
+                        for (let k of keys) {
+                            if (temp && temp[k] !== undefined) {
+                                temp = temp[k];
+                            } else {
+                                found = false;
+                                break;
+                            }
+                        }
+                        if (found) {
+                            value = temp;
+                            isAutoFilled = true;
+                        }
                     } else if (currentFileMeta[field.auto_fill_key]) {
+                        // 原有逻辑
                         value = currentFileMeta[field.auto_fill_key];
                         isAutoFilled = true;
                     }

@@ -22,6 +22,7 @@ from ai_utils.ai_helper import call_ai_platform_chat
 from ai_utils.volc_file_manager import VolcFileManager
 from blueprints.admin import bp as admin_bp
 from config import Config, BASE_CREATOR_PROMPT, STRICT_MODE_PROMPT, LOOSE_MODE_PROMPT, EXAMPLE_PROMPT
+from export_core.doc_config import DocumentTypeConfig
 from export_core.manager import TemplateManager
 # 确保 extensions.py 中已正确初始化 db = Database()
 from extensions import db
@@ -220,7 +221,7 @@ def get_corrected_path(db_path, folder_path):
     return None
 
 
-def smart_parse_with_metadata(file_id, doc_type):
+def smart_parse_with_metadata(file_id, doc_category_hint="exam"):
     """
     智能解析文件 V2：提取正文(Markdown) + 元数据(JSON)。
     并自动更新数据库中的 parsed_content 和 meta_info 字段。
@@ -235,51 +236,32 @@ def smart_parse_with_metadata(file_id, doc_type):
     if not record:
         return False, "文件记录不存在", {}
 
-    # 尝试读取原始内容（可以是纯文本，也可以是OCR后的文本）
-    # 如果还没有解析过，先尝试提取一次
     physical_path = record['physical_path']
     parse_success, raw_text = extract_text_from_file(physical_path)
 
     if not parse_success or not raw_text:
         return False, f"基础解析失败: {raw_text}", {}
 
-    # 如果内容过多，进行截断以符合 Token 限制
     input_content = raw_text[:50000]
 
-    # 2. 构造 Prompt
-    doc_label = "试卷" if doc_type == "exam" else "评分标准"
+    # === [修改开始]：使用配置类生成动态 Prompt ===
+    system_prompt = "你是高校教学资料结构化专家。请读取内容并提取元数据，同时整理正文Markdown。"
 
-    system_prompt = "你是教学资料结构化专家。请严格按照要求返回 JSON 格式数据。"
+    # 获取特定类型的 Prompt 指令
+    type_specific_instruction = DocumentTypeConfig.get_prompt_by_type(doc_category_hint)
 
     user_prompt = f"""
-    请读取以下【{doc_label}】的原始内容，并完成两项任务：
+            {type_specific_instruction}
 
-    任务一：清洗整理
-    去除乱码、页眉页脚，将正文整理为清晰规范的 Markdown 格式。保留所有题目、选项、分值和评分细则。
+            请以纯 JSON 格式返回，结构如下：
+            {{
+                "content": "Markdown内容...",
+                "metadata": {{ ...根据上述要求提取的字段... }}
+            }}
 
-    任务二：提取元数据
-    根据内容提取关键信息，填充到 `metadata` 对象中。如果文中未提及，请留空字符串。
-
-    【重要】请直接返回纯 JSON 字符串，不要使用 Markdown 代码块包裹，格式如下：
-    {{
-        "title": "文档标题",
-        "content": "这里是清洗后的Markdown内容...",
-        "metadata": {{
-            "course_name": "课程名称(如 Python程序设计)",
-            "class_name": "适用班级(如 2023级软件工程)",
-            "assessment_type": "考核方式(考试/考查)",
-            "teacher_name": "命题教师姓名",
-            "head_name": "系主任姓名",
-            "year_start": "学年起始年份(如 2024)",
-            "year_end": "学年结束年份(如 2025)",
-            "semester": "学期(一/二)",
-            "date": "命题日期(YYYY-MM-DD)"
-        }}
-    }}
-
-    原始内容如下：
-    {input_content}
-    """
+            原始内容：
+            {input_content}
+        """
 
     # 3. 调用 AI
     standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
@@ -303,24 +285,41 @@ def smart_parse_with_metadata(file_id, doc_type):
                 cleaned_json = match.group(1)
 
         data = json.loads(cleaned_json)
-
         parsed_content = data.get("content", "")
-        meta_info = data.get("metadata", {})
-        title = data.get("title", record['original_name'])  # 优先用AI生成的标题
+        meta = data.get("metadata", {})
 
-        if not parsed_content:
-            raise ValueError("AI 返回的内容为空")
+        # 提取关键字段用于存入 DB 索引列
+        academic_year = meta.get("academic_year")
+        semester = str(meta.get("semester", ""))
+        course_name = meta.get("course_name")
+        # [新增] 尝试从 syllabus 元数据中提取 course_name 兜底
+        if not course_name and doc_category_hint == 'syllabus':
+            course_name = meta.get("course_name")
 
-        # 5. 更新数据库
+        cohort_tag = meta.get("cohort_tag")
+
+        # 更新数据库 (包括新增的列)
         conn = db.get_connection()
-        # 更新解析内容
-        db.update_file_parsed_content(file_id, parsed_content)
-        # 更新元数据 (meta_info 字段需确保存储的是 JSON 字符串)
-        conn.execute("UPDATE file_assets SET meta_info = ? WHERE id = ?",
-                     (json.dumps(meta_info, ensure_ascii=False), file_id))
+        conn.execute('''
+                     UPDATE file_assets
+                     SET parsed_content=?,
+                         meta_info=?,
+                         doc_category=?,
+                         academic_year=?,
+                         semester=?,
+                         course_name=?,
+                         cohort_tag=?
+                     WHERE id = ?
+                     ''', (
+                         parsed_content,
+                         json.dumps(meta, ensure_ascii=False),
+                         doc_category_hint,
+                         academic_year, semester, course_name, cohort_tag,
+                         file_id
+                     ))
         conn.commit()
 
-        return True, parsed_content, meta_info
+        return True, parsed_content, meta
 
     except json.JSONDecodeError:
         print(f"[SmartParse] JSON Parse Error. Raw AI response: {ai_response[:100]}...")
@@ -681,7 +680,8 @@ def smart_parse_file_content(file_id, doc_type=None):
         vision_config = db.get_best_ai_config("vision")
 
         # 定义支持 Vision 上传的类型
-        is_media = ext in ['.pdf', '.jpg', '.jpeg', '.png', '.mp4', '.bmp', '.webp', '.tiff', '.docx', '.doc', '.txt', '.py', '.java', '.c', '.md', '.json', '.html', '.js']
+        is_media = ext in ['.pdf', '.jpg', '.jpeg', '.png', '.mp4', '.bmp', '.webp', '.tiff', '.docx', '.doc', '.txt',
+                           '.py', '.java', '.c', '.md', '.json', '.html', '.js']
 
         # --- 分支 A: 调用 Vision 模型 ---
         if is_media and vision_config and vision_config.get('api_key'):
@@ -915,6 +915,57 @@ def auth_middleware():
     if not g.user:
         return redirect(url_for('login'))
     return None
+
+
+# === [新增] 文档库 路由区域 ===
+
+@app.route('/library/view')
+def library_view():
+    """渲染新的独立文档库页面"""
+    if not g.user: return redirect(url_for('login'))
+    return render_template('library/index.html', user=g.user)
+
+
+@app.route('/api/library/files')
+def api_library_files():
+    """
+    文档库专用接口：支持 分类、年份、课程、模糊搜索 组合筛选
+    """
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+
+    # 获取筛选参数
+    category = request.args.get('category', '')  # exam, standard, etc.
+    year = request.args.get('year', '')
+    course = request.args.get('course', '')
+    search = request.args.get('q', '')
+
+    # 调用 Database 的高级筛选方法 (需确保 database.py 中 get_files_by_filter 逻辑正确)
+    files = db.get_files_by_filter(
+        user_id=g.user['id'],
+        doc_category=category if category != 'all' else None,
+        year=year,
+        course=course,
+        # 这里假设 get_files_by_filter 还没支持 search，我们将在 database.py 中微调
+    )
+
+    # 如果 database 层没做 search 过滤，这里在内存做 (或者修改 SQL，推荐修改 SQL)
+    if search:
+        search = search.lower()
+        files = [f for f in files if search in f['original_name'].lower()]
+
+    # 标记权限
+    for f in files:
+        f['is_owner'] = (f['uploaded_by'] == g.user['id']) or g.user.get('is_admin')
+
+    return jsonify(files)
+
+
+@app.route('/api/library/filters')
+def api_library_filters():
+    """获取侧边栏筛选树所需的数据 (学年/课程/标签)"""
+    if not g.user: return jsonify([]), 401
+    tree = db.get_document_library_tree(g.user['id'])
+    return jsonify(tree)
 
 
 @app.route('/export_page/<int:file_id>')
@@ -1747,7 +1798,9 @@ def parse_file_asset():
         if not record:
             return jsonify({"msg": "文件记录创建失败"}), 500
 
-        parse_success, parsed_text, _ = smart_parse_file_content(record['id'], request.form.get('doc_type'))
+        # parse_success, parsed_text, _ = smart_parse_file_content(record['id'], request.form.get('doc_type'))
+        doc_type = request.form.get('doc_type')
+        parse_success, parsed_text, _ = smart_parse_with_metadata(record['id'], doc_type)
         if not parse_success:
             return jsonify({"msg": parsed_text}), 400
 
@@ -2097,7 +2150,8 @@ def get_export_templates():
     if not g.user: return jsonify({"msg": "Unauthorized"}), 401
     # 从数据库读取，确保是最新的
     conn = db.get_connection()
-    templates = conn.execute("SELECT template_id, name, description, ui_schema FROM export_templates WHERE is_active=1").fetchall()
+    templates = conn.execute(
+        "SELECT template_id, name, description, ui_schema FROM export_templates WHERE is_active=1").fetchall()
     return jsonify([dict(row) for row in templates])
 
 
