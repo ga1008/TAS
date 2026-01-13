@@ -1,10 +1,11 @@
 # utils/word_exporter_base.py
 import re
 from datetime import datetime
+
 from docx import Document
-from docx.shared import Cm, Pt, RGBColor
-from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Cm, Pt, RGBColor
 
 
 class BaseWordExporter:

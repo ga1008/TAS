@@ -19,14 +19,14 @@ from docx import Document
 from flask import Flask, render_template, request, redirect, url_for, send_file, jsonify, session, g
 
 from ai_utils.ai_helper import call_ai_platform_chat
+from ai_utils.volc_file_manager import VolcFileManager
+from blueprints.admin import bp as admin_bp
+from config import Config, BASE_CREATOR_PROMPT, STRICT_MODE_PROMPT, LOOSE_MODE_PROMPT, EXAMPLE_PROMPT
+from export_core.manager import TemplateManager
 # 确保 extensions.py 中已正确初始化 db = Database()
 from extensions import db
-from blueprints.admin import bp as admin_bp
-from config import CREATOR_PROMPT, Config, BASE_CREATOR_PROMPT, STRICT_MODE_PROMPT, LOOSE_MODE_PROMPT, EXAMPLE_PROMPT
 from grading_core.direct_grader_template import DIRECT_GRADER_TEMPLATE
 from grading_core.factory import GraderFactory
-from ai_utils.volc_file_manager import VolcFileManager
-from utils.word_exporter import ExamWordExporter
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -35,23 +35,24 @@ app.config.from_object(Config)
 app.register_blueprint(admin_bp)
 
 # 确保基础目录存在
-for d in [app.config['UPLOAD_FOLDER'], app.config['WORKSPACE_FOLDER'], app.config['GRADERS_DIR'],
-          app.config['TRASH_DIR']]:
+for d in [
+    app.config['UPLOAD_FOLDER'],
+    app.config['WORKSPACE_FOLDER'],
+    app.config['GRADERS_DIR'],
+    app.config['TRASH_DIR'],
+    app.config['FILE_REPO_FOLDER'],
+    app.config['TEMPLATE_DIR'],
+    app.config['SIGNATURES_FOLDER']
+]:
     if not os.path.exists(d): os.makedirs(d)
+
+TemplateManager.load_templates(app.config['TEMPLATE_DIR'])
 
 # 启动时加载评分策略
 try:
     GraderFactory.load_graders()
 except Exception as e:
     print(f"Warning: Failed to load graders on startup: {e}")
-
-if not os.path.exists(app.config['FILE_REPO_FOLDER']):
-    os.makedirs(app.config['FILE_REPO_FOLDER'])
-
-# 配置增加
-app.config['SIGNATURES_FOLDER'] = Config.SIGNATURES_FOLDER
-if not os.path.exists(app.config['SIGNATURES_FOLDER']):
-    os.makedirs(app.config['SIGNATURES_FOLDER'])
 
 
 @app.before_request
@@ -217,6 +218,120 @@ def get_corrected_path(db_path, folder_path):
         return corrected_path
 
     return None
+
+
+def smart_parse_with_metadata(file_id, doc_type):
+    """
+    智能解析文件 V2：提取正文(Markdown) + 元数据(JSON)。
+    并自动更新数据库中的 parsed_content 和 meta_info 字段。
+    """
+    import json
+    import asyncio
+    from extensions import db  # 确保能引用到数据库实例
+    from ai_utils.ai_helper import call_ai_platform_chat
+
+    # 1. 获取文件记录
+    record = db.get_file_by_id(file_id)
+    if not record:
+        return False, "文件记录不存在", {}
+
+    # 尝试读取原始内容（可以是纯文本，也可以是OCR后的文本）
+    # 如果还没有解析过，先尝试提取一次
+    physical_path = record['physical_path']
+    parse_success, raw_text = extract_text_from_file(physical_path)
+
+    if not parse_success or not raw_text:
+        return False, f"基础解析失败: {raw_text}", {}
+
+    # 如果内容过多，进行截断以符合 Token 限制
+    input_content = raw_text[:50000]
+
+    # 2. 构造 Prompt
+    doc_label = "试卷" if doc_type == "exam" else "评分标准"
+
+    system_prompt = "你是教学资料结构化专家。请严格按照要求返回 JSON 格式数据。"
+
+    user_prompt = f"""
+    请读取以下【{doc_label}】的原始内容，并完成两项任务：
+
+    任务一：清洗整理
+    去除乱码、页眉页脚，将正文整理为清晰规范的 Markdown 格式。保留所有题目、选项、分值和评分细则。
+
+    任务二：提取元数据
+    根据内容提取关键信息，填充到 `metadata` 对象中。如果文中未提及，请留空字符串。
+
+    【重要】请直接返回纯 JSON 字符串，不要使用 Markdown 代码块包裹，格式如下：
+    {{
+        "title": "文档标题",
+        "content": "这里是清洗后的Markdown内容...",
+        "metadata": {{
+            "course_name": "课程名称(如 Python程序设计)",
+            "class_name": "适用班级(如 2023级软件工程)",
+            "assessment_type": "考核方式(考试/考查)",
+            "teacher_name": "命题教师姓名",
+            "head_name": "系主任姓名",
+            "year_start": "学年起始年份(如 2024)",
+            "year_end": "学年结束年份(如 2025)",
+            "semester": "学期(一/二)",
+            "date": "命题日期(YYYY-MM-DD)"
+        }}
+    }}
+
+    原始内容如下：
+    {input_content}
+    """
+
+    # 3. 调用 AI
+    standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
+    if not standard_config:
+        return False, "未配置 AI 模型，无法进行智能元数据提取", {}
+
+    try:
+        ai_response = asyncio.run(call_ai_platform_chat(
+            system_prompt=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            platform_config=standard_config
+        ))
+
+        # 4. 结果清洗与解析
+        # 有时 AI 会包裹 ```json ... ```，需要去除
+        cleaned_json = ai_response.strip()
+        if cleaned_json.startswith("```"):
+            import re
+            match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned_json, re.DOTALL)
+            if match:
+                cleaned_json = match.group(1)
+
+        data = json.loads(cleaned_json)
+
+        parsed_content = data.get("content", "")
+        meta_info = data.get("metadata", {})
+        title = data.get("title", record['original_name'])  # 优先用AI生成的标题
+
+        if not parsed_content:
+            raise ValueError("AI 返回的内容为空")
+
+        # 5. 更新数据库
+        conn = db.get_connection()
+        # 更新解析内容
+        db.update_file_parsed_content(file_id, parsed_content)
+        # 更新元数据 (meta_info 字段需确保存储的是 JSON 字符串)
+        conn.execute("UPDATE file_assets SET meta_info = ? WHERE id = ?",
+                     (json.dumps(meta_info, ensure_ascii=False), file_id))
+        conn.commit()
+
+        return True, parsed_content, meta_info
+
+    except json.JSONDecodeError:
+        print(f"[SmartParse] JSON Parse Error. Raw AI response: {ai_response[:100]}...")
+        # 降级处理：如果 JSON 解析失败，但 AI 返回了文本，尝试把它当作纯 Markdown 存入
+        # 此时元数据为空
+        db.update_file_parsed_content(file_id, ai_response)
+        return True, ai_response, {}
+
+    except Exception as e:
+        print(f"[SmartParse] Exception: {e}")
+        return False, str(e), {}
 
 
 def handle_file_upload_or_reuse(file_obj, existing_file_id, user_id):
@@ -905,56 +1020,6 @@ def get_signature_image(sig_id):
         return "Image file not found on server", 404
 
     return send_file(real_path)
-
-# ================= 修改 Export 逻辑以支持从库引用 =================
-
-@app.route('/api/export_word', methods=['POST'])
-def api_export_word():
-    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
-
-    file_id = request.form.get('file_id')
-    template = request.form.get('template')
-    data = request.form.to_dict()
-
-    # [NEW] 处理签名集引用
-    # 前端传来的字段可能是 sig_id，需要转换成 path
-    sig_keys = ['teacher_sig', 'head_sig', 'leader_sig']
-    for key in sig_keys:
-        sig_id_val = data.get(f"{key}_select")
-        if sig_id_val and sig_id_val.isdigit():
-            sig_rec = db.get_signature_by_id(int(sig_id_val))
-            if sig_rec:
-                # 获取修复后的路径，确保 Word Exporter 能读取到
-                real_path = get_corrected_path(sig_rec['file_path'], app.config['SIGNATURES_FOLDER'])
-                if real_path:
-                    data[f"{key}_path"] = real_path
-
-    record = db.get_file_by_id(file_id)
-    if not record: return jsonify({"msg": "文件不存在"}), 404
-
-    content = record.get('parsed_content', '')
-    if not content: return jsonify({"msg": "文件内容为空"}), 400
-
-    filename = f"export_{uuid.uuid4().hex}.docx"
-    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-    try:
-        exporter = ExamWordExporter(template)
-        exporter.generate_guangwai_exam(content, data, save_path)
-
-        dl_name = data.get('course_name', 'document')
-        try:
-            # 尝试简单转义防止 header 中文乱码
-            dl_name.encode('latin-1')
-        except UnicodeEncodeError:
-            # 如果包含中文，flask send_file 在某些环境下自动处理，或者使用 urlquote
-            from urllib.parse import quote
-            dl_name = quote(dl_name)
-
-        return send_file(save_path, as_attachment=True, download_name=f"{dl_name}.docx")
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"msg": f"导出失败: {str(e)}"}), 500
 
 
 @app.route('/intro')
@@ -2020,6 +2085,89 @@ def preview_file(class_id, student_id):
     except Exception as e:
         print(f"Preview Error: {e}")
         return jsonify({"type": "error", "msg": str(e)}), 500
+
+
+# 2. 获取可用模板列表 API
+@app.route('/api/export/templates')
+def get_export_templates():
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    # 从数据库读取，确保是最新的
+    conn = db.get_connection()
+    templates = conn.execute("SELECT template_id, name, description, ui_schema FROM export_templates WHERE is_active=1").fetchall()
+    return jsonify([dict(row) for row in templates])
+
+
+# 3. 执行导出 API (重写)
+# 需要在 app.py 顶部确保引入 quote
+from urllib.parse import quote
+
+
+@app.route('/api/export_word_v2', methods=['POST'])
+def export_word_v2():
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json
+    file_id = data.get('file_id')
+    template_id = data.get('template_id')
+    form_data = data.get('form_data', {})  # 前端动态表单填写的KV
+
+    # 获取文件内容和元数据
+    file_record = db.get_file_by_id(file_id)
+    if not file_record:
+        return jsonify({"msg": "文件记录不存在"}), 404
+
+    content = file_record['parsed_content']
+    meta_info = json.loads(file_record.get('meta_info') or '{}')
+
+    # 获取模板实例
+    exporter = TemplateManager.get_template(template_id)
+    if not exporter:
+        return jsonify({"msg": "模板未找到"}), 404
+
+    # === [FIX 1] 修复字典遍历报错 ===
+    # 处理签名路径逻辑 (将 ID 转为 Path)
+    # 使用 list() 创建 items 的副本进行遍历，避免 "dictionary changed size" 错误
+    for key, val in list(form_data.items()):
+        # 只要 key 是 _sig 结尾（如 teacher_sig）或者是特定的 _select 结尾（兼容旧逻辑），且值为数字 ID
+        is_sig_field = key.endswith('_sig') or key.endswith('_select')
+
+        if is_sig_field and str(val).isdigit():
+            sig = db.get_signature_by_id(int(val))
+            if sig:
+                # 注入 path 供模板使用
+                # 注意：这里我们向 form_data 添加了新 Key，所以外层必须用 list() 拷贝迭代
+                real_path = get_corrected_path(sig['file_path'], app.config['SIGNATURES_FOLDER'])
+                if real_path:
+                    # 如果 key 是 teacher_sig，则注入 teacher_sig_path
+                    # 如果 key 是 teacher_sig_select，则注入 teacher_sig_path (保持兼容)
+                    prefix = key.replace('_select', '')
+                    form_data[f"{prefix}_path"] = real_path
+
+    # 生成文件
+    filename = f"export_{uuid.uuid4().hex}.docx"
+    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+    try:
+        exporter.generate(content, meta_info, form_data, save_path)
+
+        # === [FIX 2] 补全中文文件名处理 ===
+        dl_name = form_data.get('course_name', 'Document')
+        # 确保文件名是字符串
+        if not dl_name: dl_name = 'Document'
+
+        try:
+            # 尝试编码，如果不报错说明是纯 ASCII，不需要 quote
+            dl_name.encode('latin-1')
+            final_name = f"{dl_name}.docx"
+        except UnicodeEncodeError:
+            # 包含中文，使用 URL 编码防止 header 错误
+            final_name = f"{quote(dl_name)}.docx"
+
+        return send_file(save_path, as_attachment=True, download_name=final_name)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"msg": f"导出失败: {str(e)}"}), 500
 
 
 if __name__ == '__main__':

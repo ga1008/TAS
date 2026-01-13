@@ -185,6 +185,42 @@ class Database:
                        )
                        ''')
 
+        # [NEW] 1. 新增导出模板表
+        # 该表存储模板的元数据和前端所需的表单定义(Schema)，实现UI解耦
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS export_templates
+                       (
+                           id
+                           INTEGER
+                           PRIMARY
+                           KEY
+                           AUTOINCREMENT,
+                           template_id
+                           TEXT
+                           UNIQUE
+                           NOT
+                           NULL, -- 对应 Python 类中的 ID
+                           name
+                           TEXT
+                           NOT
+                           NULL, -- 显示名称
+                           description
+                           TEXT,
+                           file_path
+                           TEXT, -- 物理 py 文件路径
+                           ui_schema
+                           TEXT, -- JSON 格式的前端表单配置
+                           is_active
+                           BOOLEAN
+                           DEFAULT
+                           1,
+                           updated_at
+                           TIMESTAMP
+                           DEFAULT
+                           CURRENT_TIMESTAMP
+                       )
+                       ''')
+
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_capability ON ai_models (capability)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_file_hash ON file_assets (file_hash)')
@@ -201,6 +237,7 @@ class Database:
         self._migrate_table(cursor, conn, "ai_tasks", "max_score", "INTEGER DEFAULT 100")
         self._migrate_table(cursor, conn, "users", "has_seen_help", "BOOLEAN DEFAULT 0")
         self._migrate_table(cursor, conn, "file_assets", "parsed_content", "TEXT")
+        self._migrate_table(cursor, conn, "file_assets", "meta_info", "TEXT")
 
     def _migrate_table(self, cursor, conn, table, column, type_def):
         """辅助函数：检查列是否存在，不存在则添加"""

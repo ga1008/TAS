@@ -1,37 +1,41 @@
-import re
 import os
+import re
 from datetime import datetime
-from docx import Document
-from docx.shared import Cm, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT, WD_ROW_HEIGHT_RULE
-from docx.oxml.ns import qn
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsmap
+from docx.oxml.ns import qn
+from docx.shared import Cm, Pt, RGBColor
 
-from utils.word_exporter_base import BaseWordExporter
+from export_core.base_template import BaseExportTemplate
+from export_core.word_exporter_base import BaseWordExporter
 
 
-class GuangWaiExamExporter(BaseWordExporter):
-    def __init__(self, template_type="exam_guangwai"):
-        super().__init__()
-        self.doc = Document()
-        self.template_type = template_type
+class GuangWaiExamExporter(BaseExportTemplate, BaseWordExporter):
+    ID = "exam_guangwai"
+    NAME = "广西外国语学院 - 期末试卷"
+    DESCRIPTION = "标准 A4 试卷格式，包含密封线和审批栏。"
 
-        # === 常量定义 ===
-        self.FONT_CN_MAIN = '宋体'
-        self.FONT_CN_BOLD = '黑体'
-        self.FONT_EN = 'Times New Roman'
+    # 【核心改进】定义前端需要渲染的字段，不再由 HTML 硬编码
+    UI_SCHEMA = [
+        {"name": "course_name", "label": "课程名称", "type": "text", "placeholder": "例如：Python程序设计", "auto_fill_key": "course_name"},
+        {"name": "class_name", "label": "专业班级", "type": "text", "placeholder": "例如：2023级软工1班", "auto_fill_key": "class_name"},
+        {"name": "teacher_name", "label": "命题教师", "type": "text", "auto_fill_key": "uploader_name"}, # 关联上传者
+        {"name": "teacher_sig", "label": "教师签名", "type": "signature_selector", "bind_to": "teacher_name"},
+        {"name": "head_name", "label": "系主任姓名", "type": "text", "auto_fill_key": "head_name"},
+        {"name": "head_sig", "label": "系主任签名", "type": "signature_selector", "bind_to": "head_name"},
+        {"name": "leader_name", "label": "学院领导姓名", "type": "text"},
+        {"name": "leader_sig", "label": "领导签名", "type": "signature_selector", "bind_to": "leader_name"},
+        {"name": "semester_info", "label": "学期信息", "type": "group", "children": [
+            {"name": "year_start", "label": "起始年份", "type": "number", "width": "30%"},
+            {"name": "year_end", "label": "结束年份", "type": "number", "width": "30%"},
+            {"name": "semester", "label": "学期", "type": "select", "options": ["一", "二"], "width": "30%"}
+        ]}
+    ]
 
-        # 字号映射 (Pt)
-        self.SIZE_SMALL_2 = 18  # 小二
-        self.SIZE_4 = 14  # 四号
-        self.SIZE_SMALL_4 = 12  # 小四
-        self.SIZE_5 = 10.5  # 五号
-        self.SIZE_SMALL_5 = 9  # 小五
-
-    # ================= 核心工具方法 =================
+    def __init__(self):
+        BaseWordExporter.__init__(self)
 
     def _set_font(self, run, size_pt, bold=False, font_name='宋体', align=None):
         """
@@ -126,9 +130,9 @@ class GuangWaiExamExporter(BaseWordExporter):
                 big_questions.append(marker)
         return big_questions
 
-    # ================= 业务生成逻辑 =================
-
-    def generate(self, content, metadata, output_path):
+    def generate(self, content, meta_info, form_data, output_path):
+        # ... 这里粘贴原来的 docx 生成逻辑 ...
+        # 注意：数据来源现在统一从 form_data 获取
         # 1. 页面设置
         section = self.doc.sections[0]
         section.page_width = Cm(21)
@@ -216,13 +220,13 @@ class GuangWaiExamExporter(BaseWordExporter):
             return cell  # 【关键修复】这里必须返回 cell 对象，否则外部接收为 None
 
         fill(0, 0, "课程名称")
-        fill(0, 1, metadata.get('course_name', ''), merge_c=4)
+        fill(0, 1, form_data.get('course_name', ''), merge_c=4)
         fill(1, 0, "学历层次")
         fill(1, 1, "本科（ √ ）/ 专科（ ）")
         fill(1, 2, "考核类型")
         fill(1, 3, "考查（ ）/ 考试（ √ ）", merge_c=4)
         fill(2, 0, "专业年级班级")
-        fill(2, 1, metadata.get('class_name', ''))
+        fill(2, 1, form_data.get('class_name', ''))
         fill(2, 2, "考试时间")
         fill(2, 3, "（ 90 ）分钟", merge_c=4)
         fill(3, 0, "试卷类型")
@@ -230,13 +234,13 @@ class GuangWaiExamExporter(BaseWordExporter):
 
         # [MODIFIED] 命题教师及签名
         fill(3, 2, "命题教师")
-        c_teacher = fill(3, 3, metadata.get('teacher_name', ''), merge_c=4)
+        c_teacher = fill(3, 3, form_data.get('teacher_name', ''), merge_c=4)
         # 插入命题教师签名 (如果存在)
-        if metadata.get('teacher_sig_path') and os.path.exists(metadata.get('teacher_sig_path')):
+        if form_data.get('teacher_sig_path') and os.path.exists(form_data.get('teacher_sig_path')):
             try:
                 # 放在名字后面或者换行
                 r = c_teacher.paragraphs[0].add_run("  ")
-                r.add_picture(metadata.get('teacher_sig_path'), height=Cm(0.8))
+                r.add_picture(form_data.get('teacher_sig_path'), height=Cm(0.8))
             except Exception as e:
                 print(f"Insert teacher sig error: {e}")
 
@@ -244,11 +248,11 @@ class GuangWaiExamExporter(BaseWordExporter):
         fill(4, 0, "系 (教研室)\n主任")
 
         # [MODIFIED] 系主任签名
-        c_head = fill(4, 1, metadata.get('head_name', ''))  # 系主任名字
-        if metadata.get('head_sig_path') and os.path.exists(metadata.get('head_sig_path')):
+        c_head = fill(4, 1, form_data.get('head_name', ''))  # 系主任名字
+        if form_data.get('head_sig_path') and os.path.exists(form_data.get('head_sig_path')):
             try:
                 r = c_head.paragraphs[0].add_run("  ")
-                r.add_picture(metadata.get('head_sig_path'), height=Cm(0.8))
+                r.add_picture(form_data.get('head_sig_path'), height=Cm(0.8))
             except:
                 pass
 
@@ -262,12 +266,12 @@ class GuangWaiExamExporter(BaseWordExporter):
 
         # [MODIFIED] 学院领导签名 (最后一列)
         # 优化：直接使用 fill 填充名字，避免 NoneType 错误和 font 设置错位
-        c_leader = fill(4, 4, metadata.get('leader_name', ''))
+        c_leader = fill(4, 4, form_data.get('leader_name', ''))
 
-        if metadata.get('leader_sig_path') and os.path.exists(metadata.get('leader_sig_path')):
+        if form_data.get('leader_sig_path') and os.path.exists(form_data.get('leader_sig_path')):
             try:
                 r = c_leader.paragraphs[0].add_run("  ")
-                r.add_picture(metadata.get('leader_sig_path'), height=Cm(0.8))
+                r.add_picture(form_data.get('leader_sig_path'), height=Cm(0.8))
             except:
                 pass
 
@@ -441,7 +445,7 @@ class GuangWaiExamExporter(BaseWordExporter):
         # 匹配 Line 2 的视觉长度
         # 8个汉字 ≈ 16个 dash_unit 长度
         # 总长 ≈ 12*2 + 5*7 + 16 = 24 + 35 + 16 = 75 units
-        line3_text = dash_unit * (side_unit_count*2 + 5*7 + 8)
+        line3_text = dash_unit * (side_unit_count * 2 + 5 * 7 + 8)
 
         # 3. 样式计算
         # 注意：高度设为 700pt (约24.7cm)，留出上下余量
@@ -458,61 +462,61 @@ class GuangWaiExamExporter(BaseWordExporter):
         # w:lineRule="exact" 表示固定值
         # w:line 单位是 1/20 pt。16pt = 320, 13pt = 260
         vml_xml = f"""
-        <v:shape xmlns:v="urn:schemas-microsoft-com:vml" 
-                 xmlns:o="urn:schemas-microsoft-com:office:office"
-                 id="SealLineShape" 
-                 style="{vml_style}"
-                 filled="f" stroked="f" coordsize="21600,21600">
+            <v:shape xmlns:v="urn:schemas-microsoft-com:vml" 
+                     xmlns:o="urn:schemas-microsoft-com:office:office"
+                     id="SealLineShape" 
+                     style="{vml_style}"
+                     filled="f" stroked="f" coordsize="21600,21600">
 
-            <v:textbox style="layout-flow:vertical-ideographic; mso-layout-flow-alt:bottom-to-top" inset="0,0,0,0">
-                <w:txbxContent xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                <v:textbox style="layout-flow:vertical-ideographic; mso-layout-flow-alt:bottom-to-top" inset="0,0,0,0">
+                    <w:txbxContent xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 
-                    <w:p>
-                        <w:pPr>
-                            <w:spacing w:line="320" w:lineRule="exact"/> 
-                            <w:jc w:val="center"/> 
-                        </w:pPr>
-                        <w:r>
-                            <w:rPr>
-                                <w:rFonts w:ascii="SimHei" w:eastAsia="SimHei"/>
-                                <w:sz w:val="24"/> 
-                            </w:rPr>
-                            <w:t xml:space="preserve">{line1_text}</w:t>
-                        </w:r>
-                    </w:p>
+                        <w:p>
+                            <w:pPr>
+                                <w:spacing w:line="320" w:lineRule="exact"/> 
+                                <w:jc w:val="center"/> 
+                            </w:pPr>
+                            <w:r>
+                                <w:rPr>
+                                    <w:rFonts w:ascii="SimHei" w:eastAsia="SimHei"/>
+                                    <w:sz w:val="24"/> 
+                                </w:rPr>
+                                <w:t xml:space="preserve">{line1_text}</w:t>
+                            </w:r>
+                        </w:p>
 
-                    <w:p>
-                        <w:pPr>
-                            <w:spacing w:line="260" w:lineRule="exact" w:after="0"/> 
-                            <w:jc w:val="center"/> 
-                        </w:pPr>
-                        <w:r>
-                            <w:rPr>
-                                <w:rFonts w:ascii="SimHei" w:eastAsia="SimHei"/>
-                                <w:b/> <w:sz w:val="24"/>
-                            </w:rPr>
-                            <w:t xml:space="preserve">{line2_text}</w:t>
-                        </w:r>
-                    </w:p>
+                        <w:p>
+                            <w:pPr>
+                                <w:spacing w:line="260" w:lineRule="exact" w:after="0"/> 
+                                <w:jc w:val="center"/> 
+                            </w:pPr>
+                            <w:r>
+                                <w:rPr>
+                                    <w:rFonts w:ascii="SimHei" w:eastAsia="SimHei"/>
+                                    <w:b/> <w:sz w:val="24"/>
+                                </w:rPr>
+                                <w:t xml:space="preserve">{line2_text}</w:t>
+                            </w:r>
+                        </w:p>
 
-                    <w:p>
-                        <w:pPr>
-                            <w:spacing w:line="260" w:lineRule="exact"/>
-                            <w:jc w:val="center"/> 
-                        </w:pPr>
-                        <w:r>
-                            <w:rPr>
-                                <w:rFonts w:ascii="SimHei" w:eastAsia="SimHei"/>
-                                <w:b/> <w:sz w:val="24"/>
-                            </w:rPr>
-                            <w:t xml:space="preserve">{line3_text}</w:t>
-                        </w:r>
-                    </w:p>
+                        <w:p>
+                            <w:pPr>
+                                <w:spacing w:line="260" w:lineRule="exact"/>
+                                <w:jc w:val="center"/> 
+                            </w:pPr>
+                            <w:r>
+                                <w:rPr>
+                                    <w:rFonts w:ascii="SimHei" w:eastAsia="SimHei"/>
+                                    <w:b/> <w:sz w:val="24"/>
+                                </w:rPr>
+                                <w:t xml:space="preserve">{line3_text}</w:t>
+                            </w:r>
+                        </w:p>
 
-                </w:txbxContent>
-            </v:textbox>
-        </v:shape>
-        """
+                    </w:txbxContent>
+                </v:textbox>
+            </v:shape>
+            """
 
         run = paragraph.add_run()
         pict = parse_xml('<w:pict xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')

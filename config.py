@@ -27,6 +27,8 @@ class Config:
 
     SIGNATURES_FOLDER = os.path.join(UPLOAD_FOLDER, 'signatures')
 
+    TEMPLATE_DIR = os.path.join(base_dir, 'export_core', 'templates')
+
 
 # === 基础 Prompt (保持不变的部分) ===
 BASE_CREATOR_PROMPT = """
