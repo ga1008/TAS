@@ -85,9 +85,11 @@
             <button onclick="switchMainTab('workstation')" id="tab-btn-workstation" class="text-lg font-bold text-slate-700 border-b-2 border-sky-500 pb-3 px-2 transition-all">
                 <i class="fas fa-file-invoice mr-2"></i>文档解析工作台
             </button>
+            {% if user.is_admin %}
             <button onclick="switchMainTab('signatures')" id="tab-btn-signatures" class="text-lg font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-600 pb-3 px-2 transition-all">
                 <i class="fas fa-signature mr-2"></i>签名集管理
             </button>
+            {% endif %}
         </div>
 
         <div id="main-workstation" class="space-y-8 animate-fade-in">

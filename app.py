@@ -948,7 +948,8 @@ def list_signatures():
 
 @app.route('/api/signatures/upload', methods=['POST'])
 def upload_signature():
-    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
 
     file = request.files.get('file')
     name = request.form.get('name', '').strip()
@@ -976,11 +977,13 @@ def upload_signature():
 
 @app.route('/api/signatures/delete', methods=['POST'])
 def delete_signature():
-    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
     sig_id = request.json.get('id')
 
     sig = db.get_signature_by_id(sig_id)
-    if not sig: return jsonify({"msg": "记录不存在"}), 404
+    if not sig:
+        return jsonify({"msg": "记录不存在"}), 404
 
     # 权限检查
     if sig['uploaded_by'] != g.user['id'] and not g.user.get('is_admin'):
@@ -1006,7 +1009,8 @@ def delete_signature():
 
 @app.route('/api/signatures/image/<int:sig_id>')
 def get_signature_image(sig_id):
-    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
     sig = db.get_signature_by_id(sig_id)
 
     if not sig:
