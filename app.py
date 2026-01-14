@@ -221,14 +221,30 @@ def get_corrected_path(db_path, folder_path):
     return None
 
 
+# app.py
+
+# 引入新写的转换工具
+from utils.file_converter import convert_to_pdf
+from ai_utils.volc_file_manager import VolcFileManager
+
+# app.py 部分代码替换
+
+# 引入转换工具 (确保文件存在)
+from utils.file_converter import convert_to_pdf
+
+
 def smart_parse_with_metadata(file_id, doc_category_hint="exam"):
     """
-    智能解析文件 V2：提取正文(Markdown) + 元数据(JSON)。
-    并自动更新数据库中的 parsed_content 和 meta_info 字段。
+    智能解析文件 V3 (视觉多模态版)：
+    1. [新增] 尝试将 Doc/Docx 转为 PDF。
+    2. [新增] 上传 PDF 到火山引擎 Files API。
+    3. [新增] 使用 Vision 模型进行"视觉阅读"，完美保留表格结构。
+    4. [兜底] 如果视觉失败，回退到纯文本提取。
     """
     import json
     import asyncio
-    from extensions import db  # 确保能引用到数据库实例
+    import re
+    from extensions import db
     from ai_utils.ai_helper import call_ai_platform_chat
 
     # 1. 获取文件记录
@@ -237,68 +253,134 @@ def smart_parse_with_metadata(file_id, doc_category_hint="exam"):
         return False, "文件记录不存在", {}
 
     physical_path = record['physical_path']
-    parse_success, raw_text = extract_text_from_file(physical_path)
+    original_ext = os.path.splitext(physical_path)[1].lower()
 
-    if not parse_success or not raw_text:
-        return False, f"基础解析失败: {raw_text}", {}
+    parsed_content = ""
+    meta = {}
+    used_vision = False
+    error_log = []
 
-    input_content = raw_text[:50000]
+    # === 策略 A: 视觉解析 (优先) ===
+    # 只有当配置了 Vision 模型，且文件是文档类型时尝试
+    vision_config = db.get_best_ai_config("vision")
 
-    # === [修改开始]：使用配置类生成动态 Prompt ===
-    system_prompt = "你是高校教学资料结构化专家。请读取内容并提取元数据，同时整理正文Markdown。"
+    if vision_config and original_ext in ['.docx', '.doc', '.pdf']:
+        print(f"[SmartParse] Attempting Vision Mode for {record['original_name']}...")
+        try:
+            # A1. 格式转换
+            target_file_path = physical_path
+            if original_ext != '.pdf':
+                converted_pdf = convert_to_pdf(physical_path)
+                if converted_pdf and os.path.exists(converted_pdf):
+                    target_file_path = converted_pdf
+                else:
+                    raise Exception("PDF conversion failed")
 
-    # 获取特定类型的 Prompt 指令
-    type_specific_instruction = DocumentTypeConfig.get_prompt_by_type(doc_category_hint)
+            # A2. 上传到火山引擎
+            uploader = VolcFileManager(api_key=vision_config['api_key'], base_url=vision_config.get('base_url'))
+            remote_file_id = uploader.upload_file(target_file_path)
 
-    user_prompt = f"""
+            if remote_file_id:
+                print(f"[SmartParse] Uploaded to VolcEngine: {remote_file_id}")
+
+                # A3. 构造视觉 Prompt
+                type_specific_instruction = DocumentTypeConfig.get_prompt_by_type(doc_category_hint)
+
+                # 增强视觉引导
+                user_prompt = f"""
+                {type_specific_instruction}
+
+                【视觉特别指令】
+                1. 请利用视觉能力识别文档中的布局。
+                2. **特别注意勾选框**：文档中可能有 '□', '☑', 'R', '√' 等符号。请务必识别哪个选项被勾选了，并提取该选项的文字到 metadata 中。
+                3. **表格识别**：请保持表格的行列对应关系，尤其是'考核计划表'的三列对应。
+                4. 若有图片（如知识图谱），请尝试描述或用 Mermaid 代码表示。
+                """
+
+                # A4. 调用 AI (ai_helper 会自动切换到 Responses API)
+                ai_response = asyncio.run(call_ai_platform_chat(
+                    system_prompt="你是高校教学资料结构化专家。请基于视觉识别文档内容。",
+                    messages=[{
+                        "role": "user",
+                        "content": user_prompt,
+                        "file_ids": [remote_file_id]  # 传入 ID
+                    }],
+                    platform_config=vision_config
+                ))
+
+                # 简单的有效性检查
+                if ai_response and len(ai_response) > 50 and "[PARSE_ERROR]" not in ai_response:
+                    used_vision = True
+                    raw_response_text = ai_response
+                    print("[SmartParse] Vision Mode Success.")
+                else:
+                    error_log.append("Vision model returned empty or error.")
+            else:
+                error_log.append("Failed to upload file to VolcEngine.")
+
+        except Exception as e:
+            print(f"[SmartParse] Vision Mode Error: {e}")
+            error_log.append(str(e))
+
+    # === 策略 B: 纯文本提取 (兜底) ===
+    if not used_vision:
+        print(f"[SmartParse] Fallback to Text Mode. (Errors: {'; '.join(error_log)})")
+        parse_success, raw_text = extract_text_from_file(physical_path)
+
+        if not parse_success or not raw_text:
+            return False, f"基础解析失败: {raw_text}", {}
+
+        input_content = raw_text[:50000]
+        type_specific_instruction = DocumentTypeConfig.get_prompt_by_type(doc_category_hint)
+
+        user_prompt = f"""
             {type_specific_instruction}
+            请务必严格遵守以下输出要求：
+            1. **必须仅返回一个标准的 JSON 对象**。
+            2. JSON 根对象包含 "content" 和 "metadata"。
 
-            请以纯 JSON 格式返回，结构如下：
-            {{
-                "content": "Markdown内容...",
-                "metadata": {{ ...根据上述要求提取的字段... }}
-            }}
-
-            原始内容：
+            待处理内容：
             {input_content}
         """
 
-    # 3. 调用 AI
-    standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
-    if not standard_config:
-        return False, "未配置 AI 模型，无法进行智能元数据提取", {}
+        standard_config = db.get_best_ai_config("thinking") or db.get_best_ai_config("standard")
+        if not standard_config:
+            return False, "未配置 AI 模型", {}
 
-    try:
-        ai_response = asyncio.run(call_ai_platform_chat(
-            system_prompt=system_prompt,
+        raw_response_text = asyncio.run(call_ai_platform_chat(
+            system_prompt="你是高校教学资料结构化专家。",
             messages=[{"role": "user", "content": user_prompt}],
             platform_config=standard_config
         ))
 
-        # 4. 结果清洗与解析
-        # 有时 AI 会包裹 ```json ... ```，需要去除
-        cleaned_json = ai_response.strip()
-        if cleaned_json.startswith("```"):
-            import re
-            match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned_json, re.DOTALL)
-            if match:
-                cleaned_json = match.group(1)
+    # === 通用：JSON 清洗与入库 ===
+    try:
+        cleaned_json = raw_response_text.strip()
+        # Regex 提取 JSON
+        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned_json, re.DOTALL)
+        if json_match:
+            cleaned_json = json_match.group(1)
+        else:
+            start = cleaned_json.find('{')
+            end = cleaned_json.rfind('}')
+            if start != -1 and end != -1:
+                cleaned_json = cleaned_json[start:end + 1]
 
         data = json.loads(cleaned_json)
+
+        if not isinstance(data, dict): raise ValueError("Not a dict")
+
         parsed_content = data.get("content", "")
         meta = data.get("metadata", {})
 
-        # 提取关键字段用于存入 DB 索引列
+        if not parsed_content: raise ValueError("No content")
+
+        # 提取字段入库
         academic_year = meta.get("academic_year")
         semester = str(meta.get("semester", ""))
         course_name = meta.get("course_name")
-        # [新增] 尝试从 syllabus 元数据中提取 course_name 兜底
-        if not course_name and doc_category_hint == 'syllabus':
-            course_name = meta.get("course_name")
-
         cohort_tag = meta.get("cohort_tag")
 
-        # 更新数据库 (包括新增的列)
         conn = db.get_connection()
         conn.execute('''
                      UPDATE file_assets
@@ -321,16 +403,12 @@ def smart_parse_with_metadata(file_id, doc_category_hint="exam"):
 
         return True, parsed_content, meta
 
-    except json.JSONDecodeError:
-        print(f"[SmartParse] JSON Parse Error. Raw AI response: {ai_response[:100]}...")
-        # 降级处理：如果 JSON 解析失败，但 AI 返回了文本，尝试把它当作纯 Markdown 存入
-        # 此时元数据为空
-        db.update_file_parsed_content(file_id, ai_response)
-        return True, ai_response, {}
-
     except Exception as e:
-        print(f"[SmartParse] Exception: {e}")
-        return False, str(e), {}
+        print(f"[SmartParse] Parse/Save Error: {e}")
+        # 如果是 Vision 模式失败，可能返回特定错误
+        if used_vision:
+            return False, f"视觉解析结果处理失败: {str(e)}", {}
+        return False, f"解析失败: {str(e)}", {}
 
 
 def handle_file_upload_or_reuse(file_obj, existing_file_id, user_id):
@@ -441,42 +519,46 @@ def create_text_asset(content, title, user_id, ext=".md"):
 
 def extract_title_and_content(ai_text, doc_type=None):
     """
-    增强版解析：从 AI 返回的文本中提取标题和正文。
-    支持纯文本，也支持 JSON 格式，自动去除 Markdown 代码块标记。
+    解析 AI 返回的 JSON 或 文本。
+    返回: (title, content, metadata_dict)
     """
-    if not ai_text:
-        return generate_title_from_content("", doc_type), ""
-
     cleaned = ai_text.strip()
+    meta = {}
+    content = ""
+    title = ""
 
-    # 1. 去除可能存在的 markdown 代码块标记
-    # 匹配 ```json ... ``` 或 ``` ... ```
+    # 1. 尝试 Regex 提取 JSON
     json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned, re.DOTALL)
     if json_match:
         cleaned = json_match.group(1)
 
-    # 2. 尝试解析 JSON
     try:
-        # 预处理：有时候 AI 会在 JSON 外面加闲聊，尝试寻找 { 开头和 } 结尾
+        # 尝试寻找 JSON 边界
         start = cleaned.find('{')
         end = cleaned.rfind('}')
         if start != -1 and end != -1:
             potential_json = cleaned[start:end + 1]
             payload = json.loads(potential_json)
 
-            title = payload.get("title") or payload.get("name")
-            content = payload.get("content") or payload.get("body")
+            # 兼容新旧格式
+            content = payload.get("content") or payload.get("body") or ""
+            meta = payload.get("metadata") or {}
 
-            # 如果内容为空，可能解析失败，回退
-            if content:
-                final_title = sanitize_filename(title) if title else generate_title_from_content(content, doc_type)
-                return final_title, content
-    except Exception as e:
-        print(f"[Extract JSON Error] {e}")
+            # 尝试从 meta 拼凑标题
+            if meta.get("course_name"):
+                suffix = DocumentTypeConfig.TYPES.get(doc_type, "文档")
+                title = f"{meta['course_name']} {suffix}"
+            elif payload.get("title"):
+                title = payload.get("title")
 
-    # 3. 如果不是 JSON，则视为纯文本
-    # 尝试提取首行作为标题
-    return generate_title_from_content(cleaned, doc_type), cleaned
+    except Exception:
+        # JSON 解析失败，视为纯文本
+        content = ai_text
+
+    if not content: content = ai_text  # 兜底
+    if not title: title = generate_title_from_content(content, doc_type)
+
+    return sanitize_filename(title), content
 
 
 def is_content_garbage(text):
@@ -1932,8 +2014,7 @@ def ai_generate_document():
 
     # 获取上传的新文件
     uploaded_files = request.files.getlist('files')
-
-    # 获取用户选择的已有文件 ID (多选)
+    # 获取用户选择的已有文件 ID
     existing_file_ids = request.form.getlist('existing_file_ids')
 
     if not prompt and not uploaded_files and not existing_file_ids:
@@ -1944,7 +2025,7 @@ def ai_generate_document():
     file_errors = []
 
     try:
-        # A. 处理新上传的文件
+        # A. 处理新上传的文件 (保持不变)
         for f in uploaded_files:
             if not f or not f.filename: continue
             physical_path, original_name = handle_file_upload_or_reuse(f, None, g.user['id'])
@@ -1963,66 +2044,112 @@ def ai_generate_document():
                 else:
                     file_errors.append(f"{original_name or f.filename}: {text}")
 
-        # B. 处理已选择的现有文件 (新增逻辑)
+        # B. 处理已选择的现有文件 (保持不变)
         for eid in existing_file_ids:
             if not eid: continue
             record = db.get_file_by_id(eid)
             if record and record.get('parsed_content'):
-                # 直接使用数据库中已解析好的纯文本
                 doc_texts.append({
                     "name": f"[库]{record['original_name']}",
                     "content": record['parsed_content']
                 })
-            elif record:
-                # 如果数据库里只有文件没解析内容，尝试现场解析（可选，这里为了性能暂只取已解析的）
-                pass
 
-        # C. 组装 Prompt (保持原有逻辑)
-        prompt_parts = []
-        doc_label = "试卷" if doc_type == "exam" else "评分标准"
-        prompt_parts.append(f"你正在生成一份{doc_label}文档，请输出 Markdown。根据内容和类型拟定合理的标题。")
-        if prompt:
-            prompt_parts.append(f"用户提示词：{prompt}")
+        # C. 组装 Prompt (【修改点】：使用 DocumentTypeConfig)
+        # 获取特定类型的 System Prompt (包含 JSON 结构要求)
+        system_instruction = DocumentTypeConfig.get_prompt_by_type(doc_type)
+
+        user_message_parts = []
+        user_message_parts.append(
+            f"【生成任务】\n请根据以下要求和参考素材，生成一份新的【{DocumentTypeConfig.TYPES.get(doc_type, '文档')}】。")
+        user_message_parts.append(f"用户具体要求：{prompt}")
 
         if doc_texts:
-            doc_section = ["参考文档内容："]
+            doc_section = ["\n【参考素材内容】："]
             for doc in doc_texts:
-                # 截断过长的文档，防止 Token 溢出 (简单保护)
-                content_snippet = doc['content'][:50000]
-                doc_section.append(f"--- {doc['name']} ---\n{content_snippet}")
-            prompt_parts.append("\n".join(doc_section))
+                content_snippet = doc['content'][:30000]  # 防止 token 溢出
+                doc_section.append(f"--- {doc['name']} ---\n{content_snippet}\n")
+            user_message_parts.append("\n".join(doc_section))
 
         if file_errors:
-            prompt_parts.append("以下文件解析失败，可忽略：\n" + "\n".join(file_errors))
+            user_message_parts.append("\n部分文件解析失败忽略：" + "; ".join(file_errors))
 
-        final_prompt = "\n\n".join(prompt_parts)
+        user_message_parts.append("\n请务必严格遵循 System Prompt 中的 JSON 输出格式，生成完整的 metadata 和 content。")
+
+        final_user_prompt = "\n".join(user_message_parts)
 
         # D. 调用 AI
         payload = {
-            "system_prompt": "你是教学资料的专业整理助手，擅长输出结构化的考试试卷与评分标准。",
+            "system_prompt": system_instruction,  # 使用统一的配置
             "messages": [],
-            "new_message": final_prompt,
-            "model_capability": "vision" if image_payloads else "standard"
+            "new_message": final_user_prompt,
+            "model_capability": "vision" if image_payloads else "standard"  # 生成任务建议用 standard 或 thinking，除非有图片
         }
+
+        # 针对复杂生成任务，如果配置了 Thinking 模型效果更好
+        thinking_config = db.get_best_ai_config("thinking")
+        if thinking_config:
+            payload["model_capability"] = "thinking"
+
         if image_payloads:
             payload["messages"].append({
                 "role": "user",
-                "content": "以下是参考图片，请结合内容完成生成。",
+                "content": "参考图片如下",
                 "file_ids": image_payloads
             })
+            payload["model_capability"] = "vision"  # 有图必须用 vision
 
-        response = httpx.post(app.config['AI_ASSISTANT_CHAT_ENDPOINT'], json=payload, timeout=180.0)
+        response = httpx.post(app.config['AI_ASSISTANT_CHAT_ENDPOINT'], json=payload, timeout=240.0)
         if response.status_code != 200:
             return jsonify({"msg": f"AI 助手返回错误: {response.status_code} - {response.text}"}), 500
 
         ai_text = response.json().get("response_text", "")
-        # 使用新的提取工具函数 (假设之前已更新 extract_title_and_content)
-        title, content = extract_title_and_content(ai_text, doc_type)
 
-        if not content:
-            return jsonify({"msg": "AI 未返回有效内容"}), 500
+        # E. 解析返回的 JSON (复用 smart_parse 的逻辑)
+        # 因为现在 Prompt 强制返回 JSON {metadata:..., content:...}
+        try:
+            cleaned_json = ai_text.strip()
+            # 尝试提取 JSON 块
+            import re
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned_json, re.DOTALL)
+            if json_match:
+                cleaned_json = json_match.group(1)
+            else:
+                # 尝试找首尾大括号
+                start = cleaned_json.find('{')
+                end = cleaned_json.rfind('}')
+                if start != -1 and end != -1:
+                    cleaned_json = cleaned_json[start:end + 1]
 
-        file_id, filename = create_text_asset(content, title, g.user['id'])
+            data = json.loads(cleaned_json)
+
+            parsed_content = data.get("content", "")
+            meta = data.get("metadata", {})
+
+            # 如果解析失败或者 AI 没遵循格式，回退到纯文本
+            if not parsed_content and not meta:
+                parsed_content = ai_text  # 整个当做正文
+                title = generate_title_from_content(ai_text, doc_type)
+            else:
+                # 尝试从 Meta 中获取更准确的标题
+                title = meta.get("course_name", "") + " " + DocumentTypeConfig.TYPES.get(doc_type, "文档")
+                if len(title) < 5: title = generate_title_from_content(parsed_content, doc_type)
+
+        except Exception as e:
+            print(f"JSON Parse Error in Generate: {e}")
+            parsed_content = ai_text
+            title = generate_title_from_content(ai_text, doc_type)
+            meta = {}
+
+        # 保存结果
+        file_id, filename = create_text_asset(parsed_content, title, g.user['id'])
+
+        # 【关键】更新元数据到数据库
+        if file_id and meta:
+            conn = db.get_connection()
+            conn.execute("UPDATE file_assets SET meta_info = ? WHERE id = ?",
+                         (json.dumps(meta, ensure_ascii=False), file_id))
+            conn.commit()
+
         if not file_id:
             return jsonify({"msg": "保存 AI 生成内容失败"}), 500
 

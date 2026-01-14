@@ -145,7 +145,7 @@ export function initImageParser() {
         const spinner = els.parseBtn.querySelector('.spinner-border');
         const text = els.parseBtn.querySelector('.parse-btn-text');
         if (spinner) spinner.classList.toggle('d-none', !isLoading);
-        if (text) text.textContent = isLoading ? '解析中...' : '解析';
+        if (text) text.textContent = isLoading ? '解析中，大约需要5分钟...' : '解析';
     }
 
     async function handleParse() {

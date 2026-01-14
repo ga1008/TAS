@@ -481,7 +481,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 spinner.classList.toggle('d-none', !isParsing);
             }
             if (textSpan) {
-                textSpan.textContent = isParsing ? '解析中...' : '解析';
+                textSpan.textContent = isParsing ? '解析中，大概需要5分钟...' : '解析';
             }
         }
 

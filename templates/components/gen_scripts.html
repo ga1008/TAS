@@ -263,7 +263,7 @@
         e.preventDefault();
         const btn = document.getElementById('btnDirectSubmit');
         const formData = new FormData(this);
-        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> 解析中...';
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> 解析中，大约需要5分钟...';
         btn.disabled = true;
         fetch('/api/create_direct_grader', { method: 'POST', body: formData })
             .then(res => res.json())

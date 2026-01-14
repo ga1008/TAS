@@ -59,23 +59,33 @@
 </head>
 <body class="font-sans text-slate-800 selection:bg-sky-100 selection:text-sky-700">
 
-    <nav class="glass-panel sticky top-0 z-40 shadow-sm">
+    <nav class="glass-panel sticky top-0 z-40 shadow-sm transition-all duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <a href="/ai_generator" class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-sky-600 hover:border-sky-200 transition-all shadow-sm">
-                    <i class="fas fa-arrow-left text-sm"></i>
+                <a href="/ai_generator" class="group w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-sky-600 hover:border-sky-300 hover:shadow-md transition-all">
+                    <i class="fas fa-arrow-left text-sm group-hover:-translate-x-0.5 transition-transform"></i>
                 </a>
-                <h1 class="text-lg font-bold text-slate-800 flex items-center">
-                    <span class="bg-sky-100 text-sky-600 w-8 h-8 rounded-lg flex items-center justify-center mr-3 text-sm">
-                        <i class="fas fa-file-invoice"></i>
-                    </span>
-                    文档解析管理器
-                </h1>
+                <div class="flex flex-col">
+                    <h1 class="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                        <i class="fas fa-file-invoice text-sky-500"></i>
+                        文档解析工作台
+                    </h1>
+                    <span class="text-[10px] text-slate-400 font-medium">智能识别 · 结构化提取 · 自动归档</span>
+                </div>
             </div>
-            <a href="/library/view" class="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 transition shadow-xl">
-                <i class="fas fa-database mr-2"></i> 进入文档资产库
-            </a>
 
+            <div class="flex items-center">
+                <a href="/library/view" class="group relative flex items-center gap-3 px-5 py-2 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-lg hover:border-sky-200 transition-all duration-300">
+                    <div class="flex flex-col items-end">
+                        <span class="text-xs font-bold text-slate-700 group-hover:text-sky-600 transition-colors">资产文档库</span>
+                        <span class="text-[9px] text-slate-400 group-hover:text-sky-400 transition-colors">View Library</span>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center group-hover:bg-sky-500 group-hover:text-white transition-all duration-300">
+                        <i class="fas fa-database text-xs group-hover:scale-110 transition-transform"></i>
+                    </div>
+                    <div class="absolute inset-0 rounded-full border border-sky-500 opacity-0 scale-95 group-hover:opacity-20 group-hover:scale-100 transition-all duration-500"></div>
+                </a>
+            </div>
         </div>
     </nav>
 
@@ -125,6 +135,7 @@
                                     <option value="exam">试卷</option>
                                     <option value="standard">评分标准</option>
                                     <option value="syllabus">课程教学大纲</option>
+                                    <option value="plan">课程考核计划表</option>
                                 </select>
                             </div>
                             <label class="flex-1 border-2 border-dashed border-slate-200 rounded-xl bg-white/70 p-6 text-center cursor-pointer hover:border-sky-300 hover:bg-sky-50 transition">
@@ -157,6 +168,7 @@
                                         <option value="exam">类型：试卷</option>
                                         <option value="standard">类型：评分标准</option>
                                         <option value="syllabus">类型：教学大纲</option>
+                                        <option value="plan">类型：考核计划表</option>
                                     </select>
                                 </div>
                             </div>
@@ -194,6 +206,7 @@
                                         <option value="exam">生成目标：试卷</option>
                                         <option value="standard">生成目标：评分标准</option>
                                         <option value="syllabus">生成目标：教学大纲</option>
+                                        <option value="plan">生成目标：考核计划表</option>
                                     </select>
                                 </div>
                             </div>
@@ -739,6 +752,17 @@
         }
 
         function initActions() {
+            // === [新增] 通用跳转处理函数 ===
+            const handleSuccessRedirect = (statusEl, msg) => {
+                setStatus(statusEl, `${msg} 正在跳转至文档库...`, 'success');
+                // 禁用页面交互防止重复点击，增加转圈效果
+                document.body.style.cursor = 'wait';
+                setTimeout(() => {
+                    window.location.href = '/library/view';
+                }, 1000); // 1秒延迟，让用户看清成功提示
+            };
+
+            // 1. 上传解析逻辑
             const uploadInput = document.getElementById('uploadFileInput');
             const uploadDisplay = document.getElementById('uploadFileDisplay');
             const uploadStatus = document.getElementById('uploadStatus');
@@ -766,27 +790,29 @@
                 formData.append('doc_type', document.getElementById('uploadDocType').value);
 
                 uploadBtn.disabled = true;
-                uploadBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中...';
+                uploadBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中，大约需要5分钟...';
                 setStatus(uploadStatus, '系统正在调用解析器，请稍候。');
 
                 fetch('/api/parse_file_asset', { method: 'POST', body: formData })
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === 'success') {
-                            setStatus(uploadStatus, '解析成功，已入库。', 'success');
-                            uploadInput.value = '';
-                            loadFiles();
+                            // [修改] 调用自动跳转
+                            handleSuccessRedirect(uploadStatus, '解析成功！');
                         } else {
                             setStatus(uploadStatus, data.msg || '解析失败，请重试。', 'error');
+                            uploadBtn.disabled = false;
+                            uploadBtn.innerHTML = '<i class="fas fa-bolt mr-1"></i> 解析并入库';
                         }
                     })
-                    .catch(() => { setStatus(uploadStatus, '解析失败，请检查网络连接。', 'error'); })
-                    .finally(() => {
+                    .catch(() => {
+                        setStatus(uploadStatus, '解析失败，请检查网络连接。', 'error');
                         uploadBtn.disabled = false;
                         uploadBtn.innerHTML = '<i class="fas fa-bolt mr-1"></i> 解析并入库';
                     });
             });
 
+            // 2. 粘贴解析逻辑
             const pasteClearBtn = document.getElementById('pasteClearBtn');
             const pasteSaveBtn = document.getElementById('pasteSaveBtn');
             const pasteParseSaveBtn = document.getElementById('pasteParseSaveBtn');
@@ -799,38 +825,27 @@
             });
 
             pasteSaveBtn.addEventListener('click', () => {
+                // ... (纯保存逻辑保持不变，如果需要纯保存也跳转，可以在这里加，但通常纯保存可能还需要继续编辑，建议保持现状或根据需求加) ...
                 const content = pasteContent.value.trim();
-                if (!content) {
-                    setStatus(pasteStatus, '内容不能为空。', 'error');
-                    return;
-                }
-                pasteSaveBtn.disabled = true;
-                pasteSaveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 保存中...';
-                setStatus(pasteStatus, '正在保存内容，AI 正在生成标题...');
+                if (!content) { setStatus(pasteStatus, '内容不能为空。', 'error'); return; }
 
+                pasteSaveBtn.disabled = true;
                 fetch('/api/save_pasted_document', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        content: content,
-                        doc_type: document.getElementById('pasteDocType').value
-                    })
+                    body: JSON.stringify({ content: content, doc_type: document.getElementById('pasteDocType').value })
                 })
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        setStatus(pasteStatus, `保存成功：${data.title}`, 'success');
-                        pasteContent.value = '';
-                        loadFiles();
+                         // [修改] 纯保存也建议跳转，或者清空让用户继续。这里假设保存即完成
+                        handleSuccessRedirect(pasteStatus, '保存成功！');
                     } else {
-                        setStatus(pasteStatus, data.msg || '保存失败，请重试。', 'error');
+                        setStatus(pasteStatus, data.msg || '保存失败', 'error');
+                        pasteSaveBtn.disabled = false;
                     }
                 })
-                .catch(() => { setStatus(pasteStatus, '保存失败，请检查网络连接。', 'error'); })
-                .finally(() => {
-                    pasteSaveBtn.disabled = false;
-                    pasteSaveBtn.innerHTML = '<i class="fas fa-save mr-1"></i> 保存入库';
-                });
+                .catch(() => { pasteSaveBtn.disabled = false; });
             });
 
             pasteParseSaveBtn.addEventListener('click', () => {
@@ -840,8 +855,8 @@
                     return;
                 }
                 pasteParseSaveBtn.disabled = true;
-                pasteParseSaveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中...';
-                setStatus(pasteStatus, 'AI 正在解析并规整内容，请稍候。');
+                pasteParseSaveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中，大约需要5分钟...';
+                setStatus(pasteStatus, 'AI 正在解析并规整内容，大约需要5分钟，请稍候。');
 
                 fetch('/api/parse_and_save_pasted_document', {
                     method: 'POST',
@@ -854,20 +869,22 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        setStatus(pasteStatus, `解析保存成功：${data.title}`, 'success');
-                        pasteContent.value = '';
-                        loadFiles();
+                        // [修改] 调用自动跳转
+                        handleSuccessRedirect(pasteStatus, '智能解析成功！');
                     } else {
                         setStatus(pasteStatus, data.msg || '解析保存失败，请重试。', 'error');
+                        pasteParseSaveBtn.disabled = false;
+                        pasteParseSaveBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> 解析并保存';
                     }
                 })
-                .catch(() => { setStatus(pasteStatus, '解析保存失败，请检查网络连接。', 'error'); })
-                .finally(() => {
+                .catch(() => {
+                    setStatus(pasteStatus, '解析保存失败，请检查网络连接。', 'error');
                     pasteParseSaveBtn.disabled = false;
                     pasteParseSaveBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> 解析并保存';
                 });
             });
 
+            // 3. AI 生成逻辑
             const aiGenerateBtn = document.getElementById('aiGenerateBtn');
             const aiStatus = document.getElementById('aiStatus');
 
@@ -894,21 +911,19 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === 'success') {
-                            setStatus(statusEl, `生成成功：${data.title}`, 'success');
-                            document.getElementById('aiPrompt').value = '';
-                            materialFiles = [];
-                            materialExistingIds.clear();
-                            renderAiMaterials();
-                            loadFiles();
+                             // [修改] 调用自动跳转
+                            handleSuccessRedirect(statusEl, 'AI 生成成功！');
                         } else {
                             setStatus(statusEl, data.msg || '生成失败，请重试。', 'error');
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i> 开始智能生成';
                         }
                     })
-                    .catch(() => { setStatus(statusEl, '网络错误。', 'error'); })
-                    .finally(() => {
+                    .catch(() => {
+                        setStatus(statusEl, '网络错误。', 'error');
                         btn.disabled = false;
                         btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i> 开始智能生成';
-                });
+                    });
             });
         }
 

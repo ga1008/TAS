@@ -3,6 +3,12 @@ from typing import Dict, List
 from fastapi import HTTPException
 from openai import AsyncOpenAI
 from volcenginesdkarkruntime import AsyncArk
+# [修正] 使用正确的事件类名
+from volcenginesdkarkruntime.types.responses import (
+    ResponseReasoningSummaryTextDeltaEvent,
+    ResponseTextDeltaEvent,  # 原 ResponseOutputTextDeltaEvent 是错误的
+    ResponseCompletedEvent
+)
 from ai_utils.ai_concurrency_manager import concurrency_manager
 
 
@@ -46,71 +52,81 @@ async def call_ai_platform_chat(
         try:
             response_content = ""
 
-            # === 火山引擎 (Base64 增强版 + 资源自动释放) ===
+            # === 火山引擎 (针对多模态文件增强版) ===
             if platform_type == "volcengine":
-                # 【关键修复】使用 async with 确保 Client 在退出时自动关闭连接
                 async with AsyncArk(api_key=api_key, base_url=base_url if base_url else None) as client:
 
-                    # 构建符合 OpenAI Vision 协议的消息
-                    final_messages_payload = [{"role": "system", "content": system_prompt}]
+                    # 检查是否包含 file_ids，如果有，必须走 Responses API
+                    has_files = any("file_ids" in m and m["file_ids"] for m in messages)
 
-                    for msg in messages:
-                        # 检查是否包含 file_ids/file_data (Direct AI Grader 发来的特殊结构)
-                        if "file_ids" in msg and msg["file_ids"]:
-                            content_list = []
+                    if has_files:
+                        # --- 分支 A: 使用 Responses API (支持 File ID / PDF) ---
 
-                            # 1. 处理多媒体文件
-                            for item in msg["file_ids"]:
-                                # 兼容逻辑：如果是字典，取 type 和 data/id
-                                if isinstance(item, dict):
-                                    ftype = item.get("type", "image")
-                                    # 如果有 data (Base64) 优先用 data，否则用 id (Video file-id)
-                                    payload = item.get("data") or item.get("id")
-                                else:
-                                    # 旧逻辑兼容
-                                    ftype = "image"
-                                    payload = item
+                        user_content_list = []
+                        current_file_ids = []
+                        current_text = ""
 
-                                if ftype == "video":
-                                    content_list.append({
-                                        "type": "video_url",
-                                        "video_url": {"url": payload}
-                                    })
-                                else:
-                                    # 图片：使用 image_url，内容为 Base64 字符串
-                                    content_list.append({
-                                        "type": "image_url",
-                                        "image_url": {"url": payload}
-                                    })
+                        # 简单的合并逻辑：把所有 context 里的文件和文本都放到当前输入
+                        for msg in messages:
+                            if "file_ids" in msg:
+                                current_file_ids.extend(msg["file_ids"])
+                            if msg["content"]:
+                                current_text += f"{msg['content']}\n"
 
-                            # 2. 插入文本指令
-                            content_list.append({
-                                "type": "text",
-                                "text": msg["content"]
+                        # 1. 文件部分
+                        for fid in current_file_ids:
+                            real_fid = fid.get("id") if isinstance(fid, dict) else fid
+                            user_content_list.append({
+                                "type": "input_file",
+                                "file_id": real_fid
                             })
 
-                            final_messages_payload.append({
-                                "role": msg["role"],
-                                "content": content_list
-                            })
-                        else:
-                            final_messages_payload.append(msg)
+                        # 2. 文本部分
+                        full_text = f"{system_prompt}\n\n{current_text}"
+                        user_content_list.append({
+                            "type": "input_text",
+                            "text": full_text
+                        })
 
-                    extra_kwargs = {}
-                    if "thinking" in model_name or "reasoner" in model_name:
-                        extra_kwargs["thinking"] = {"type": "enabled"}
+                        # 调用 Stream API
+                        stream = await client.responses.create(
+                            model=model_name,
+                            input=[
+                                {
+                                    "role": "user",
+                                    "content": user_content_list
+                                }
+                            ],
+                            stream=True
+                        )
 
-                    completion = await client.chat.completions.create(
-                        model=model_name,
-                        messages=final_messages_payload,
-                        timeout=600,
-                        **extra_kwargs
-                    )
-                    response_content = completion.choices[0].message.content
+                        # 处理流式响应
+                        async for event in stream:
+                            # [修正] 使用 ResponseTextDeltaEvent
+                            if isinstance(event, ResponseTextDeltaEvent):
+                                response_content += event.delta
+                            # 也可以收集思考过程(Reasoning)，如果需要的话
+                            if isinstance(event, ResponseReasoningSummaryTextDeltaEvent):
+                                pass
 
-            # === OpenAI 标准协议 (资源自动释放) ===
+                    else:
+                        # --- 分支 B: 无文件，走标准 OpenAI 兼容接口 ---
+                        final_messages = [{"role": "system", "content": system_prompt}, *n_messages]
+
+                        extra_kwargs = {}
+                        if "thinking" in model_name or "reasoner" in model_name:
+                            extra_kwargs["thinking"] = {"type": "enabled"}
+
+                        completion = await client.chat.completions.create(
+                            model=model_name,
+                            messages=final_messages,
+                            timeout=600,
+                            **extra_kwargs
+                        )
+                        response_content = completion.choices[0].message.content
+
+            # === OpenAI 标准协议 ===
             elif platform_type == "openai":
-                # 【关键修复】使用 async with
                 async with AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=300.0) as client:
                     final_messages = [{"role": "system", "content": system_prompt}, *n_messages]
                     completion = await client.chat.completions.create(
@@ -126,4 +142,6 @@ async def call_ai_platform_chat(
 
         except Exception as e:
             print(f"[ERROR] {p_name} 调用失败: {e}")
+            import traceback
+            traceback.print_exc()
             raise HTTPException(500, f"Upstream API Error: {str(e)}")
