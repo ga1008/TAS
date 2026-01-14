@@ -70,10 +70,16 @@ class GuangWaiStandardExporter(BaseExportTemplate, BaseWordExporter):
         self._create_semester_header(form_data)
 
         # 4. 考核说明
-        note_text = form_data.get('assessment_note', '（非笔试考核）')
-        if not note_text: note_text = '（非笔试考核）'
+        note_text = form_data.get('assessment_note', '（非笔试考核）') or '（非笔试考核）'
+        if not note_text.startswith("（"):
+            note_text = f"（{note_text}）"
         p_note = self.doc.add_paragraph()
         p_note.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        p_note.paragraph_format.line_spacing = 1.0
+        p_note.paragraph_format.space_before = Pt(0)
+        p_note.paragraph_format.space_after = Pt(0)
+
         self.set_font(p_note.add_run(note_text), self.SIZE_SMALL_4)
 
         # 5. 表格1 (基本信息与签字栏)

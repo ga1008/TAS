@@ -1,5 +1,5 @@
 # 使用一个精简的 Python 基础镜像
-FROM auto_correcting:v2
+FROM auto_correcting:v3
 
 # 设置工作目录
 WORKDIR /auto_app

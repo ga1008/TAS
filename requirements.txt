@@ -15,3 +15,4 @@ volcengine-python-sdk[ark]
 pillow
 passlib
 gunicorn
+docx2pdf
