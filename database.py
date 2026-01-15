@@ -375,6 +375,38 @@ class Database:
         conn.execute("UPDATE file_assets SET parsed_content = ? WHERE id = ?", (content, file_id))
         conn.commit()
 
+    # [新增] 更新文件的元数据信息
+    def update_file_metadata(self, file_id, meta_info, doc_category=None, course_name=None, academic_year=None):
+        """
+        更新文件的元数据
+        :param file_id: 文件 ID
+        :param meta_info: JSON 字符串或字典
+        :param doc_category: 文档类别 (可选更新)
+        :param course_name: 课程名称 (可选更新)
+        :param academic_year: 学年 (可选更新)
+        """
+        import json
+        conn = self.get_connection()
+
+        # 构建动态 SQL
+        updates = ["meta_info = ?"]
+        params = [json.dumps(meta_info, ensure_ascii=False) if isinstance(meta_info, dict) else meta_info]
+
+        if doc_category is not None:
+            updates.append("doc_category = ?")
+            params.append(doc_category)
+        if course_name is not None:
+            updates.append("course_name = ?")
+            params.append(course_name)
+        if academic_year is not None:
+            updates.append("academic_year = ?")
+            params.append(academic_year)
+
+        params.append(file_id)
+        sql = f"UPDATE file_assets SET {', '.join(updates)} WHERE id = ?"
+        conn.execute(sql, params)
+        conn.commit()
+
     # [新增] 添加标记帮助已读的方法
     def mark_help_read(self, user_id):
         conn = self.get_connection()

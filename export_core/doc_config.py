@@ -9,6 +9,83 @@ class DocumentTypeConfig:
         "plan": "考核计划"
     }
 
+    # ==================== 字段配置 Schema ====================
+    # 每种文档类型的元数据字段定义，用于前端动态生成表单
+    # type: text | select | number | nested
+    # required: 是否必填
+    # options: 下拉选项 (仅 select 类型)
+    # fields: 嵌套字段 (仅 nested 类型)
+
+    FIELD_SCHEMAS = {
+        "exam": {
+            "label": "试卷元数据",
+            "fields": [
+                {"key": "academic_year_semester", "label": "学年学期", "type": "text", "placeholder": "如: 2025-2026学年度第一学期"},
+                {"key": "exam_type", "label": "考试类型", "type": "select", "options": ["期末考试", "补考", "重新学习考试"]},
+                {"key": "course_name", "label": "课程名称", "type": "text", "required": True},
+                {"key": "education_level", "label": "学历层次", "type": "select", "options": ["本科", "专科", "高职"]},
+                {"key": "assessment_type", "label": "考核类型", "type": "select", "options": ["考试", "考查"]},
+                {"key": "class_info", "label": "专业年级班级", "type": "text", "placeholder": "如: 软工2406、2407班"},
+                {"key": "duration", "label": "考试时长(分钟)", "type": "number", "placeholder": "如: 120"},
+                {"key": "exam_mode", "label": "试卷类型", "type": "select", "options": ["开卷", "闭卷"]},
+                {"key": "teacher", "label": "命题教师", "type": "text"},
+                {"key": "dept_head", "label": "系(教研室)主任", "type": "text"},
+                {"key": "college_dean", "label": "二级学院主管领导", "type": "text"},
+                {"key": "total_score", "label": "试卷总分", "type": "number", "placeholder": "如: 100"}
+            ]
+        },
+        "syllabus": {
+            "label": "教学大纲元数据",
+            "fields": [
+                {"key": "course_name", "label": "课程名称", "type": "text", "required": True},
+                {"key": "course_code", "label": "课程编号", "type": "text", "placeholder": "如: E020185B3"},
+                {"key": "course_category", "label": "课程类别", "type": "select", "options": ["通识必修", "专业核心", "专业限选", "专业任选", "通识选修"]},
+                {"key": "hours_info", "label": "学时信息", "type": "nested", "fields": [
+                    {"key": "total", "label": "总学时", "type": "number"},
+                    {"key": "theory", "label": "理论学时", "type": "number"},
+                    {"key": "practice", "label": "实践学时", "type": "number"}
+                ]},
+                {"key": "credits", "label": "学分", "type": "number", "placeholder": "如: 3.0"},
+                {"key": "department", "label": "开课部门", "type": "text"},
+                {"key": "authors", "label": "编写人员", "type": "nested", "fields": [
+                    {"key": "drafter", "label": "制定人", "type": "text"},
+                    {"key": "reviewer", "label": "审定人", "type": "text"}
+                ]}
+            ]
+        },
+        "plan": {
+            "label": "考核计划元数据",
+            "fields": [
+                {"key": "academic_year_semester", "label": "学年学期", "type": "text", "placeholder": "如: 2025-2026学年度第一学期"},
+                {"key": "assessment_note", "label": "考核提示语", "type": "select", "options": ["非笔试考核", "笔试考核"]},
+                {"key": "course_name", "label": "课程名称", "type": "text", "required": True},
+                {"key": "class_info", "label": "专业年级班级", "type": "text"},
+                {"key": "assessment_type", "label": "考核类型", "type": "select", "options": ["考试", "考查"]},
+                {"key": "teacher", "label": "命题教师", "type": "text"},
+                {"key": "dept_head", "label": "系(教研室)主任", "type": "text"},
+                {"key": "date", "label": "命题日期", "type": "text", "placeholder": "如: 2025年10月13日"}
+            ]
+        },
+        "standard": {
+            "label": "评分细则元数据",
+            "fields": [
+                {"key": "academic_year_semester", "label": "学年学期", "type": "text", "placeholder": "如: 2025-2026学年度第一学期"},
+                {"key": "assessment_note", "label": "考核提示语", "type": "text", "placeholder": "如: 非笔试考核"},
+                {"key": "course_name", "label": "课程名称", "type": "text", "required": True},
+                {"key": "class_info", "label": "专业年级班级", "type": "text"},
+                {"key": "assessment_form", "label": "考核形式", "type": "text", "placeholder": "如: 大作业、项目实战"},
+                {"key": "date", "label": "命题日期", "type": "text"},
+                {"key": "teacher", "label": "命题教师", "type": "text"},
+                {"key": "dept_head", "label": "系(教研室)主任", "type": "text"}
+            ]
+        }
+    }
+
+    @classmethod
+    def get_field_schema(cls, doc_type):
+        """获取指定文档类型的字段配置 Schema"""
+        return cls.FIELD_SCHEMAS.get(doc_type, {"label": "通用元数据", "fields": []})
+
     @staticmethod
     def get_prompt_by_type(doc_type):
         """

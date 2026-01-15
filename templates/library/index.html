@@ -32,6 +32,13 @@
         .prose pre { background: #f1f5f9; padding: 1em; border-radius: 0.5em; overflow-x: auto; font-family: monospace; font-size: 0.9em; }
 
         .active-filter { background-color: #e0f2fe; color: #0284c7; border-right: 3px solid #0284c7; }
+
+        /* Toast 动画 */
+        @keyframes slide-up {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up { animation: slide-up 0.3s ease-out; }
     </style>
 </head>
 <body class="font-sans text-slate-800">
@@ -96,11 +103,12 @@
     <div id="previewModal" class="fixed inset-0 z-50 hidden transition-opacity duration-300">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onclick="closePreview()"></div>
 
-        <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-slate-900/5 scale-95 opacity-0 transition-all duration-300" id="modalContent">
+        <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-6xl h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden ring-1 ring-slate-900/5 scale-95 opacity-0 transition-all duration-300" id="modalContent">
 
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 backdrop-blur-md z-10">
+            <!-- 顶部标题栏 -->
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 backdrop-blur-md z-10 flex-shrink-0">
                 <div class="flex items-center gap-4 overflow-hidden flex-1 mr-4">
-                    <div class="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border border-indigo-100">
+                    <div class="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border border-indigo-100" id="previewIcon">
                         <i class="fas fa-file-alt"></i>
                     </div>
                     <div class="min-w-0">
@@ -108,27 +116,31 @@
                         <div class="flex items-center gap-2 mt-0.5">
                             <span class="text-[10px] bg-slate-200 text-slate-500 px-1.5 rounded" id="previewOwnerBadge">Owner</span>
                             <span class="text-[10px] text-slate-400 truncate" id="previewMeta">Read Only</span>
+                            <span class="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 rounded font-medium" id="previewDocType">文档</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <div id="previewActionGroup" class="hidden flex items-center gap-2 mr-2 border-r border-slate-200 pr-4">
-                        <button id="btnEdit" onclick="toggleEditMode(true)" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-sky-600 transition border border-transparent">
+                    <!-- 视图切换标签 -->
+                    <div class="flex items-center bg-slate-100 rounded-lg p-0.5 mr-2" id="viewTabs">
+                        <button onclick="switchView('preview')" class="view-tab px-3 py-1.5 rounded-md text-xs font-bold transition-all bg-white text-slate-700 shadow-sm" data-view="preview">
+                            <i class="fas fa-eye mr-1"></i> 预览
+                        </button>
+                        <button onclick="switchView('edit')" class="view-tab px-3 py-1.5 rounded-md text-xs font-bold transition-all text-slate-500 hover:text-slate-700" data-view="edit">
                             <i class="fas fa-edit mr-1"></i> 编辑
                         </button>
+                        <button onclick="switchView('metadata')" class="view-tab px-3 py-1.5 rounded-md text-xs font-bold transition-all text-slate-500 hover:text-slate-700" data-view="metadata">
+                            <i class="fas fa-tags mr-1"></i> 元数据
+                        </button>
+                    </div>
 
-                        <div id="editControls" class="hidden flex items-center gap-2">
-                            <button id="btnCancel" onclick="toggleEditMode(false)" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-rose-500 hover:bg-rose-50 transition">
-                                取消
-                            </button>
-                            <button id="btnSave" onclick="saveFileContent()" class="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center shadow-indigo-200">
-                                <i class="fas fa-save mr-1.5"></i> 保存
-                            </button>
-                        </div>
-
+                    <div id="previewActionGroup" class="hidden flex items-center gap-2 mr-2 border-l border-slate-200 pl-4">
+                        <button id="btnSaveAll" onclick="saveAllChanges()" class="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center shadow-indigo-200">
+                            <i class="fas fa-save mr-1.5"></i> 保存
+                        </button>
                         <button onclick="goToExportPage()" class="px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 transition border border-transparent">
-                            <i class="fas fa-file-word mr-1"></i> 导出 Word
+                            <i class="fas fa-file-word mr-1"></i> 导出
                         </button>
                     </div>
 
@@ -138,11 +150,49 @@
                 </div>
             </div>
 
-            <div class="flex-1 overflow-hidden relative bg-white">
-                <div class="absolute inset-0 overflow-y-auto p-8 prose max-w-none text-slate-600 transition-opacity duration-200" id="previewContent"></div>
+            <!-- 主体内容区 -->
+            <div class="flex-1 overflow-hidden relative bg-white flex">
+                <!-- 预览视图 -->
+                <div id="viewPreview" class="view-panel absolute inset-0 overflow-y-auto p-8 prose max-w-none text-slate-600 transition-opacity duration-200 custom-scrollbar"></div>
 
-                <textarea id="editContent" class="absolute inset-0 w-full h-full p-8 font-mono text-sm text-slate-700 resize-none focus:outline-none bg-slate-50 hidden opacity-0 transition-opacity duration-200 leading-relaxed"></textarea>
+                <!-- 编辑视图 -->
+                <div id="viewEdit" class="view-panel absolute inset-0 hidden opacity-0 transition-opacity duration-200 flex flex-col">
+                    <div class="flex-1 overflow-hidden">
+                        <textarea id="editContent" class="w-full h-full p-6 font-mono text-sm text-slate-700 resize-none focus:outline-none bg-slate-50 leading-relaxed custom-scrollbar" placeholder="在此编辑文档内容（支持 Markdown 格式）..."></textarea>
+                    </div>
+                </div>
 
+                <!-- 元数据视图 -->
+                <div id="viewMetadata" class="view-panel absolute inset-0 hidden opacity-0 transition-opacity duration-200 overflow-y-auto custom-scrollbar">
+                    <div class="max-w-3xl mx-auto p-8">
+                        <!-- 文档类型选择 -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-bold text-slate-700 mb-2">文档类型</label>
+                            <div class="flex flex-wrap gap-2" id="docTypeSelector">
+                                <!-- 动态生成 -->
+                            </div>
+                        </div>
+
+                        <!-- 动态元数据表单 -->
+                        <div class="bg-slate-50 rounded-xl p-6 border border-slate-100">
+                            <h4 class="text-sm font-bold text-slate-600 mb-4 flex items-center gap-2" id="metadataFormTitle">
+                                <i class="fas fa-info-circle text-slate-400"></i>
+                                <span>元数据字段</span>
+                            </h4>
+                            <div id="metadataForm" class="space-y-4">
+                                <!-- 动态生成的表单字段 -->
+                            </div>
+                        </div>
+
+                        <!-- 提示信息 -->
+                        <div class="mt-4 text-xs text-slate-400 flex items-center gap-1">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>元数据用于文档分类、筛选和导出时的自动填充。</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 加载指示器 -->
                 <div id="modalLoading" class="absolute inset-0 bg-white/80 z-20 hidden flex items-center justify-center backdrop-blur-[1px]">
                     <div class="flex flex-col items-center">
                         <i class="fas fa-circle-notch fa-spin text-indigo-500 text-2xl mb-2"></i>
@@ -162,11 +212,17 @@
         let currentFilter = { category: 'all', year: '', course: '', q: '' };
         let fileCache = {};
         let currentPreviewId = null;
+        let currentView = 'preview';
+        let docTypeSchemas = {};  // 缓存所有文档类型的字段 Schema
+        let currentDocType = 'other';  // 当前文档类型
+        let currentMetadata = {};  // 当前元数据
+        let hasUnsavedChanges = false;  // 是否有未保存的更改
 
         // --- 初始化 ---
         document.addEventListener('DOMContentLoaded', () => {
             loadFilters();
             loadFiles();
+            loadDocTypeSchemas();  // 预加载所有文档类型配置
 
             // 搜索防抖
             let timeout = null;
@@ -178,6 +234,18 @@
                 }, 300);
             });
         });
+
+        // --- 加载文档类型 Schema ---
+        async function loadDocTypeSchemas() {
+            try {
+                const res = await fetch('/api/doc_type_schema');
+                const data = await res.json();
+                docTypeSchemas = data.schemas || {};
+                window.docTypes = data.types || {};
+            } catch(e) {
+                console.error('加载文档类型配置失败:', e);
+            }
+        }
 
         // --- 筛选逻辑 ---
         function setCategory(cat) {
@@ -350,119 +418,387 @@
 
         // --- 核心功能 ---
 
-        function openPreview(fileId) {
+        async function openPreview(fileId) {
             const file = fileCache[fileId];
             if (!file) return;
             currentPreviewId = fileId;
+            hasUnsavedChanges = false;
 
-            // 填充头部信息
-            document.getElementById('previewTitle').innerText = file.original_name;
-            document.getElementById('previewMeta').innerText = `上传于: ${file.created_at || '未知'}`;
-
-            const ownerBadge = document.getElementById('previewOwnerBadge');
-            if(file.is_owner) {
-                ownerBadge.className = "text-[10px] bg-sky-100 text-sky-600 px-1.5 rounded font-bold";
-                ownerBadge.innerText = "上传者";
-            } else {
-                ownerBadge.className = "text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded";
-                ownerBadge.innerText = file.uploader_name || "未知";
-            }
-
-            // 填充内容
-            const content = file.parsed_content || "";
-            document.getElementById('editContent').value = content;
-            const parser = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : (t => t);
-            document.getElementById('previewContent').innerHTML = content ? parser(content) : '<div class="text-center mt-20 text-slate-300">暂无内容</div>';
-
-            // 按钮权限控制
-            const actionGroup = document.getElementById('previewActionGroup');
-            if (file.is_owner || {{ 'true' if user.is_admin else 'false' }}) { // 假设后端注入了user对象，如果没有请移除后面条件
-                actionGroup.classList.remove('hidden');
-            } else {
-                actionGroup.classList.add('hidden');
-            }
-
-            // 重置为阅读模式
-            toggleEditMode(false);
-
-            // 显示弹窗动画
+            // 显示加载状态
             const modal = document.getElementById('previewModal');
             const contentDiv = document.getElementById('modalContent');
             modal.classList.remove('hidden');
-            // 强制重绘
             void modal.offsetWidth;
             contentDiv.classList.remove('scale-95', 'opacity-0');
             contentDiv.classList.add('scale-100', 'opacity-100');
+
+            const loadingEl = document.getElementById('modalLoading');
+            loadingEl.classList.remove('hidden');
+
+            try {
+                // 从服务器获取完整文件详情（包括元数据）
+                const res = await fetch(`/api/file_detail/${fileId}`);
+                const data = await res.json();
+
+                if (data.status !== 'success') {
+                    throw new Error(data.msg || '获取文件详情失败');
+                }
+
+                const fileDetail = data.file;
+                currentDocType = fileDetail.doc_category || 'other';
+                currentMetadata = fileDetail.meta_info || {};
+
+                // 填充头部信息
+                document.getElementById('previewTitle').innerText = fileDetail.original_name;
+                document.getElementById('previewMeta').innerText = `上传于: ${fileDetail.created_at || '未知'}`;
+
+                // 文档类型标签
+                const docTypeLabel = window.docTypes?.[currentDocType] || '其他';
+                document.getElementById('previewDocType').innerText = docTypeLabel;
+
+                // 更新图标
+                const icon = getIcon(currentDocType);
+                const iconEl = document.getElementById('previewIcon');
+                iconEl.className = `${icon.bg} ${icon.color} w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm border border-${icon.bg.replace('bg-', '').replace('-50', '-100')}`;
+                iconEl.innerHTML = `<i class="fas ${icon.fa}"></i>`;
+
+                const ownerBadge = document.getElementById('previewOwnerBadge');
+                if(fileDetail.is_owner) {
+                    ownerBadge.className = "text-[10px] bg-sky-100 text-sky-600 px-1.5 rounded font-bold";
+                    ownerBadge.innerText = "上传者";
+                } else {
+                    ownerBadge.className = "text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded";
+                    ownerBadge.innerText = file.uploader_name || "未知";
+                }
+
+                // 填充内容
+                const content = fileDetail.parsed_content || "";
+                document.getElementById('editContent').value = content;
+                const parser = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : (t => t);
+                document.getElementById('viewPreview').innerHTML = content ? parser(content) : '<div class="text-center mt-20 text-slate-300">暂无内容</div>';
+
+                // 初始化文档类型选择器
+                renderDocTypeSelector();
+
+                // 初始化元数据表单
+                renderMetadataForm();
+
+                // 按钮权限控制
+                const actionGroup = document.getElementById('previewActionGroup');
+                const viewTabs = document.getElementById('viewTabs');
+                if (fileDetail.is_owner || {{ 'true' if user.is_admin else 'false' }}) {
+                    actionGroup.classList.remove('hidden');
+                    actionGroup.classList.add('flex');
+                    viewTabs.classList.remove('hidden');
+                } else {
+                    actionGroup.classList.add('hidden');
+                    // 非所有者隐藏编辑和元数据标签
+                    viewTabs.querySelectorAll('.view-tab').forEach(tab => {
+                        if (tab.dataset.view !== 'preview') {
+                            tab.classList.add('hidden');
+                        }
+                    });
+                }
+
+                // 重置为预览视图
+                switchView('preview');
+
+            } catch(e) {
+                console.error(e);
+                alert('加载文件详情失败: ' + e.message);
+            } finally {
+                loadingEl.classList.add('hidden');
+            }
         }
 
         function closePreview() {
+            if (hasUnsavedChanges && !confirm('有未保存的更改，确定要关闭吗？')) {
+                return;
+            }
+
             const modal = document.getElementById('previewModal');
             const contentDiv = document.getElementById('modalContent');
             contentDiv.classList.remove('scale-100', 'opacity-100');
             contentDiv.classList.add('scale-95', 'opacity-0');
             setTimeout(() => {
                 modal.classList.add('hidden');
+                currentPreviewId = null;
+                hasUnsavedChanges = false;
             }, 300);
         }
 
-        function toggleEditMode(isEdit) {
-            const previewEl = document.getElementById('previewContent');
-            const editEl = document.getElementById('editContent');
-            const btnEdit = document.getElementById('btnEdit');
-            const editControls = document.getElementById('editControls');
+        // --- 视图切换 ---
+        function switchView(viewName) {
+            currentView = viewName;
 
-            if (isEdit) {
-                previewEl.classList.add('hidden');
-                editEl.classList.remove('hidden');
-                setTimeout(() => editEl.classList.remove('opacity-0'), 10);
+            // 更新标签样式
+            document.querySelectorAll('.view-tab').forEach(tab => {
+                if (tab.dataset.view === viewName) {
+                    tab.classList.add('bg-white', 'text-slate-700', 'shadow-sm');
+                    tab.classList.remove('text-slate-500');
+                } else {
+                    tab.classList.remove('bg-white', 'text-slate-700', 'shadow-sm');
+                    tab.classList.add('text-slate-500');
+                }
+            });
 
-                btnEdit.classList.add('hidden');
-                editControls.classList.remove('hidden');
-                editControls.classList.add('flex');
-            } else {
-                editEl.classList.add('opacity-0');
-                setTimeout(() => editEl.classList.add('hidden'), 200);
-                previewEl.classList.remove('hidden');
+            // 切换视图面板
+            document.querySelectorAll('.view-panel').forEach(panel => {
+                panel.classList.add('hidden', 'opacity-0');
+            });
 
-                btnEdit.classList.remove('hidden');
-                editControls.classList.add('hidden');
-                editControls.classList.remove('flex');
+            const targetPanel = document.getElementById('view' + viewName.charAt(0).toUpperCase() + viewName.slice(1));
+            if (targetPanel) {
+                targetPanel.classList.remove('hidden');
+                setTimeout(() => targetPanel.classList.remove('opacity-0'), 10);
             }
         }
 
-        function saveFileContent() {
+        // --- 文档类型选择器 ---
+        function renderDocTypeSelector() {
+            const container = document.getElementById('docTypeSelector');
+            const types = window.docTypes || { exam: '试卷', standard: '评分细则', syllabus: '教学大纲', plan: '考核计划' };
+
+            let html = '';
+            for (const [key, label] of Object.entries(types)) {
+                const isActive = key === currentDocType;
+                const icon = getIcon(key);
+                html += `
+                    <button onclick="selectDocType('${key}')"
+                            class="doc-type-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2
+                                   ${isActive ? icon.bg + ' ' + icon.color + ' ring-2 ring-offset-1 ring-' + icon.color.replace('text-', '') : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'}">
+                        <i class="fas ${icon.fa} text-xs"></i>
+                        ${label}
+                    </button>
+                `;
+            }
+            // 添加 "其他" 选项
+            const isOther = !types[currentDocType];
+            html += `
+                <button onclick="selectDocType('other')"
+                        class="doc-type-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2
+                               ${isOther ? 'bg-slate-100 text-slate-600 ring-2 ring-offset-1 ring-slate-400' : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'}">
+                    <i class="fas fa-file-alt text-xs"></i>
+                    其他
+                </button>
+            `;
+            container.innerHTML = html;
+        }
+
+        function selectDocType(docType) {
+            if (currentDocType !== docType) {
+                currentDocType = docType;
+                hasUnsavedChanges = true;
+                renderDocTypeSelector();
+                renderMetadataForm();
+
+                // 更新顶部文档类型标签
+                const docTypeLabel = window.docTypes?.[currentDocType] || '其他';
+                document.getElementById('previewDocType').innerText = docTypeLabel;
+            }
+        }
+
+        // --- 元数据表单渲染 ---
+        function renderMetadataForm() {
+            const container = document.getElementById('metadataForm');
+            const schema = docTypeSchemas[currentDocType];
+
+            if (!schema || !schema.fields || schema.fields.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-slate-400">
+                        <i class="fas fa-info-circle text-2xl mb-2 opacity-50"></i>
+                        <p class="text-sm">该文档类型暂无元数据字段配置</p>
+                    </div>
+                `;
+                document.getElementById('metadataFormTitle').querySelector('span').innerText = '元数据字段';
+                return;
+            }
+
+            document.getElementById('metadataFormTitle').querySelector('span').innerText = schema.label || '元数据字段';
+
+            let html = '';
+            for (const field of schema.fields) {
+                html += renderField(field, currentMetadata);
+            }
+            container.innerHTML = html;
+
+            // 绑定变更事件
+            container.querySelectorAll('input, select, textarea').forEach(el => {
+                el.addEventListener('change', () => { hasUnsavedChanges = true; });
+                el.addEventListener('input', () => { hasUnsavedChanges = true; });
+            });
+        }
+
+        function renderField(field, data, parentKey = '') {
+            const fullKey = parentKey ? `${parentKey}.${field.key}` : field.key;
+            const value = getNestedValue(data, fullKey) || '';
+
+            // 处理嵌套类型
+            if (field.type === 'nested' && field.fields) {
+                let nestedHtml = `
+                    <div class="border border-slate-200 rounded-lg p-4 bg-white">
+                        <label class="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">${field.label}</label>
+                        <div class="grid grid-cols-2 gap-3">
+                `;
+                for (const subField of field.fields) {
+                    nestedHtml += renderField(subField, data, field.key);
+                }
+                nestedHtml += `</div></div>`;
+                return nestedHtml;
+            }
+
+            const requiredMark = field.required ? '<span class="text-rose-500 ml-0.5">*</span>' : '';
+            const inputId = `meta_${fullKey.replace(/\./g, '_')}`;
+
+            let inputHtml = '';
+            switch (field.type) {
+                case 'select':
+                    inputHtml = `
+                        <select id="${inputId}" name="${fullKey}"
+                                class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition bg-white">
+                            <option value="">请选择...</option>
+                            ${(field.options || []).map(opt => `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                        </select>
+                    `;
+                    break;
+                case 'number':
+                    inputHtml = `
+                        <input type="number" id="${inputId}" name="${fullKey}" value="${escapeHtml(value)}"
+                               placeholder="${field.placeholder || ''}"
+                               class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition">
+                    `;
+                    break;
+                default: // text
+                    inputHtml = `
+                        <input type="text" id="${inputId}" name="${fullKey}" value="${escapeHtml(value)}"
+                               placeholder="${field.placeholder || ''}"
+                               class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition">
+                    `;
+            }
+
+            // 嵌套字段使用更紧凑的布局
+            if (parentKey) {
+                return `
+                    <div>
+                        <label for="${inputId}" class="block text-xs text-slate-500 mb-1">${field.label}${requiredMark}</label>
+                        ${inputHtml}
+                    </div>
+                `;
+            }
+
+            return `
+                <div>
+                    <label for="${inputId}" class="block text-sm font-medium text-slate-700 mb-1.5">${field.label}${requiredMark}</label>
+                    ${inputHtml}
+                </div>
+            `;
+        }
+
+        function getNestedValue(obj, path) {
+            if (!obj || !path) return '';
+            return path.split('.').reduce((o, k) => (o && o[k] !== undefined) ? o[k] : '', obj);
+        }
+
+        function collectMetadataFromForm() {
+            const form = document.getElementById('metadataForm');
+            const inputs = form.querySelectorAll('input, select, textarea');
+            const metadata = {};
+
+            inputs.forEach(input => {
+                const name = input.name;
+                const value = input.value.trim();
+                if (!name) return;
+
+                // 处理嵌套路径 (如 hours_info.total)
+                const parts = name.split('.');
+                let current = metadata;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    if (!current[parts[i]]) current[parts[i]] = {};
+                    current = current[parts[i]];
+                }
+                current[parts[parts.length - 1]] = value;
+            });
+
+            return metadata;
+        }
+
+        // --- 保存功能 ---
+        async function saveAllChanges() {
             if (!currentPreviewId) return;
-            const newContent = document.getElementById('editContent').value;
+
             const loadingEl = document.getElementById('modalLoading');
             loadingEl.classList.remove('hidden');
 
-            fetch('/api/update_file_content', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    id: currentPreviewId,
-                    content: newContent
-                })
-            })
-            .then(res => res.json())
-            .then(data => {
+            try {
+                const content = document.getElementById('editContent').value;
+                const metadata = collectMetadataFromForm();
+
+                const res = await fetch('/api/update_file_full', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: currentPreviewId,
+                        content: content,
+                        meta_info: metadata,
+                        doc_category: currentDocType
+                    })
+                });
+
+                const data = await res.json();
                 if (data.status === 'success') {
+                    // 更新缓存
                     if (fileCache[currentPreviewId]) {
-                        fileCache[currentPreviewId].parsed_content = newContent;
+                        fileCache[currentPreviewId].parsed_content = content;
+                        fileCache[currentPreviewId].doc_category = currentDocType;
                     }
+                    currentMetadata = metadata;
+                    hasUnsavedChanges = false;
+
+                    // 更新预览
                     const parser = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : (t => t);
-                    document.getElementById('previewContent').innerHTML = parser(newContent);
-                    toggleEditMode(false);
-                    loadFiles(); // 刷新列表以更新预览摘要
-                    alert('保存成功');
+                    document.getElementById('viewPreview').innerHTML = content ? parser(content) : '<div class="text-center mt-20 text-slate-300">暂无内容</div>';
+
+                    // 刷新列表
+                    loadFiles();
+                    loadFilters();
+
+                    // 提示成功
+                    showToast('保存成功', 'success');
                 } else {
-                    alert('保存失败: ' + data.msg);
+                    throw new Error(data.msg || '保存失败');
                 }
-            })
-            .catch(err => alert('网络错误: ' + err))
-            .finally(() => {
+            } catch (e) {
+                console.error(e);
+                showToast('保存失败: ' + e.message, 'error');
+            } finally {
                 loadingEl.classList.add('hidden');
-            });
+            }
+        }
+
+        // --- 轻量级 Toast 提示 ---
+        function showToast(message, type = 'info') {
+            const existing = document.getElementById('toast');
+            if (existing) existing.remove();
+
+            const colors = {
+                success: 'bg-emerald-500',
+                error: 'bg-rose-500',
+                info: 'bg-indigo-500'
+            };
+
+            const toast = document.createElement('div');
+            toast.id = 'toast';
+            toast.className = `fixed bottom-6 right-6 ${colors[type] || colors.info} text-white px-5 py-3 rounded-xl shadow-lg text-sm font-medium z-[100] flex items-center gap-2 animate-slide-up`;
+            toast.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+                ${escapeHtml(message)}
+            `;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'transition-opacity');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
         }
 
         function deleteFile(id) {

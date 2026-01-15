@@ -235,6 +235,137 @@ def update_file_content():
     return jsonify({"status": "success", "msg": "保存成功"})
 
 
+@bp.route('/api/doc_type_schema')
+def get_doc_type_schema():
+    """获取所有文档类型的字段配置 Schema"""
+    doc_type = request.args.get('type')
+    if doc_type:
+        schema = DocumentTypeConfig.get_field_schema(doc_type)
+        return jsonify({"type": doc_type, "schema": schema})
+    else:
+        # 返回所有类型的 Schema
+        all_schemas = {}
+        for dt in DocumentTypeConfig.TYPES.keys():
+            all_schemas[dt] = DocumentTypeConfig.get_field_schema(dt)
+        return jsonify({"types": DocumentTypeConfig.TYPES, "schemas": all_schemas})
+
+
+@bp.route('/api/file_detail/<int:file_id>')
+def get_file_detail(file_id):
+    """获取文件详情，包含解析内容和元数据"""
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    record = db.get_file_by_id(file_id)
+    if not record:
+        return jsonify({"msg": "文件不存在"}), 404
+
+    # 解析 meta_info JSON
+    meta_info = {}
+    if record.get('meta_info'):
+        try:
+            meta_info = json.loads(record['meta_info'])
+        except:
+            pass
+
+    # 权限标记
+    is_owner = (int(record['uploaded_by']) == int(g.user['id'])) or g.user.get('is_admin')
+
+    return jsonify({
+        "status": "success",
+        "file": {
+            "id": record['id'],
+            "original_name": record['original_name'],
+            "doc_category": record.get('doc_category', 'other'),
+            "parsed_content": record.get('parsed_content', ''),
+            "meta_info": meta_info,
+            "course_name": record.get('course_name', ''),
+            "academic_year": record.get('academic_year', ''),
+            "created_at": record.get('created_at', ''),
+            "is_owner": is_owner
+        }
+    })
+
+
+@bp.route('/api/update_file_metadata', methods=['POST'])
+def update_file_metadata():
+    """更新文件元数据"""
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json or {}
+    file_id = data.get('id')
+    meta_info = data.get('meta_info', {})
+    doc_category = data.get('doc_category')
+
+    if not file_id:
+        return jsonify({"msg": "参数错误: 缺少文件ID"}), 400
+
+    record = db.get_file_by_id(file_id)
+    if not record:
+        return jsonify({"msg": "文件不存在"}), 404
+
+    # 权限检查
+    if int(record['uploaded_by']) != int(g.user['id']) and not g.user.get('is_admin'):
+        return jsonify({"msg": "无权编辑他人文档"}), 403
+
+    # 从元数据中提取关键字段用于数据库索引
+    course_name = meta_info.get('course_name') if isinstance(meta_info, dict) else None
+    academic_year = meta_info.get('academic_year_semester', '').split('学年')[0] if isinstance(meta_info, dict) else None
+
+    db.update_file_metadata(
+        file_id=file_id,
+        meta_info=meta_info,
+        doc_category=doc_category,
+        course_name=course_name,
+        academic_year=academic_year
+    )
+
+    return jsonify({"status": "success", "msg": "元数据保存成功"})
+
+
+@bp.route('/api/update_file_full', methods=['POST'])
+def update_file_full():
+    """同时更新文件内容和元数据"""
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json or {}
+    file_id = data.get('id')
+    content = data.get('content')
+    meta_info = data.get('meta_info', {})
+    doc_category = data.get('doc_category')
+
+    if not file_id:
+        return jsonify({"msg": "参数错误: 缺少文件ID"}), 400
+
+    record = db.get_file_by_id(file_id)
+    if not record:
+        return jsonify({"msg": "文件不存在"}), 404
+
+    # 权限检查
+    if int(record['uploaded_by']) != int(g.user['id']) and not g.user.get('is_admin'):
+        return jsonify({"msg": "无权编辑他人文档"}), 403
+
+    # 更新内容
+    if content is not None:
+        db.update_file_parsed_content(file_id, content)
+
+    # 更新元数据
+    course_name = meta_info.get('course_name') if isinstance(meta_info, dict) else None
+    academic_year = meta_info.get('academic_year_semester', '').split('学年')[0] if isinstance(meta_info, dict) else None
+
+    db.update_file_metadata(
+        file_id=file_id,
+        meta_info=meta_info,
+        doc_category=doc_category,
+        course_name=course_name,
+        academic_year=academic_year
+    )
+
+    return jsonify({"status": "success", "msg": "保存成功"})
+
+
 @bp.route('/api/delete_file_asset', methods=['POST'])
 def delete_file_asset():
     """【补全】删除文件"""
