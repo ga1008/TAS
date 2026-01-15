@@ -508,16 +508,38 @@
         function clearData() {
             if(confirm('警告：确定要清空所有成绩和已上传的文件吗？此操作无法撤销。')) {
                 fetch(`/clear_data/${CLASS_ID}`, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => location.reload());
+                .then(res => {
+                    if (!res.ok) {
+                        return res.json().then(data => { throw new Error(data.msg || '操作失败'); });
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    alert(data.msg || '成绩已清空');
+                    location.reload();
+                })
+                .catch(err => {
+                    alert('清空成绩失败: ' + err.message);
+                });
             }
         }
 
         function deleteData() {
             if(confirm('警告：确定要删除本次批改所有相关数据吗？此操作无法撤销。')) {
                 fetch(`/delete_class/${CLASS_ID}`, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => window.location.href = '/');
+                .then(res => {
+                    if (!res.ok) {
+                        return res.json().then(data => { throw new Error(data.msg || '操作失败'); });
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    alert(data.msg || '任务已删除');
+                    window.location.href = '/';
+                })
+                .catch(err => {
+                    alert('删除任务失败: ' + err.message);
+                });
             }
         }
     </script>

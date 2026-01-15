@@ -1,16 +1,22 @@
 import functools
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, g, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+
 from extensions import db
 
-# 注意 url_prefix
+# url_prefix 设置为 /admin，所有路由自动加上 /admin
 bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
 def admin_required(view):
+    """装饰器：确保用户是管理员"""
+
     @functools.wraps(view)
     def wrapped_view(**kwargs):
-        if g.user is None or not g.user.get('is_admin'):
+        # 检查 g.user (由 auth 蓝图或 before_request 加载)
+        # 或者直接检查 session['user']
+        user = session.get('user')
+        if not user or not user.get('is_admin'):
             return redirect(url_for('admin.login'))
         return view(**kwargs)
 
@@ -26,24 +32,27 @@ def login():
         user = db.verify_admin_login(username, password)
 
         if user:
-            session.clear()
+            # 登录成功，写入 session
+            # 注意：如果这和普通用户登录冲突，需要考虑 session key 的设计
+            # 这里简单起见，覆盖 'user'
             session['user'] = user
             return redirect(url_for('admin.dashboard'))
 
         flash('管理员账号或密码错误', 'error')
 
+    # 渲染 templates/admin/login.html
     return render_template('admin/login.html')
 
 
 @bp.route('/')
 @admin_required
 def dashboard():
-    # 获取所有厂商及其模型
+    # 获取数据
     providers = db.get_all_providers()
-    # 为了前端显示方便，我们把模型挂载到厂商字典下
     for p in providers:
         p['models'] = db.get_models_by_provider(p['id'])
 
+    # 渲染 templates/admin/dashboard.html
     return render_template('admin/dashboard.html', providers=providers)
 
 
