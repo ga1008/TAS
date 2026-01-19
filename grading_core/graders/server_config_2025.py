@@ -7,6 +7,8 @@ class ServerConfigGrader(BaseGrader):
     ID = "server_config_2025"
     NAME = "服务器配置与管理考试"
 
+    COURSE = "服务器配置与管理"
+
     def grade(self, student_dir, student_info) -> GradingResult:
         self.res = GradingResult()
         self.student_name = student_info.get('name', '')

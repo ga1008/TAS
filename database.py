@@ -125,6 +125,7 @@ class Database:
                            strictness    TEXT      DEFAULT 'standard',
                            extra_desc    TEXT,
                            max_score     INTEGER   DEFAULT 100, -- 新增字段
+                           course_name   TEXT      DEFAULT '',
                            created_by    INTEGER   DEFAULT 1,
                            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                        )
@@ -228,6 +229,45 @@ class Database:
                        )
                        ''')
 
+        # [NEW] 9. 学生名单表
+        # 存储解析后的学生名单记录和元数据
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS student_lists
+                       (
+                           id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                           file_asset_id INTEGER,           -- 关联的文件资产ID
+                           class_name   TEXT,              -- 班级名称
+                           college      TEXT,              -- 学院
+                           department   TEXT,              -- 系部
+                           enrollment_year TEXT,           -- 入学年份
+                           education_type TEXT,            -- 培养类型 (普本/专升本/专科)
+                           student_count  INTEGER DEFAULT 0, -- 学生数量
+                           has_gender     BOOLEAN DEFAULT 0, -- 是否包含性别信息
+                           uploaded_by   INTEGER,          -- 上传者ID
+                           created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                       )
+                       ''')
+
+        # [NEW] 10. 学生详细信息表
+        # 存储每个学生的详细信息
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS student_details
+                       (
+                           id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                           student_list_id INTEGER,        -- 关联的学生名单ID
+                           student_id    TEXT,             -- 学号
+                           name          TEXT,             -- 姓名
+                           gender        TEXT,             -- 性别
+                           email         TEXT,             -- 邮箱
+                           phone         TEXT,             -- 电话
+                           status        TEXT DEFAULT 'normal', -- 状态 (normal/abnormal)
+                           created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           UNIQUE(student_list_id, student_id)
+                       )
+                       ''')
+
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_capability ON ai_models (capability)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_file_hash ON file_assets (file_hash)')
@@ -242,6 +282,7 @@ class Database:
         self._migrate_table(cursor, conn, "ai_tasks", "strictness", "TEXT DEFAULT 'standard'")
         self._migrate_table(cursor, conn, "ai_tasks", "extra_desc", "TEXT DEFAULT ''")
         self._migrate_table(cursor, conn, "ai_tasks", "max_score", "INTEGER DEFAULT 100")
+        self._migrate_table(cursor, conn, "ai_tasks", "course_name", "TEXT DEFAULT ''")
         self._migrate_table(cursor, conn, "users", "has_seen_help", "BOOLEAN DEFAULT 0")
         self._migrate_table(cursor, conn, "file_assets", "parsed_content", "TEXT")
         self._migrate_table(cursor, conn, "file_assets", "meta_info", "TEXT")
@@ -251,6 +292,12 @@ class Database:
         self._migrate_table(cursor, conn, "file_assets", "semester", "TEXT")
         self._migrate_table(cursor, conn, "file_assets", "course_name", "TEXT")
         self._migrate_table(cursor, conn, "file_assets", "cohort_tag", "TEXT")  # 关键：用于区分 2401 和 2406
+
+        # 学生名单表迁移
+        self._migrate_table(cursor, conn, "student_lists", "department", "TEXT")
+
+        # 学生详细信息表迁移（如果表已存在但缺少字段）
+        self._migrate_table(cursor, conn, "student_details", "status", "TEXT DEFAULT 'normal'")
 
     def _migrate_table(self, cursor, conn, table, column, type_def):
         """辅助函数：检查列是否存在，不存在则添加"""
@@ -274,25 +321,37 @@ class Database:
             conn.commit()
             print(f"[DB] 超级管理员已初始化: {admin_user}")
 
-    def get_document_library_tree(self, user_id):
+    def get_document_library_tree(self, user_id, is_admin=False):
         """
         获取文档库的目录树结构：学年 -> 学期 -> 课程 -> 适用人群
         """
         conn = self.get_connection()
         # 聚合查询，找出所有存在的组合
-        sql = '''
-              SELECT DISTINCT academic_year, \
-                              semester, \
-                              course_name, \
-                              cohort_tag
-              FROM file_assets
-              WHERE uploaded_by = ? \
-                AND academic_year IS NOT NULL
-              ORDER BY academic_year DESC, semester ASC, course_name \
-              '''
-        return [dict(row) for row in conn.execute(sql, (user_id,)).fetchall()]
+        if is_admin:
+            sql = '''
+                  SELECT DISTINCT academic_year, \
+                                  semester, \
+                                  course_name, \
+                                  cohort_tag
+                  FROM file_assets
+                  WHERE academic_year IS NOT NULL
+                  ORDER BY academic_year DESC, semester ASC, course_name \
+                  '''
+            return [dict(row) for row in conn.execute(sql).fetchall()]
+        else:
+            sql = '''
+                  SELECT DISTINCT academic_year, \
+                                  semester, \
+                                  course_name, \
+                                  cohort_tag
+                  FROM file_assets
+                  WHERE uploaded_by = ? \
+                    AND academic_year IS NOT NULL
+                  ORDER BY academic_year DESC, semester ASC, course_name \
+                  '''
+            return [dict(row) for row in conn.execute(sql, (user_id,)).fetchall()]
 
-    def get_files_by_filter(self, user_id, doc_category=None, year=None, course=None, cohort=None, search=None):
+    def get_files_by_filter(self, user_id, doc_category=None, year=None, course=None, cohort=None, search=None, is_admin=False):
         """
         [增强版] 高级筛选接口
         """
@@ -300,10 +359,10 @@ class Database:
         sql = "SELECT f.*, u.username as uploader_name FROM file_assets f LEFT JOIN users u ON f.uploaded_by = u.id WHERE f.parsed_content IS NOT NULL"
         params = []
 
-        # 权限控制：只能看自己的，或者管理员看全部 (根据业务需求调整，这里暂时只查自己的)
-        # 如果需要看全部，请移除下面这行或根据 user_id 逻辑调整
-        sql += " AND f.uploaded_by = ?"
-        params.append(user_id)
+        # 权限控制：管理员可以看全部，普通用户只能看自己的
+        if not is_admin:
+            sql += " AND f.uploaded_by = ?"
+            params.append(user_id)
 
         if doc_category:
             sql += " AND f.doc_category = ?"
@@ -719,18 +778,18 @@ class Database:
     # ================= AI 任务相关 =================
     def insert_ai_task(self, name, status="pending", log_info="等待队列中...",
                        exam_path=None, standard_path=None,
-                       strictness='standard', extra_desc='', max_score=100, user_id=1, grader_id=None):
+                       strictness='standard', extra_desc='', max_score=100, user_id=1, grader_id=None, course_name=None):
         conn = self.get_connection()
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO ai_tasks (name, status, log_info, exam_path, standard_path, strictness, extra_desc, max_score, created_by, grader_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (name, status, log_info, exam_path, standard_path, strictness, extra_desc, max_score, user_id, grader_id)
+            """INSERT INTO ai_tasks (name, status, log_info, exam_path, standard_path, strictness, extra_desc, max_score, created_by, grader_id, course_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, status, log_info, exam_path, standard_path, strictness, extra_desc, max_score, user_id, grader_id, course_name)
         )
         conn.commit()
         return cur.lastrowid
 
-    def update_ai_task(self, task_id, status=None, log_info=None, grader_id=None):
+    def update_ai_task(self, task_id, status=None, log_info=None, grader_id=None, course_name=None):
         conn = self.get_connection()
         updates = []
         params = []
@@ -743,6 +802,10 @@ class Database:
         if grader_id:
             updates.append("grader_id=?")
             params.append(grader_id)
+
+        if course_name:
+            updates.append("course_name=?")
+            params.append(course_name)
 
         if updates:
             params.append(task_id)
@@ -806,3 +869,170 @@ class Database:
             conn.execute("DELETE FROM grader_recycle_bin WHERE id=?", (recycle_id,)).commit()
             return dict(row)
         return None
+
+    # ================= 学生名单管理 =================
+
+    def save_student_list(self, file_asset_id, class_name, college, department, enrollment_year,
+                         education_type, student_count, has_gender, user_id):
+        """保存学生名单记录"""
+        import json
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO student_lists (file_asset_id, class_name, college, department, enrollment_year,
+                                      education_type, student_count, has_gender, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (file_asset_id, class_name, college, department, enrollment_year,
+                 education_type, student_count, has_gender, user_id))
+        conn.commit()
+
+        list_id = cursor.lastrowid
+
+        # 同时更新 file_assets 表，将文档类别设置为 "other"
+        # 并更新元数据
+        meta_info = {
+            "class_name": class_name,
+            "college": college,
+            "department": department,
+            "enrollment_year": enrollment_year,
+            "education_type": education_type,
+            "student_count": student_count,
+            "has_gender": has_gender
+        }
+        conn.execute('''
+            UPDATE file_assets
+            SET doc_category = 'other',
+                meta_info = ?
+            WHERE id = ?
+            ''', (json.dumps(meta_info, ensure_ascii=False), file_asset_id))
+        conn.commit()
+
+        return list_id
+
+    def add_student_detail(self, student_list_id, student_id, name, gender='', email='', phone=''):
+        """添加学生详细信息"""
+        conn = self.get_connection()
+        try:
+            conn.execute('''
+                INSERT INTO student_details (student_list_id, student_id, name, gender, email, phone)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''', (student_list_id, student_id, name, gender, email, phone))
+            conn.commit()
+            return True
+        except:
+            return False
+
+    def get_student_details(self, student_list_id):
+        """获取学生名单的所有学生详细信息"""
+        conn = self.get_connection()
+        rows = conn.execute('''
+            SELECT * FROM student_details
+            WHERE student_list_id = ?
+            ORDER BY student_id
+            ''', (student_list_id,)).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_student_detail(self, detail_id, student_id, name, gender, email, phone, status):
+        """更新学生详细信息"""
+        conn = self.get_connection()
+        conn.execute('''
+            UPDATE student_details
+            SET student_id = ?, name = ?, gender = ?, email = ?, phone = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            ''', (student_id, name, gender, email, phone, status, detail_id))
+        conn.commit()
+
+    def delete_student_detail(self, detail_id):
+        """删除学生详细信息"""
+        conn = self.get_connection()
+        conn.execute("DELETE FROM student_details WHERE id=?", (detail_id,))
+        conn.commit()
+
+    def update_student_list_metadata(self, list_id, class_name, college, department, enrollment_year, education_type):
+        """更新学生名单元数据"""
+        conn = self.get_connection()
+        conn.execute('''
+            UPDATE student_lists
+            SET class_name = ?, college = ?, department = ?, enrollment_year = ?, education_type = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            ''', (class_name, college, department, enrollment_year, education_type, list_id))
+        conn.commit()
+
+        # 同步更新 file_assets 的元数据
+        sl = conn.execute("SELECT * FROM student_lists WHERE id=?", (list_id,)).fetchone()
+        if sl:
+            import json
+            meta_info = {
+                "class_name": sl['class_name'],
+                "college": sl['college'],
+                "department": sl['department'],
+                "enrollment_year": str(sl['enrollment_year']) if sl['enrollment_year'] else '',
+                "education_type": sl['education_type'],
+                "student_count": sl['student_count'],
+                "has_gender": sl['has_gender']
+            }
+            conn.execute('''
+                UPDATE file_assets
+                SET meta_info = ?
+                WHERE id = ?
+                ''', (json.dumps(meta_info, ensure_ascii=False), sl['file_asset_id']))
+            conn.commit()
+
+    def get_student_list_by_file_id(self, file_asset_id):
+        """根据文件ID获取学生名单记录"""
+        conn = self.get_connection()
+        row = conn.execute("SELECT * FROM student_lists WHERE file_asset_id=?", (file_asset_id,)).fetchone()
+        return dict(row) if row else None
+
+        # 在 database.py 中找到 get_student_lists 方法并替换为：
+
+    def get_student_lists(self, user_id=None, fetch_all=False, search=None):
+        """
+        获取学生名单列表
+        :param user_id: 当前用户ID
+        :param fetch_all: 是否获取所有数据 (权限: 普通用户可使用任何人的数据 -> True)
+        :param search: 模糊搜索关键词 (班级名/学院/年份)
+        """
+        conn = self.get_connection()
+
+        sql = '''
+              SELECT sl.*, u.username as uploader_name, fa.original_name as source_file
+              FROM student_lists sl
+                       LEFT JOIN users u ON sl.uploaded_by = u.id
+                       LEFT JOIN file_assets fa ON sl.file_asset_id = fa.id
+              WHERE 1 = 1
+              '''
+        params = []
+
+        # 1. 权限控制逻辑
+        # 如果不是获取全部 (fetch_all=False) 且指定了 user_id，则只看自己的
+        # 如果是 fetch_all=True，则忽略 user_id 限制，返回所有 (符合"使用任何人的数据"需求)
+        if user_id and not fetch_all:
+            sql += " AND sl.uploaded_by = ?"
+            params.append(user_id)
+
+        # 2. 搜索逻辑 (新增)
+        if search:
+            sql += " AND (sl.class_name LIKE ? OR sl.college LIKE ? OR sl.enrollment_year LIKE ?)"
+            search_pattern = f"%{search}%"
+            params.extend([search_pattern, search_pattern, search_pattern])
+
+        sql += " ORDER BY sl.created_at DESC"
+
+        return [dict(row) for row in conn.execute(sql, params).fetchall()]
+
+    def delete_student_list(self, list_id):
+        """删除学生名单记录及所有关联的学生"""
+        conn = self.get_connection()
+        # 先删除所有关联的学生详情
+        conn.execute("DELETE FROM student_details WHERE student_list_id=?", (list_id,))
+        # 再删除学生名单记录
+        conn.execute("DELETE FROM student_lists WHERE id=?", (list_id,))
+        conn.commit()
+
+    def get_user_by_id(self, user_id):
+        """根据用户ID获取用户信息"""
+        conn = self.get_connection()
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return dict(row) if row else None
+

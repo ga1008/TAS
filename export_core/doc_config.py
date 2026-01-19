@@ -6,7 +6,8 @@ class DocumentTypeConfig:
         "exam": "试卷",
         "standard": "评分细则",
         "syllabus": "教学大纲",
-        "plan": "考核计划"
+        "plan": "考核计划",
+        "student_list": "学生名单"
     }
 
     # ==================== 字段配置 Schema ====================
@@ -20,7 +21,9 @@ class DocumentTypeConfig:
         "exam": {
             "label": "试卷元数据",
             "fields": [
-                {"key": "academic_year_semester", "label": "学年学期", "type": "text", "placeholder": "如: 2025-2026学年度第一学期"},
+                {"key": "academic_year", "label": "学年", "type": "text", "placeholder": "如: 2025-2026"},
+                {"key": "semester", "label": "学期", "type": "select", "options": ["第一学期", "第二学期", "第三学期"]},
+                {"key": "academic_year_semester", "label": "学年学期(完整)", "type": "hidden"},
                 {"key": "exam_type", "label": "考试类型", "type": "select", "options": ["期末考试", "补考", "重新学习考试"]},
                 {"key": "course_name", "label": "课程名称", "type": "text", "required": True},
                 {"key": "education_level", "label": "学历层次", "type": "select", "options": ["本科", "专科", "高职"]},
@@ -56,7 +59,9 @@ class DocumentTypeConfig:
         "plan": {
             "label": "考核计划元数据",
             "fields": [
-                {"key": "academic_year_semester", "label": "学年学期", "type": "text", "placeholder": "如: 2025-2026学年度第一学期"},
+                {"key": "academic_year", "label": "学年", "type": "text", "placeholder": "如: 2025-2026"},
+                {"key": "semester", "label": "学期", "type": "select", "options": ["第一学期", "第二学期", "第三学期"]},
+                {"key": "academic_year_semester", "label": "学年学期(完整)", "type": "hidden"},
                 {"key": "assessment_note", "label": "考核提示语", "type": "select", "options": ["非笔试考核", "笔试考核"]},
                 {"key": "course_name", "label": "课程名称", "type": "text", "required": True},
                 {"key": "class_info", "label": "专业年级班级", "type": "text"},
@@ -69,7 +74,9 @@ class DocumentTypeConfig:
         "standard": {
             "label": "评分细则元数据",
             "fields": [
-                {"key": "academic_year_semester", "label": "学年学期", "type": "text", "placeholder": "如: 2025-2026学年度第一学期"},
+                {"key": "academic_year", "label": "学年", "type": "text", "placeholder": "如: 2025-2026"},
+                {"key": "semester", "label": "学期", "type": "select", "options": ["第一学期", "第二学期", "第三学期"]},
+                {"key": "academic_year_semester", "label": "学年学期(完整)", "type": "hidden"},
                 {"key": "assessment_note", "label": "考核提示语", "type": "text", "placeholder": "如: 非笔试考核"},
                 {"key": "course_name", "label": "课程名称", "type": "text", "required": True},
                 {"key": "class_info", "label": "专业年级班级", "type": "text"},
@@ -77,6 +84,15 @@ class DocumentTypeConfig:
                 {"key": "date", "label": "命题日期", "type": "text"},
                 {"key": "teacher", "label": "命题教师", "type": "text"},
                 {"key": "dept_head", "label": "系(教研室)主任", "type": "text"}
+            ]
+        },
+        "student_list": {
+            "label": "学生名单元数据",
+            "fields": [
+                {"key": "class_name", "label": "班级名称", "type": "text", "required": True, "placeholder": "如: 软工2401班"},
+                {"key": "college", "label": "学院", "type": "text", "placeholder": "如: 数字科技学院"},
+                {"key": "enrollment_year", "label": "入学年份", "type": "text", "placeholder": "如: 2024"},
+                {"key": "education_type", "label": "培养类型", "type": "select", "options": ["普本", "专升本", "专科"]}
             ]
         }
     }
@@ -227,6 +243,44 @@ class DocumentTypeConfig:
             2. 请整理为清晰的 Markdown 表格或多级列表。
             3. 重点提取：**分值** 和 **具体的评分描述**（例如 '功能实现得5分，未实现扣2分'）。
             4. 如有特殊要求（如提交格式、截止时间），请单独列出。
+            """
+
+        # ==================== 5. 学生名单 (Student List) ====================
+        elif doc_type == "student_list":
+            return base_instruction + """
+            【文档类型：学生名单】
+            这是一份学生名单表格，需要准确提取每个学生的信息。请特别注意保持学号的准确性，不要随意更改或补全。
+
+            一、Metadata 提取规则 (JSON字段):
+            {
+                "class_name": "班级名称 (从表格标题或内容中提取，如: '软工2401班')",
+                "college": "学院名称 (如: '数字科技学院')",
+                "enrollment_year": "入学年份 (四位数字，如: '2024')",
+                "education_type": "培养类型 (识别或推断: '普本' / '专升本' / '专科')"
+            }
+
+            **元数据提取注意事项**：
+            - 班级名称通常在表格标题中，格式如 "XXX学院2024级XXX班学生名单" 或 "软工2401班"
+            - 学院名称通常在表格标题中
+            - 入入年份可以从班级名称推断（如 "2401班" -> 2024年入学）
+            - 培养类型：如果班级名称包含 "专升本" 标记为专升本，否则默认为普本
+
+            二、Content (Markdown) 整理规则:
+            1. 将名单整理为标准的 Markdown 表格。
+            2. 表格必须包含以下列（按顺序）：
+               - **学号** (student_id): 必须保持原样，不要修改或补全
+               - **姓名** (name): 学生姓名
+               - **性别** (gender): 可选列，如果没有则省略此列
+            3. **核心原则**：
+               - **学号准确性**：学号必须完全保持原样，不要补零、不要格式化、不要修正可能的"错误"
+               - **姓名准确性**：姓名保持原样，不要添加空格或标点
+               - **对应关系**：确保每个学生的学号、姓名、性别（如有）一一对应，不能错位
+            4. 表格格式示例：
+               | 学号 | 姓名 | 性别 |
+               | --- | --- | --- |
+               | 202401001 | 张三 | 男 |
+               | 202401002 | 李四 | 女 |
+            5. 如果原始表格包含其他列（如专业、备注等），请忽略，只保留上述必要列。
             """
 
         else:

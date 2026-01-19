@@ -18,6 +18,65 @@ from utils.common import calculate_file_hash, generate_title_from_content, creat
 bp = Blueprint('library', __name__)
 
 
+# ================= 辅助函数：数据清洗管道 =================
+def _clean_and_validate_students(raw_students):
+    """
+    [架构解耦] 独立的数据清洗管道
+    1. 格式标准化 (去除空格, 处理 Excel 浮点数)
+    2. 数据完整性校验
+    3. 集合级去重
+    """
+    clean_students = []
+    seen_ids = set()
+    errors = []
+
+    # 获取数据库中已存在的学号（可选：如果需要全局唯一性校验，需在此处查询 DB）
+    # current_db_ids = db.get_all_student_ids(class_id) # 示例
+
+    for idx, s in enumerate(raw_students):
+        row_num = idx + 1
+
+        # 1. 字段提取与类型安全转换
+        raw_id = s.get('student_id', '')
+        raw_name = s.get('name', '')
+
+        # [TODO Resolved] 处理 Excel 导入可能出现的 '202401.0' 格式
+        if isinstance(raw_id, float):
+            s_id = str(int(raw_id))
+        else:
+            s_id = str(raw_id).strip()
+            # 处理可能的 '.0' 后缀
+            if s_id.endswith('.0'):
+                s_id = s_id[:-2]
+
+        name = str(raw_name).strip()
+
+        # 2. 基础有效性校验
+        if not s_id or not name:
+            # 只有当两个都为空时才完全忽略，否则记录错误
+            if s_id or name:
+                errors.append(f"第 {row_num} 行数据不完整: 学号或姓名缺失")
+            continue
+
+            # 3. 批次内去重
+        if s_id in seen_ids:
+            errors.append(f"第 {row_num} 行学号 {s_id} 重复，已自动跳过")
+            continue
+
+        seen_ids.add(s_id)
+
+        # 4. 构建标准化对象
+        clean_students.append({
+            'student_id': s_id,
+            'name': name,
+            'gender': str(s.get('gender', '')).strip(),
+            'email': str(s.get('email', '')).strip(),
+            'phone': str(s.get('phone', '')).strip()
+        })
+
+    return clean_students, errors
+
+
 @bp.route('/library/view')
 def index():
     """文档库视图"""
@@ -49,7 +108,8 @@ def api_library_files():
         doc_category=category if category != 'all' else None,
         year=year,
         course=course,
-        search=search  # 假设 DB 层已支持，或在下方过滤
+        search=search,
+        is_admin=g.user.get('is_admin', False)
     )
 
     # 补全权限标记
@@ -63,7 +123,7 @@ def api_library_files():
 def api_library_filters():
     """左侧筛选树"""
     if not g.user: return jsonify([]), 401
-    tree = db.get_document_library_tree(g.user['id'])
+    tree = db.get_document_library_tree(g.user['id'], is_admin=g.user.get('is_admin', False))
     return jsonify(tree)
 
 
@@ -114,18 +174,34 @@ def parse_file_asset():
             f_hash = calculate_file_hash(f_stream)
         record = db.get_file_by_hash(f_hash)
 
-        # 3. 智能解析
+        # 3. 根据文档类型选择解析方法
         doc_type = request.form.get('doc_type')
-        success, content, meta = AiService.smart_parse_content(record['id'], doc_type)
 
-        if not success: return jsonify({"msg": content}), 400
+        if doc_type == 'student_list':
+            # 使用专门的学生名单解析函数
+            success, data, error_msg = AiService.parse_student_list_dedicated(record['id'])
+            if not success:
+                return jsonify({"msg": error_msg or "解析失败"}), 400
 
-        return jsonify({
-            "status": "success",
-            "file_id": record['id'],
-            "title": record['original_name'],
-            "parsed_content": content
-        })
+            # 学生名单解析成功，返回解析结果
+            return jsonify({
+                "status": "success",
+                "file_id": record['id'],
+                "title": data.get('metadata', {}).get('class_name', record['original_name']),
+                "data": data
+            })
+        else:
+            # 使用常规智能解析
+            success, content, meta = AiService.smart_parse_content(record['id'], doc_type)
+
+            if not success: return jsonify({"msg": content}), 400
+
+            return jsonify({
+                "status": "success",
+                "file_id": record['id'],
+                "title": record['original_name'],
+                "parsed_content": content
+            })
     except Exception as e:
         traceback.print_exc()
         return jsonify({"msg": f"解析失败: {str(e)}"}), 500
@@ -491,3 +567,75 @@ def ai_generate_document():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"msg": f"生成失败: {str(e)}"}), 500
+
+
+@bp.route('/api/student_detail/<int:detail_id>', methods=['PUT'])
+def api_update_student_detail(detail_id):
+    """更新学生详细信息（增强版：唯一性校验）"""
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json or {}
+    student_id = str(data.get('student_id', '')).strip()
+    name = str(data.get('name', '')).strip()
+
+    if not student_id or not name:
+        return jsonify({"msg": "学号和姓名不能为空"}), 400
+
+    try:
+        # 获取当前记录以得到 student_list_id
+        conn = db.get_connection()
+        current = conn.execute("SELECT * FROM student_details WHERE id=?", (detail_id,)).fetchone()
+        if not current:
+            return jsonify({"msg": "记录不存在"}), 404
+
+        # 校验同一名单下是否存在重复学号 (排除自己)
+        conflict = conn.execute(
+            "SELECT id FROM student_details WHERE student_list_id=? AND student_id=? AND id!=?",
+            (current['student_list_id'], student_id, detail_id)
+        ).fetchone()
+
+        if conflict:
+            return jsonify({"msg": f"学号 {student_id} 在该班级中已存在"}), 400
+
+        db.update_student_detail(
+            detail_id,
+            student_id,
+            name,
+            str(data.get('gender', '')).strip(),
+            str(data.get('email', '')).strip(),
+            str(data.get('phone', '')).strip(),
+            data.get('status', 'normal')
+        )
+        return jsonify({"status": "success", "msg": "更新成功"})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"msg": f"更新失败: {str(e)}"}), 500
+
+
+@bp.route('/api/student_detail/<int:detail_id>', methods=['DELETE'])
+def api_delete_student_detail(detail_id):
+    """删除学生详细信息"""
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+
+    try:
+        # 获取学生详情以获取 student_list_id
+        conn = db.get_connection()
+        student = conn.execute("SELECT * FROM student_details WHERE id=?", (detail_id,)).fetchone()
+
+        if not student:
+            return jsonify({"msg": "学生不存在"}), 404
+
+        student_list_id = student['student_list_id']
+
+        # 删除学生
+        db.delete_student_detail(detail_id)
+
+        # 更新学生名单的 student_count
+        new_count = len(db.get_student_details(student_list_id))
+        conn.execute("UPDATE student_lists SET student_count=? WHERE id=?", (new_count, student_list_id))
+        conn.commit()
+
+        return jsonify({"status": "success", "msg": "删除成功"})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"msg": f"删除失败: {str(e)}"}), 500

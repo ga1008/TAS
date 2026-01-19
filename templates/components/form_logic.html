@@ -11,6 +11,17 @@
         </div>
     </div>
 
+    <div class="md:col-span-2 space-y-2">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+            <i class="fas fa-book mr-1 text-indigo-500"></i> 课程名称
+        </label>
+        <div class="relative">
+            <input type="text" name="course_name" required placeholder="例如：数据结构与算法"
+                   value="{{ ref_task['course_name'] if ref_task else '' }}"
+                   class="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3.5 focus:outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm font-medium">
+        </div>
+    </div>
+
     <div class="md:col-span-1 space-y-2">
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">试卷满分</label>
         <div class="relative">

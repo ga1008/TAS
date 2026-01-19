@@ -274,13 +274,18 @@
             // 1. Group (组合字段)
             if (field.type === 'group') {
                 const childrenHTML = field.children.map(child => {
-                    let childVal = currentFileMeta[child.name] || '';
+                    // 使用 auto_fill_key 或 name 来获取元数据值
+                    let childVal = '';
+                    const autoFillKey = child.auto_fill_key || child.name;
+                    if (autoFillKey && currentFileMeta[autoFillKey]) {
+                        childVal = currentFileMeta[autoFillKey];
+                    }
                     let input = '';
                     if (child.type === 'select') {
                          const opts = child.options.map(o => `<option value="${o}" ${childVal==o?'selected':''}>${o}</option>`).join('');
                          input = `<select name="${child.name}" class="${commonClasses}">${opts}</select>`;
                     } else {
-                         input = `<input type="${child.type}" name="${child.name}" value="${childVal}" class="${commonClasses}">`;
+                         input = `<input type="${child.type}" name="${child.name}" value="${childVal}" placeholder="${child.placeholder || ''}" class="${commonClasses}">`;
                     }
                     return `
                         <div style="width: ${child.width || '100%'}">

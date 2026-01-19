@@ -7,6 +7,8 @@ from grading_core.base import BaseGrader, GradingResult
 class ServerConfigExamGrader(BaseGrader):
     ID = "server_config_exam_2025_v1"
     NAME = "服务器配置与管理期末(宽松模式)"
+
+    COURSE = "服务器配置与管理"
     
     def grade(self, student_dir, student_info) -> GradingResult:
         """主评分函数"""

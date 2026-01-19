@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>班级详情管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {brand: {50: '#eff6ff', 500: '#3b82f6', 600: '#2563eb'}},
+                    animation: {'fade-in': 'fadeIn 0.5s ease-out forwards'},
+                    keyframes: {fadeIn: {'0%': {opacity: '0'}, '100%': {opacity: '1'}}}
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.4);
+            border: 1px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: #cbd5e1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        /* 隐藏 Chrome 数字输入框箭头 */
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    </style>
+</head>
+<body class="bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100 via-slate-50 to-white min-h-screen font-sans text-slate-800 flex flex-col">
+
+<header class="glass-panel px-6 py-4 sticky top-0 z-30 shadow-sm transition-all duration-300">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+
+        <div class="flex items-center gap-4 flex-1">
+            <a href="/student/"
+               class="w-10 h-10 rounded-xl bg-white/50 hover:bg-white flex items-center justify-center text-slate-500 hover:text-indigo-600 transition shadow-sm border border-white/60">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+
+            <div id="headerInfoContainer" class="flex-1">
+                <div class="animate-pulse h-10 bg-slate-200/50 rounded w-1/3"></div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button onclick="saveClassInfo()" id="saveHeaderBtn"
+                    class="hidden bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-lg shadow-indigo-200 transition items-center gap-2">
+                <i class="fas fa-save"></i> 保存信息
+            </button>
+            <button onclick="deleteClass()" id="deleteClassBtn"
+                    class="hidden text-rose-500 hover:bg-rose-50 px-4 py-2 rounded-lg text-sm font-bold transition border border-transparent hover:border-rose-100">
+                <i class="fas fa-trash-alt mr-1"></i> 删除班级
+            </button>
+        </div>
+    </div>
+</header>
+
+<main class="flex-1 p-6 max-w-7xl mx-auto w-full animate-fade-in">
+
+    <div class="bg-white/60 backdrop-blur-xl rounded-2xl shadow-sm border border-white/60 overflow-hidden">
+        <div class="p-4 border-b border-slate-100/50 flex justify-between items-center bg-white/40">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-list text-indigo-500"></i>
+                <h2 class="font-bold text-slate-700 text-sm">学生名单明细</h2>
+            </div>
+            <span class="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm"
+                  id="totalCount">Loading...</span>
+        </div>
+
+        <div class="overflow-x-auto min-h-[500px]">
+            <table class="w-full text-sm text-left border-separate border-spacing-y-1 px-2">
+                <thead class="text-slate-500 font-medium">
+                <tr>
+                    <th class="py-3 px-4 w-32">学号</th>
+                    <th class="py-3 px-4 w-32">姓名</th>
+                    <th class="py-3 px-4 w-24 text-center">性别</th>
+                    <th class="py-3 px-4">联系方式</th>
+                    <th class="py-3 px-4 w-24 text-center">操作</th>
+                </tr>
+                </thead>
+                <tbody id="studentTableBody" class="text-slate-700">
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<script>
+    const listId = {{ list_id }};
+    let canManage = false;
+
+    document.addEventListener('DOMContentLoaded', loadDetails);
+
+    async function loadDetails() {
+        try {
+            const res = await fetch(`/student/api/detail/${listId}`);
+            const json = await res.json();
+
+            if (json.status === 'success') {
+                const info = json.info;
+                canManage = json.permissions.can_manage;
+
+                // 1. 渲染头部信息 (核心改进点)
+                renderHeader(info);
+
+                // 2. 控制删除按钮
+                const delBtn = document.getElementById('deleteClassBtn');
+                if (canManage) {
+                    delBtn.classList.remove('hidden');
+                }
+
+                // 3. 渲染表格
+                document.getElementById('totalCount').innerText = json.students.length + ' 人';
+                renderTable(json.students);
+            } else {
+                alert(json.msg);
+                window.location.href = '/student/';
+            }
+        } catch (e) {
+            console.error(e);
+            alert("加载失败");
+        }
+    }
+
+    // --- 核心改进：根据权限渲染头部 ---
+    function renderHeader(info) {
+        const container = document.getElementById('headerInfoContainer');
+        const saveBtn = document.getElementById('saveHeaderBtn');
+
+        if (canManage) {
+            // === 模式 A: 管理员/所有者 (可编辑表单) ===
+            saveBtn.classList.remove('hidden'); // 显示保存按钮
+
+            container.innerHTML = `
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="group">
+                             <label class="block text-[10px] text-slate-400 font-bold uppercase ml-1 mb-0.5">班级名称</label>
+                             <input type="text" id="editClassName" value="${info.class_name || ''}" class="glass-input w-full px-3 py-1.5 rounded-lg text-sm font-bold text-slate-800 placeholder-slate-300">
+                        </div>
+                        <div class="group">
+                             <label class="block text-[10px] text-slate-400 font-bold uppercase ml-1 mb-0.5">学院</label>
+                             <input type="text" id="editCollege" value="${info.college || ''}" placeholder="未设置" class="glass-input w-full px-3 py-1.5 rounded-lg text-sm text-slate-600 font-medium placeholder-slate-300">
+                        </div>
+                        <div class="group">
+                             <label class="block text-[10px] text-slate-400 font-bold uppercase ml-1 mb-0.5">系部/专业</label>
+                             <input type="text" id="editDepartment" value="${info.department || ''}" placeholder="未设置" class="glass-input w-full px-3 py-1.5 rounded-lg text-sm text-slate-600 font-medium placeholder-slate-300">
+                        </div>
+                        <div class="group">
+                             <label class="block text-[10px] text-slate-400 font-bold uppercase ml-1 mb-0.5">入学年份</label>
+                             <input type="text" id="editYear" value="${info.enrollment_year || ''}" placeholder="YYYY" class="glass-input w-full px-3 py-1.5 rounded-lg text-sm text-slate-600 font-medium placeholder-slate-300">
+                        </div>
+                    </div>
+                `;
+        } else {
+            // === 模式 B: 访客 (只读文本) ===
+            saveBtn.classList.add('hidden');
+
+            container.innerHTML = `
+                    <div class="flex flex-col justify-center h-full pl-2">
+                        <h1 class="font-bold text-xl text-slate-800 flex items-center gap-3">
+                            ${info.class_name}
+                            <span class="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full border border-slate-200">只读视图</span>
+                        </h1>
+                        <p class="text-xs text-slate-400 mt-1 flex gap-3">
+                            <span><i class="fas fa-university mr-1"></i> ${info.college || '未知学院'}</span>
+                            <span class="w-px h-3 bg-slate-300"></span>
+                            <span>${info.department || '未知系部'}</span>
+                            <span class="w-px h-3 bg-slate-300"></span>
+                            <span>${info.enrollment_year || '年份未知'}级</span>
+                            <span class="w-px h-3 bg-slate-300"></span>
+                            <span>创建者: ${info.uploader_name || '未知'}</span>
+                        </p>
+                    </div>
+                `;
+        }
+    }
+
+    // 保存班级元数据
+    async function saveClassInfo() {
+        const btn = document.getElementById('saveHeaderBtn');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> 保存中`;
+
+        const payload = {
+            class_name: document.getElementById('editClassName').value,
+            college: document.getElementById('editCollege').value,
+            department: document.getElementById('editDepartment').value,
+            enrollment_year: document.getElementById('editYear').value
+        };
+
+        try {
+            const res = await fetch(`/student/api/class/${listId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+
+            if (json.status === 'success') {
+                // 简单的成功反馈动画
+                btn.classList.replace('bg-indigo-600', 'bg-emerald-500');
+                btn.innerHTML = `<i class="fas fa-check"></i> 已保存`;
+                setTimeout(() => {
+                    btn.classList.replace('bg-emerald-500', 'bg-indigo-600');
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }, 1500);
+            } else {
+                alert('保存失败: ' + json.msg);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        } catch (e) {
+            alert('网络错误');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+
+    function renderTable(students) {
+        const tbody = document.getElementById('studentTableBody');
+        tbody.innerHTML = '';
+
+        students.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-white/50 group transition-colors align-top"; // 增加hover效果
+
+            // 权限控制：无权限则禁用输入框，样式变灰
+            const disabledAttr = canManage ? '' : 'disabled';
+            const inputClass = canManage
+                ? "bg-transparent w-full outline-none border-b border-transparent focus:text-indigo-600 focus:border-indigo-300 hover:border-slate-200 transition placeholder-slate-300 text-sm py-1"
+                : "bg-transparent w-full border-none text-slate-500 cursor-not-allowed py-1";
+
+            const deleteAction = canManage
+                ? `<button onclick="deleteStudent(${s.id}, this)" class="text-slate-300 hover:text-rose-500 transition px-2 py-1"><i class="fas fa-trash-alt"></i></button>`
+                : `<span class="text-slate-200 cursor-not-allowed px-2 py-1"><i class="fas fa-lock"></i></span>`;
+
+            tr.innerHTML = `
+                    <td class="py-3 px-4 font-mono font-medium text-slate-600 bg-white/30 rounded-l-lg mb-1">
+                        <input type="text" value="${s.student_id || ''}" class="${inputClass}" ${disabledAttr}
+                               onchange="updateStudent(${s.id}, 'student_id', this.value)" placeholder="学号">
+                    </td>
+                    <td class="py-3 px-4 font-bold text-slate-700 bg-white/30">
+                        <input type="text" value="${s.name || ''}" class="${inputClass}" ${disabledAttr}
+                               onchange="updateStudent(${s.id}, 'name', this.value)" placeholder="姓名">
+                    </td>
+                    <td class="py-3 px-4 text-center bg-white/30">
+                        <input type="text" value="${s.gender || ''}" class="${inputClass} text-center" ${disabledAttr}
+                               onchange="updateStudent(${s.id}, 'gender', this.value)" placeholder="-">
+                    </td>
+                    <td class="py-3 px-4 bg-white/30">
+                        <div class="flex flex-col gap-1">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-phone text-[10px] text-slate-300 w-4"></i>
+                                <input type="text" value="${s.phone || ''}" class="${inputClass}" ${disabledAttr}
+                                       onchange="updateStudent(${s.id}, 'phone', this.value)" placeholder="电话号码">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-envelope text-[10px] text-slate-300 w-4"></i>
+                                <input type="text" value="${s.email || ''}" class="${inputClass}" ${disabledAttr}
+                                       onchange="updateStudent(${s.id}, 'email', this.value)" placeholder="电子邮箱">
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-3 px-4 text-center bg-white/30 rounded-r-lg">
+                        ${deleteAction}
+                    </td>
+                `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function updateStudent(id, field, value) {
+        try {
+            // 自动保存逻辑
+            await fetch(`/student/api/student/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({[field]: value})
+            });
+        } catch (e) {
+            console.error("Auto save failed", e);
+        }
+    }
+
+    async function deleteStudent(id, btn) {
+        if (!confirm("确定删除该学生？")) return;
+        try {
+            const res = await fetch(`/student/api/student/${id}`, {method: 'DELETE'});
+            const json = await res.json();
+            if (json.status === 'success') {
+                btn.closest('tr').remove();
+                // 重新计算人数
+                let count = parseInt(document.getElementById('totalCount').innerText) || 0;
+                document.getElementById('totalCount').innerText = Math.max(0, count - 1) + ' 人';
+            }
+        } catch (e) {
+            alert("删除失败");
+        }
+    }
+
+    async function deleteClass() {
+        if (!confirm("⚠️ 确定删除整个班级？此操作不可恢复！")) return;
+        try {
+            const res = await fetch(`/student/api/delete_class/${listId}`, {method: 'POST'});
+            const json = await res.json();
+            if (json.status === 'success') {
+                window.location.href = '/student/';
+            } else {
+                alert(json.msg);
+            }
+        } catch (e) {
+            alert("操作失败");
+        }
+    }
+</script>
+</body>
+</html>

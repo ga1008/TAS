@@ -6,6 +6,8 @@ class CentosServerConfigGrader(BaseGrader):
     ID = "centos_server_config_final_loose"
     NAME = "CentOS服务器配置与管理期末(宽松模式)"
 
+    COURSE = "服务器配置与管理"
+
     def grade(self, student_dir, student_info) -> GradingResult:
         # 初始化文件映射
         self.scan_files(student_dir)

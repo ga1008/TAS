@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>导入班级向导</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb' }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'slide-up': 'slideUp 0.4s ease-out forwards',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 自定义滚动条 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+
+        /* 玻璃拟态背景 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .glass-input {
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            border-color: #93c5fd;
+        }
+    </style>
+</head>
+<body class="bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100 via-slate-50 to-white min-h-screen font-sans text-slate-800 flex flex-col selection:bg-indigo-100 selection:text-indigo-600 overflow-hidden">
+
+    <header class="glass-panel px-8 py-4 flex items-center justify-between sticky top-0 z-40 shadow-sm/50">
+        <div class="flex items-center gap-4 group cursor-pointer" onclick="location.href='/student/'">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200 group-hover:scale-105 transition-transform duration-300">
+                <i class="fas fa-arrow-left text-sm group-hover:-translate-x-0.5 transition-transform"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-xl text-slate-800 tracking-tight">导入向导</h1>
+                <p class="text-xs text-slate-400 font-medium">Create New Class</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 bg-white/50 px-4 py-2 rounded-full border border-white/60 shadow-sm">
+            <div id="step1-indicator" class="flex items-center gap-2 text-indigo-600 font-bold text-sm transition-colors duration-500">
+                <span class="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs shadow-inner">1</span>
+                <span>上传解析</span>
+            </div>
+            <div class="w-12 h-0.5 bg-slate-200 rounded-full overflow-hidden">
+                <div id="progress-bar" class="h-full w-0 bg-indigo-500 transition-all duration-700 ease-out"></div>
+            </div>
+            <div id="step2-indicator" class="flex items-center gap-2 text-slate-400 font-medium text-sm transition-colors duration-500">
+                <span class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs">2</span>
+                <span>预览确认</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 p-6 md:p-10 max-w-6xl mx-auto w-full flex flex-col relative">
+
+        <div class="absolute top-10 -left-10 w-64 h-64 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow"></div>
+        <div class="absolute bottom-10 -right-10 w-64 h-64 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow" style="animation-delay: 1s;"></div>
+
+        <div id="step1-panel" class="glass-panel rounded-3xl shadow-xl shadow-slate-200/50 p-1 flex-1 flex flex-col animate-slide-up relative z-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-0 h-full">
+
+                <div class="p-8 md:p-12 border-b md:border-b-0 md:border-r border-slate-100 flex flex-col justify-center items-center text-center relative overflow-hidden group">
+                    <div class="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                    <label class="relative w-full max-w-sm aspect-[4/3] border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-3xl bg-white/40 hover:bg-white/80 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center gap-4 group/drop shadow-sm hover:shadow-lg hover:-translate-y-1">
+                        <input type="file" id="fileInput" class="hidden" accept=".xlsx,.xls,.csv,.doc,.docx,.pdf" onchange="handleFileSelect(this)">
+
+                        <div class="w-20 h-20 bg-white rounded-2xl shadow-lg shadow-indigo-100 flex items-center justify-center text-indigo-500 group-hover/drop:scale-110 group-hover/drop:rotate-3 transition-all duration-300">
+                            <i class="fas fa-cloud-upload-alt text-4xl"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-700 text-lg group-hover/drop:text-indigo-600 transition-colors">点击或拖拽上传</h3>
+                            <p class="text-xs text-slate-400 mt-1">支持 Excel, PDF, Word</p>
+                        </div>
+                        <div id="fileNameDisplay" class="absolute bottom-4 px-4 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-bold opacity-0 transition-opacity truncate max-w-[90%]"></div>
+                    </label>
+                </div>
+
+                <div class="p-8 md:p-12 flex flex-col bg-white/30">
+                    <div class="flex items-center justify-between mb-4">
+                        <label class="font-bold text-slate-700 flex items-center gap-2">
+                            <i class="fas fa-paste text-indigo-400"></i> 文本识别
+                        </label>
+                        <span class="text-[10px] bg-slate-100 text-slate-400 px-2 py-1 rounded-full">AI 智能分析</span>
+                    </div>
+
+                    <div class="relative flex-1 group">
+                        <textarea id="pasteInput"
+                                  class="w-full h-full min-h-[300px] p-6 rounded-2xl border-0 bg-white/60 focus:bg-white shadow-inner focus:shadow-lg ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-100 outline-none resize-none font-mono text-sm leading-relaxed transition-all duration-300 placeholder:text-slate-300"
+                                  placeholder="在此粘贴名单，例如：&#10;1001 张三 计算机系&#10;1002 李四 软件工程..."></textarea>
+
+                        <div class="absolute bottom-4 right-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-300 transition-colors">
+                            <i class="fas fa-keyboard text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 border-t border-slate-100/50 bg-white/40 backdrop-blur-md rounded-b-3xl flex justify-end">
+                <button onclick="startParse()" id="parseBtn" class="group relative overflow-hidden bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-10 py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-300/50 hover:shadow-indigo-400/60 hover:-translate-y-0.5 transition-all duration-300">
+                    <span class="relative z-10 flex items-center gap-2">
+                        <i class="fas fa-magic"></i> 开始智能解析
+                    </span>
+                    <div class="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                </button>
+            </div>
+        </div>
+
+        <div id="step2-panel" class="hidden glass-panel rounded-3xl shadow-xl p-1 flex-1 flex-col h-[75vh] relative z-10 animate-fade-in">
+
+            <div class="p-6 grid grid-cols-2 md:grid-cols-4 gap-5 bg-white/40 border-b border-slate-100/50 backdrop-blur-sm rounded-t-3xl">
+                <div class="group">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1 group-focus-within:text-indigo-500 transition-colors">班级名称 *</label>
+                    <input type="text" id="metaClassName" placeholder="例如：软件2401" class="glass-input w-full px-4 py-2.5 rounded-xl text-sm font-bold text-slate-700 placeholder:font-normal placeholder:text-slate-300 outline-none">
+                </div>
+                <div class="group">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1 group-focus-within:text-indigo-500 transition-colors">学院</label>
+                    <input type="text" id="metaCollege" class="glass-input w-full px-4 py-2.5 rounded-xl text-sm font-bold text-slate-700 outline-none">
+                </div>
+                <div class="group">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1 group-focus-within:text-indigo-500 transition-colors">系部</label>
+                    <input type="text" id="metaDepartment" class="glass-input w-full px-4 py-2.5 rounded-xl text-sm font-bold text-slate-700 outline-none">
+                </div>
+                <div class="group">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1 group-focus-within:text-indigo-500 transition-colors">入学年份</label>
+                    <input type="text" id="metaEnrollmentYear" class="glass-input w-full px-4 py-2.5 rounded-xl text-sm font-bold text-slate-700 outline-none">
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-hidden relative bg-white/20">
+                <div class="absolute inset-0 overflow-auto custom-scrollbar p-6">
+                    <table class="w-full text-sm text-left border-separate border-spacing-y-2">
+                        <thead class="sticky top-0 z-10">
+                            <tr>
+                                <th class="py-3 px-4 bg-white/80 backdrop-blur-md rounded-l-xl text-slate-400 font-medium text-xs w-16 shadow-sm">序号</th>
+                                <th class="py-3 px-4 bg-white/80 backdrop-blur-md text-slate-500 font-bold shadow-sm">学号</th>
+                                <th class="py-3 px-4 bg-white/80 backdrop-blur-md text-slate-500 font-bold shadow-sm">姓名</th>
+                                <th class="py-3 px-4 bg-white/80 backdrop-blur-md rounded-r-xl text-slate-500 font-bold shadow-sm">提取详情 (性别/电话)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewTbody" class="space-y-2">
+                            </tbody>
+                    </table>
+                </div>
+                <div class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white/60 to-transparent pointer-events-none"></div>
+            </div>
+
+            <div class="p-5 border-t border-white/50 bg-white/60 backdrop-blur-xl rounded-b-3xl flex justify-between items-center shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)] relative z-20">
+                <div class="flex items-center gap-3 pl-2">
+                    <div class="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">解析人数</span>
+                        <span class="text-lg font-bold text-slate-800 leading-none"><span id="studentCount">0</span> 人</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <button onclick="window.location.reload()" class="px-6 py-2.5 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 font-bold text-sm transition-all">
+                        重新上传
+                    </button>
+                    <button onclick="confirmCreate()" id="createBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-0.5 transition-all flex items-center gap-2">
+                        <span>确认创建</span>
+                        <i class="fas fa-check-circle"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="loadingOverlay" class="fixed inset-0 bg-white/60 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center transition-opacity duration-300">
+        <div class="relative">
+            <div class="w-20 h-20 border-4 border-indigo-100 rounded-full"></div>
+            <div class="w-20 h-20 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin absolute top-0 left-0 shadow-lg shadow-indigo-500/30"></div>
+            <i class="fas fa-magic absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-500 text-xl animate-pulse"></i>
+        </div>
+        <p class="mt-6 font-bold text-slate-600 text-lg animate-pulse">AI 正在智能分析数据...</p>
+        <p class="text-sm text-slate-400 mt-2">正在清洗格式、提取元数据</p>
+    </div>
+
+    <script>
+        let currentFileId = null;
+        let parsedStudents = [];
+
+        // 文件选择后的视觉反馈
+        function handleFileSelect(input) {
+            const display = document.getElementById('fileNameDisplay');
+            if (input.files && input.files[0]) {
+                display.textContent = input.files[0].name;
+                display.classList.remove('opacity-0');
+            }
+        }
+
+        async function startParse() {
+            const fileInput = document.getElementById('fileInput');
+            const pasteInput = document.getElementById('pasteInput');
+            const formData = new FormData();
+
+            if (fileInput.files[0]) {
+                formData.append('file', fileInput.files[0]);
+            } else if (pasteInput.value.trim()) {
+                formData.append('content', pasteInput.value.trim());
+            } else {
+                showShakeAnimation(); // 提示用户输入
+                return;
+            }
+
+            // UI Loading
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.remove('hidden');
+            // 强制重绘以触发动画
+            void overlay.offsetWidth;
+
+            try {
+                const res = await fetch('/student/api/upload_parse', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    currentFileId = data.file_id;
+                    // 模拟一点延迟让动画流畅
+                    setTimeout(() => renderPreview(data.preview_data), 500);
+                } else {
+                    alert('解析失败: ' + data.msg);
+                    overlay.classList.add('hidden');
+                }
+            } catch (e) {
+                alert('网络错误');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        function renderPreview(data) {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+
+            // 切换面板动画
+            const step1 = document.getElementById('step1-panel');
+            const step2 = document.getElementById('step2-panel');
+
+            step1.style.opacity = '0';
+            step1.style.transform = 'translateY(-20px)';
+
+            setTimeout(() => {
+                step1.classList.add('hidden');
+                step2.classList.remove('hidden');
+
+                // 进度条动画
+                document.getElementById('progress-bar').style.width = '100%';
+
+                // 指示器样式更新
+                const ind1 = document.getElementById('step1-indicator');
+                const ind2 = document.getElementById('step2-indicator');
+
+                ind1.classList.replace('text-indigo-600', 'text-slate-400');
+                ind1.querySelector('span').classList.replace('bg-indigo-100', 'bg-slate-100');
+                ind1.querySelector('span').innerHTML = '<i class="fas fa-check text-slate-400"></i>';
+
+                ind2.classList.replace('text-slate-400', 'text-indigo-600');
+                ind2.querySelector('span').classList.replace('bg-slate-100', 'bg-indigo-100');
+                ind2.querySelector('span').classList.add('shadow-inner');
+            }, 300);
+
+            // 填充元数据
+            const meta = data.metadata || {};
+            document.getElementById('metaClassName').value = meta.class_name || '';
+            document.getElementById('metaCollege').value = meta.college || '';
+            document.getElementById('metaDepartment').value = meta.department || '';
+            document.getElementById('metaEnrollmentYear').value = meta.enrollment_year || '';
+
+            // 填充表格
+            parsedStudents = data.students || [];
+            const tbody = document.getElementById('previewTbody');
+            tbody.innerHTML = '';
+
+            parsedStudents.forEach((s, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-indigo-50/50 transition-colors group";
+
+                const missingId = !s.student_id;
+                const missingName = !s.name;
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 rounded-l-xl text-slate-400 font-mono text-xs bg-white/40 group-hover:bg-white/80">${idx + 1}</td>
+                    <td class="py-3 px-4 bg-white/40 group-hover:bg-white/80">
+                        ${missingId
+                            ? '<span class="px-2 py-1 rounded bg-rose-100 text-rose-600 text-xs font-bold animate-pulse">缺失</span>'
+                            : `<span class="font-mono font-bold text-slate-700">${s.student_id}</span>`}
+                    </td>
+                    <td class="py-3 px-4 bg-white/40 group-hover:bg-white/80">
+                        ${missingName
+                            ? '<span class="px-2 py-1 rounded bg-rose-100 text-rose-600 text-xs font-bold">缺失</span>'
+                            : `<span class="font-bold text-slate-800">${s.name}</span>`}
+                    </td>
+                    <td class="py-3 px-4 rounded-r-xl bg-white/40 group-hover:bg-white/80 text-xs text-slate-500">
+                        <div class="flex items-center gap-2">
+                            ${s.gender ? `<span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-bold">${s.gender}</span>` : ''}
+                            ${s.phone ? `<span class="font-mono">${s.phone}</span>` : '<span class="text-slate-300">-</span>'}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // 数字跳动动画
+            animateValue("studentCount", 0, parsedStudents.length, 1000);
+        }
+
+        async function confirmCreate() {
+            const btn = document.getElementById('createBtn');
+            const originalContent = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> <span>处理中...</span>`;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            const payload = {
+                file_id: currentFileId,
+                metadata: {
+                    class_name: document.getElementById('metaClassName').value,
+                    college: document.getElementById('metaCollege').value,
+                    department: document.getElementById('metaDepartment').value,
+                    enrollment_year: document.getElementById('metaEnrollmentYear').value,
+                    has_gender: parsedStudents.some(s => s.gender)
+                },
+                students: parsedStudents
+            };
+
+            try {
+                const res = await fetch('/student/api/confirm_create', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const resp = await res.json();
+
+                if (resp.status === 'success') {
+                    // 成功动画
+                    btn.classList.replace('bg-indigo-600', 'bg-emerald-500');
+                    btn.innerHTML = `<i class="fas fa-check"></i> <span>创建成功</span>`;
+                    setTimeout(() => {
+                         window.location.href = `/student/detail/${resp.list_id}`;
+                    }, 800);
+                } else {
+                    alert('保存失败: ' + resp.msg);
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            } catch (e) {
+                alert('请求异常');
+                btn.disabled = false;
+                btn.innerHTML = originalContent;
+            }
+        }
+
+        function showShakeAnimation() {
+            const panel = document.getElementById('step1-panel');
+            panel.classList.add('animate-[shake_0.5s_ease-in-out]');
+            setTimeout(() => panel.classList.remove('animate-[shake_0.5s_ease-in-out]'), 500);
+        }
+
+        function animateValue(id, start, end, duration) {
+            const obj = document.getElementById(id);
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                obj.innerHTML = Math.floor(progress * (end - start) + start);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+    </script>
+</body>
+</html>

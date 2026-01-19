@@ -29,7 +29,7 @@ def ai_generator_page():
     display_list = []
 
     active_ids = set()
-    for sid, sname in strategies:
+    for sid, sname, course in strategies:
         active_ids.add(sid)
         task = db.get_task_by_grader_id(sid)
         # 只有 Admin 或者 创建者本人 才是 is_owner
@@ -112,6 +112,8 @@ def create_task():
     f_exam = request.files.get('exam_file')
     f_std = request.files.get('standard_file')
 
+    course_name = request.files.get('course_name')
+
     # 使用 FileService 处理上传
     exam_path, _ = FileService.handle_file_upload_or_reuse(f_exam, request.form.get('exam_file_id'), g.user['id'])
     std_path, _ = FileService.handle_file_upload_or_reuse(f_std, request.form.get('standard_file_id'), g.user['id'])
@@ -123,12 +125,12 @@ def create_task():
     _, std_text = FileService.extract_text_from_file(std_path)
 
     task_id = db.insert_ai_task(name, "pending", "提交中...", exam_path, std_path, strictness, extra_desc, max_score,
-                                g.user['id'])
+                                g.user['id'], course_name)
 
     # 启动线程
     app_config = current_app.config  # 传递 config 给线程
     t = threading.Thread(target=AiService.generate_grader_worker,
-                         args=(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config))
+                         args=(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config, course_name))
     t.start()
 
     return jsonify({"msg": "任务已提交", "task_id": task_id})
@@ -244,6 +246,8 @@ def create_direct_grader():
     f_exam = request.files.get('exam_file')
     f_std = request.files.get('standard_file')
 
+    course_name = request.files.get('course_name')
+
     # 复用 FileService
     exam_path, _ = FileService.handle_file_upload_or_reuse(f_exam, request.form.get('exam_file_id'), g.user['id'])
     std_path, _ = FileService.handle_file_upload_or_reuse(f_std, request.form.get('standard_file_id'), g.user['id'])
@@ -269,7 +273,7 @@ def create_direct_grader():
         return s.replace('\x00', '').replace('\\', '\\\\').replace('"', '\\"').replace("'''", "\\'\\'\\'")
 
     code = DIRECT_GRADER_TEMPLATE.format(
-        class_name=class_name, grader_id=grader_id, display_name=name,
+        class_name=class_name, grader_id=grader_id, display_name=name, course_name=course_name,
         exam_content=safe_str(p_exam), std_content=safe_str(p_std), extra_instruction=safe_str(extra)
     )
 
@@ -278,7 +282,7 @@ def create_direct_grader():
     with open(save_path, 'w', encoding='utf-8') as f:
         f.write(code)
 
-    db.insert_ai_task(name, 'success', 'Direct Created', exam_path, std_path, 'direct', '', 0, g.user['id'], grader_id)
+    db.insert_ai_task(name, 'success', 'Direct Created', exam_path, std_path, 'direct', '', 0, g.user['id'], grader_id, course_name)
     GraderFactory._loaded = False
     GraderFactory.load_graders()
 

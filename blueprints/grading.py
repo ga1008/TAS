@@ -17,27 +17,49 @@ bp = Blueprint('grading', __name__)
 @bp.route('/new_class', methods=['GET', 'POST'])
 def new_class():
     if request.method == 'POST':
-        cname = request.form['class_name']
-        course = request.form['course_name']
+        cname = request.form.get('class_name', '').strip()
+        course = request.form.get('course_name', '').strip()
         strategy = request.form.get('strategy', '')
-        file = request.files['student_list']
+        student_list_id = request.form.get('student_list_id', '').strip()
 
-        if file:
+        if cname and course:
+            # 创建班级记录
             cid = db.create_class(cname, course, strategy, g.user['id'])
-            # 创建目录
-            FileService.get_real_workspace_path(cid)  # 确保目录存在
+            FileService.get_real_workspace_path(cid)
             db.update_class_workspace(cid, FileService.get_real_workspace_path(cid))
 
-            try:
-                df = pd.read_excel(file) if file.filename.endswith('.xlsx') else pd.read_csv(file)
-                df.columns = [c.strip() for c in df.columns]
-                sid_col = next((c for c in df.columns if '学号' in c), None)
-                name_col = next((c for c in df.columns if '姓名' in c), None)
-                if sid_col and name_col:
-                    for _, row in df.iterrows():
-                        db.add_student(str(row[sid_col]), str(row[name_col]), cid)
-            except Exception as e:
-                return f"名单解析失败: {e}", 400
+            # 如果选择了学生名单，则导入学生
+            if student_list_id:
+                try:
+                    # 从 student_details 表获取学生列表（包含状态信息）
+                    students = db.get_student_details(student_list_id)
+
+                    # 只导入状态为 normal 的学生
+                    imported_count = 0
+                    for student in students:
+                        # 跳过状态为 abnormal 的学生
+                        if student.get('status') == 'abnormal':
+                            continue
+
+                        if student.get('student_id') and student.get('name'):
+                            # 检查是否已存在
+                            existing = db.get_student_detail(cid, student['student_id'])
+                            if not existing:
+                                db.add_student(
+                                    student_id=student['student_id'],
+                                    name=student['name'],
+                                    class_id=cid
+                                )
+                                imported_count += 1
+
+                    print(f"成功导入 {imported_count} 名学生到班级 {cname}")
+
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    # 学生导入失败不影响班级创建，只记录错误
+                    print(f"学生导入失败: {e}")
+
             return redirect(url_for('grading.grading_view', class_id=cid))
 
     GraderFactory.load_graders()
@@ -262,3 +284,29 @@ def delete_class(class_id):
             return jsonify({"msg": f"文件删除失败: {str(e)}"}), 500
 
     return jsonify({"msg": "班级已删除"})
+
+
+@bp.route('/api/classes')
+def api_classes():
+    """获取当前用户的班级列表"""
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    classes = db.get_classes(g.user['id'])
+    return jsonify(classes)
+
+
+@bp.route('/api/grading/student_lists', methods=['GET'])
+def api_search_student_lists():
+    """
+    新建班级时的学生名单搜索接口
+    权限策略: 允许普通用户查看和选择所有人的名单 (fetch_all=True)
+    """
+    if not g.user:
+        return jsonify([]), 401
+
+    search_query = request.args.get('search', '').strip()
+
+    # 调用 DB 新增的搜索能力，fetch_all=True 确保能看到所有人的数据
+    lists = db.get_student_lists(fetch_all=True, search=search_query)
+
+    return jsonify(lists)

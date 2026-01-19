@@ -11,6 +11,7 @@ from blueprints.grading import bp as grading_bp
 from blueprints.library import bp as library_bp
 from blueprints.main import bp as main_bp
 from blueprints.signatures import bp as signatures_bp
+from blueprints.student import bp as student_bp
 from config import Config
 
 
@@ -70,6 +71,7 @@ def create_app():
     app.register_blueprint(ai_gen_bp)
     app.register_blueprint(signatures_bp)
     app.register_blueprint(export_bp)
+    app.register_blueprint(student_bp)
 
     return app
 

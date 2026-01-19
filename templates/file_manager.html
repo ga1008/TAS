@@ -74,7 +74,17 @@
                 </div>
             </div>
 
-            <div class="flex items-center">
+            <div class="flex items-center gap-3">
+                <a href="/student" class="group relative flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-full shadow-sm hover:shadow-lg hover:border-emerald-300 transition-all duration-300">
+                    <div class="flex flex-col items-end">
+                        <span class="text-xs font-bold text-emerald-700 group-hover:text-emerald-600 transition-colors">班级学生</span>
+                        <span class="text-[9px] text-emerald-500 group-hover:text-emerald-400 transition-colors">Class Manager</span>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300">
+                        <i class="fas fa-users text-xs group-hover:scale-110 transition-transform"></i>
+                    </div>
+                    <div class="absolute inset-0 rounded-full border border-emerald-400 opacity-0 scale-95 group-hover:opacity-20 group-hover:scale-100 transition-all duration-500"></div>
+                </a>
                 <a href="/library/view" class="group relative flex items-center gap-3 px-5 py-2 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-lg hover:border-sky-200 transition-all duration-300">
                     <div class="flex flex-col items-end">
                         <span class="text-xs font-bold text-slate-700 group-hover:text-sky-600 transition-colors">资产文档库</span>
@@ -139,7 +149,7 @@
                                 </select>
                             </div>
                             <label class="flex-1 border-2 border-dashed border-slate-200 rounded-xl bg-white/70 p-6 text-center cursor-pointer hover:border-sky-300 hover:bg-sky-50 transition">
-                                <input id="uploadFileInput" type="file" class="hidden" accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp">
+                                <input id="uploadFileInput" type="file" class="hidden" accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp,.xlsx,.xls,.csv">
                                 <div id="uploadFileDisplay" class="text-slate-400 text-sm space-y-2">
                                     <div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto text-sky-500">
                                         <i class="fas fa-file-upload"></i>

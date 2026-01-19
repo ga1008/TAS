@@ -18,6 +18,7 @@ db = Database()
 class {class_name}(BaseGrader):
     ID = "{grader_id}"
     NAME = "{display_name}"
+    COURSE = "{course_name}"
 
     # === 固化的核心知识库 (由 AI 预解析生成) ===
     EXAM_CONTENT = \"\"\"

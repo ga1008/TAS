@@ -20,17 +20,16 @@ class GuangWaiExamExporter(BaseExportTemplate, BaseWordExporter):
     # 【核心改进】定义前端需要渲染的字段，不再由 HTML 硬编码
     UI_SCHEMA = [
         {"name": "course_name", "label": "课程名称", "type": "text", "placeholder": "例如：Python程序设计", "auto_fill_key": "course_name"},
-        {"name": "class_name", "label": "专业班级", "type": "text", "placeholder": "例如：2023级软工1班", "auto_fill_key": "class_name"},
-        {"name": "teacher_name", "label": "命题教师", "type": "text", "auto_fill_key": "uploader_name"}, # 关联上传者
+        {"name": "class_name", "label": "专业班级", "type": "text", "placeholder": "例如：2023级软工1班", "auto_fill_key": "class_info"}, # 修正 auto_fill_key
+        {"name": "teacher_name", "label": "命题教师", "type": "text", "auto_fill_key": "teacher"}, # 修正为 teacher 而非 uploader_name
         {"name": "teacher_sig", "label": "教师签名", "type": "signature_selector", "bind_to": "teacher_name"},
-        {"name": "head_name", "label": "系主任姓名", "type": "text", "auto_fill_key": "head_name"},
+        {"name": "head_name", "label": "系主任姓名", "type": "text", "auto_fill_key": "dept_head"}, # 修正
         {"name": "head_sig", "label": "系主任签名", "type": "signature_selector", "bind_to": "head_name"},
-        {"name": "leader_name", "label": "学院领导姓名", "type": "text"},
+        {"name": "leader_name", "label": "学院领导姓名", "type": "text", "auto_fill_key": "college_dean"}, # 修正
         {"name": "leader_sig", "label": "领导签名", "type": "signature_selector", "bind_to": "leader_name"},
         {"name": "semester_info", "label": "学期信息", "type": "group", "children": [
-            {"name": "year_start", "label": "起始年份", "type": "number", "width": "30%"},
-            {"name": "year_end", "label": "结束年份", "type": "number", "width": "30%"},
-            {"name": "semester", "label": "学期", "type": "select", "options": ["一", "二"], "width": "30%"}
+            {"name": "academic_year", "label": "学年", "type": "text", "width": "50%", "auto_fill_key": "academic_year", "placeholder": "如: 2025-2026"},
+            {"name": "semester", "label": "学期", "type": "select", "options": ["第一学期", "第二学期", "第三学期"], "width": "50%", "auto_fill_key": "semester"}
         ]}
     ]
 
@@ -150,21 +149,55 @@ class GuangWaiExamExporter(BaseExportTemplate, BaseWordExporter):
         self._set_font(run_title, self.SIZE_SMALL_2, bold=True)
 
         # 3. 学年度信息
-        now = datetime.now()
-        year = now.year
-        month = now.month
-        if 2 <= month <= 7:
-            y_start, y_end, semester = year - 1, year, "二"
-        else:
-            y_start, y_end, semester = year, year + 1, "一"
+        # 优先使用表单数据，其次尝试自动计算
+        form_year = form_data.get('academic_year', '')
+        form_semester = form_data.get('semester', '')
+
+        y_start, y_end, semester_short = "", "", ""
+
+        if form_year:
+             # 尝试解析 "2025-2026" 或 "2025-2026学年度"
+             match = re.search(r'(\d{4}).*?(\d{4})', form_year)
+             if match:
+                 y_start, y_end = match.group(1), match.group(2)
+             else:
+                 # fallback simple parse
+                 parts = form_year.split('-')
+                 if len(parts) >= 2:
+                      y_start, y_end = parts[0].strip(), parts[1].strip()
+
+        if form_semester:
+             if '一' in form_semester: semester_short = '一'
+             elif '二' in form_semester: semester_short = '二'
+             elif '三' in form_semester: semester_short = '三'
+             else: semester_short = form_semester
+
+        # 如果没有填，则自动计算
+        if not y_start or not y_end or not semester_short:
+            now = datetime.now()
+            cur_year = now.year
+            month = now.month
+            if 2 <= month <= 7:
+                calc_start, calc_end, calc_sem = cur_year - 1, cur_year, "二"
+            else:
+                calc_start, calc_end, calc_sem = cur_year, cur_year + 1, "一"
+
+            if not y_start: y_start = str(calc_start)
+            if not y_end: y_end = str(calc_end)
+            if not semester_short: semester_short = calc_sem
 
         p_year = self.doc.add_paragraph()
         p_year.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_year.paragraph_format.space_before = Pt(6)
 
         # 格式: 20 25 -- 20 26
-        y1_p, y1_s = str(y_start)[:2], str(y_start)[2:]
-        y2_p, y2_s = str(y_end)[:2], str(y_end)[2:]
+        y_start_str = str(y_start)
+        y_end_str = str(y_end)
+
+        y1_p = y_start_str[:2] if len(y_start_str) >= 2 else "20"
+        y1_s = y_start_str[2:] if len(y_start_str) >= 4 else "XX"
+        y2_p = y_end_str[:2] if len(y_end_str) >= 2 else "20"
+        y2_s = y_end_str[2:] if len(y_end_str) >= 4 else "XX"
 
         self._set_font(p_year.add_run(f"{y1_p} "), self.SIZE_4, bold=True)
         r = p_year.add_run(f"{y1_s} ")
@@ -179,7 +212,7 @@ class GuangWaiExamExporter(BaseExportTemplate, BaseWordExporter):
         r.font.underline = True
 
         self._set_font(p_year.add_run(" 学年度第 "), self.SIZE_4, bold=True)
-        r = p_year.add_run(f"  {semester}  ")
+        r = p_year.add_run(f"  {semester_short}  ")
         self._set_font(r, self.SIZE_4, bold=True);
         r.font.underline = True
         self._set_font(p_year.add_run(" 学期"), self.SIZE_4, bold=True)

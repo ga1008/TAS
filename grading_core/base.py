@@ -58,6 +58,9 @@ class BaseGrader(abc.ABC):
     ID = "base"
     NAME = "Base Grader"
 
+    # 课程名称
+    COURSE = "Generic Course"
+
     def __init__(self):
         self.file_map = {}  # 文件名索引 {lowercase_name: full_path}
 

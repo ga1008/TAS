@@ -21,7 +21,7 @@ class GuangWaiStandardExporter(BaseExportTemplate, BaseWordExporter):
         {"name": "course_name", "label": "课程名称", "type": "text", "placeholder": "例如：Python程序设计",
          "auto_fill_key": "course_name"},
         {"name": "class_name", "label": "专业班级", "type": "text", "placeholder": "例如：2023级软工1班",
-         "auto_fill_key": "class_name"},
+         "auto_fill_key": "class_info"},
 
         {"name": "assessment_type", "label": "考核形式", "type": "select", "options": ["考查", "考试"],
          "auto_fill_key": "assessment_type"},
@@ -29,18 +29,15 @@ class GuangWaiStandardExporter(BaseExportTemplate, BaseWordExporter):
         {"name": "assessment_note", "label": "考核说明", "type": "text", "placeholder": "（非笔试考核）",
          "auto_fill_key": "assessment_note"},
 
-        {"name": "teacher_name", "label": "命题教师", "type": "text", "auto_fill_key": "teacher_name"},
+        {"name": "teacher_name", "label": "命题教师", "type": "text", "auto_fill_key": "teacher"},
         {"name": "teacher_sig", "label": "教师签名", "type": "signature_selector", "bind_to": "teacher_name"},
 
-        {"name": "head_name", "label": "系主任姓名", "type": "text", "auto_fill_key": "head_name"},
+        {"name": "head_name", "label": "系主任姓名", "type": "text", "auto_fill_key": "dept_head"},
         {"name": "head_sig", "label": "系主任签名", "type": "signature_selector", "bind_to": "head_name"},
 
         {"name": "semester_info", "label": "学期信息", "type": "group", "children": [
-            {"name": "year_start", "label": "起始年份", "type": "number", "width": "30%",
-             "auto_fill_key": "year_start"},
-            {"name": "year_end", "label": "结束年份", "type": "number", "width": "30%", "auto_fill_key": "year_end"},
-            {"name": "semester", "label": "学期", "type": "select", "options": ["一", "二"], "width": "30%",
-             "auto_fill_key": "semester"}
+            {"name": "academic_year", "label": "学年", "type": "text", "width": "50%", "auto_fill_key": "academic_year", "placeholder": "如: 2025-2026"},
+            {"name": "semester", "label": "学期", "type": "select", "options": ["第一学期", "第二学期", "第三学期"], "width": "50%", "auto_fill_key": "semester"}
         ]}
     ]
 
@@ -107,16 +104,39 @@ class GuangWaiStandardExporter(BaseExportTemplate, BaseWordExporter):
 
     def _create_semester_header(self, data):
         """渲染学期信息：20 25 - 20 26 学年度第 一 学期"""
-        y_start = str(data.get('year_start', ''))
-        y_end = str(data.get('year_end', ''))
-        semester = str(data.get('semester', ''))
+        # 优先使用表单数据
+        form_year = data.get('academic_year', '')
+        form_semester = data.get('semester', '')
+
+        y_start, y_end, semester_short = "", "", ""
+
+        # 解析 academic_year (如 "2025-2026" 或 "2025-2026学年度")
+        if form_year:
+            match = re.search(r'(\d{4}).*?(\d{4})', form_year)
+            if match:
+                y_start, y_end = match.group(1), match.group(2)
+            else:
+                parts = form_year.split('-')
+                if len(parts) >= 2:
+                    y_start, y_end = parts[0].strip(), parts[1].strip()
+
+        # 解析学期 (如 "第一学期" -> "一")
+        if form_semester:
+            if '一' in form_semester:
+                semester_short = '一'
+            elif '二' in form_semester:
+                semester_short = '二'
+            elif '三' in form_semester:
+                semester_short = '三'
+            else:
+                semester_short = form_semester
 
         # 如果数据缺失，尝试自动计算
-        if not (y_start and y_end and semester):
+        if not (y_start and y_end and semester_short):
             y_s_calc, y_e_calc, sem_calc = self.get_semester_info()
             y_start = y_start or y_s_calc
             y_end = y_end or y_e_calc
-            semester = semester or sem_calc
+            semester_short = semester_short or sem_calc
 
         p = self.doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -145,7 +165,7 @@ class GuangWaiStandardExporter(BaseExportTemplate, BaseWordExporter):
 
         self.set_font(p.add_run(" 学年度第 "), self.SIZE_4, bold=True)
 
-        r_sem = p.add_run(f" {semester} ")
+        r_sem = p.add_run(f" {semester_short} ")
         self.set_font(r_sem, self.SIZE_4, bold=True, underline=True)
 
         self.set_font(p.add_run(" 学期）"), self.SIZE_4, bold=True)

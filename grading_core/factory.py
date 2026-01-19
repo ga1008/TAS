@@ -59,4 +59,4 @@ class GraderFactory:
     def get_all_strategies(cls):
         """返回所有可用策略的列表 (id, name)，用于前端下拉框"""
         cls.load_graders()
-        return [(k, v.NAME) for k, v in cls._graders.items()]
+        return [(k, v.NAME, v.COURSE) for k, v in cls._graders.items()]
