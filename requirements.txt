@@ -16,3 +16,7 @@ pillow
 passlib
 gunicorn
 docx2pdf
+pycryptodome
+beautifulsoup4
+lxml
+requests

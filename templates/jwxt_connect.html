@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}教务系统连接测试 - TAS{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-link me-2"></i>教务系统连接测试</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-3">
+                        <small><i class="fas fa-info-circle"></i> 此页面仅用于测试教务系统连通性，账号密码仅在本次会话中使用，不会保存到数据库。</small>
+                    </div>
+
+                    <form id="jwxt-login-form">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">教工号/学号</label>
+                            <input type="text" class="form-control" id="username" name="username" required placeholder="请输入教务系统账号">
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">密码</label>
+                            <input type="password" class="form-control" id="password" name="password" required placeholder="请输入教务系统密码">
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary" id="btn-connect">
+                                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                <span class="btn-text">立即连接</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <div id="result-area" class="mt-4 d-none">
+                        <h6 class="border-bottom pb-2">连接结果</h6>
+                        
+                        <div id="success-box" class="alert alert-success d-none">
+                            <i class="fas fa-check-circle me-2"></i>连接成功！
+                            <hr>
+                            <div class="row">
+                                <div class="col-4 text-muted">姓名:</div>
+                                <div class="col-8 fw-bold" id="res-name">--</div>
+                                <div class="col-4 text-muted">学院:</div>
+                                <div class="col-8 fw-bold" id="res-college">--</div>
+                                <div class="col-4 text-muted">角色:</div>
+                                <div class="col-8 fw-bold" id="res-role">--</div>
+                            </div>
+                        </div>
+
+                        <div id="error-box" class="alert alert-danger d-none">
+                            <i class="fas fa-exclamation-triangle me-2"></i><span id="error-msg">连接失败</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#jwxt-login-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        // UI Reset
+        const $btn = $('#btn-connect');
+        const $spinner = $btn.find('.spinner-border');
+        const $btnText = $btn.find('.btn-text');
+        
+        $btn.prop('disabled', true);
+        $spinner.removeClass('d-none');
+        $btnText.text('正在连接...');
+        
+        $('#result-area').addClass('d-none');
+        $('#success-box, #error-box').addClass('d-none');
+
+        // Data
+        const formData = {
+            username: $('#username').val().trim(),
+            password: $('#password').val()
+        };
+
+        // AJAX Request
+        $.ajax({
+            url: '/jwxt/connect',  // 对应后端蓝图路由
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(resp) {
+                // Handle Success
+                $('#result-area').removeClass('d-none');
+                $('#success-box').removeClass('d-none');
+                
+                $('#res-name').text(resp.data.name || '未知');
+                $('#res-college').text(resp.data.college || '未知');
+                $('#res-role').text(resp.data.role || '未知');
+            },
+            error: function(xhr) {
+                // Handle Error
+                $('#result-area').removeClass('d-none');
+                $('#error-box').removeClass('d-none');
+                
+                let msg = "未知错误";
+                if (xhr.responseJSON && xhr.responseJSON.msg) {
+                    msg = xhr.responseJSON.msg;
+                } else if (xhr.statusText) {
+                    msg = xhr.statusText;
+                }
+                $('#error-msg').text(msg);
+            },
+            complete: function() {
+                // Reset UI
+                $btn.prop('disabled', false);
+                $spinner.addClass('d-none');
+                $btnText.text('立即连接');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

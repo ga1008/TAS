@@ -4,6 +4,10 @@ FROM auto_correcting:v3
 # 设置工作目录
 WORKDIR /auto_app
 
+# 设置时区为上海
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # 复制并安装依赖（只复制 requirements.txt）
 COPY requirements.txt .
 
