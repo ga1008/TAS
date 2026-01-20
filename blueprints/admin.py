@@ -1,6 +1,6 @@
 import functools
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 
 from extensions import db
 
@@ -42,6 +42,41 @@ def login():
 
     # 渲染 templates/admin/login.html
     return render_template('admin/login.html')
+
+
+@bp.route('/check_status')
+def check_admin_status():
+    """检查当前用户是否具有管理员权限（API端点）"""
+    user = session.get('user')
+    is_admin = user and user.get('is_admin', False)
+    return jsonify({
+        'is_admin': is_admin,
+        'username': user.get('username') if user else None
+    })
+
+
+@bp.route('/ajax_login', methods=['POST'])
+def ajax_login():
+    """AJAX 管理员登录端点（用于弹窗登录）"""
+    data = request.get_json() or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    if not username or not password:
+        return jsonify({'success': False, 'message': '请输入账号和密码'}), 400
+
+    user = db.verify_admin_login(username, password)
+
+    if user:
+        # 登录成功，更新 session
+        session['user'] = user
+        return jsonify({
+            'success': True,
+            'message': '登录成功',
+            'redirect': url_for('admin.dashboard')
+        })
+
+    return jsonify({'success': False, 'message': '管理员账号或密码错误'}), 401
 
 
 @bp.route('/')

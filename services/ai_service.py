@@ -171,14 +171,23 @@ class AiService:
             return True, json_text, {}
 
     @staticmethod
-    def generate_grader_worker(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config, course_name):
+    def generate_grader_worker(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config, course_name, user_id=None, task_name=None):
         """后台生成任务 (Thread Worker)"""
+        from blueprints.notifications import NotificationService
 
         # 注意：线程中无法直接获取 Flask 上下文，这里只做纯逻辑处理或传递必要参数
         # 实际 DB 操作在 database.py 中使用的是 check_same_thread=False，可以直接调用
 
         def update_status(status, log, grader_id=None):
             db.update_ai_task(task_id, status=status, log_info=log, grader_id=grader_id, course_name=course_name)
+            # 同步更新通知
+            if user_id:
+                if status == 'processing':
+                    NotificationService.notify_task_processing(user_id, task_id, task_name or '批改核心', log)
+                elif status == 'success':
+                    NotificationService.notify_task_success(user_id, task_id, task_name or '批改核心', grader_id)
+                elif status == 'failed':
+                    NotificationService.notify_task_failed(user_id, task_id, task_name or '批改核心', log)
 
         try:
             update_status("processing", "正在组装 Prompt...")

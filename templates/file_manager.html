@@ -1,967 +1,840 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <title>文件解析管理器</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        sky: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7' },
-                        slate: { 800: '#1e293b', 500: '#64748b', 400: '#94a3b8' }
-                    },
-                    boxShadow: {
-                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
-                        'glow': '0 0 15px rgba(14, 165, 233, 0.3)'
-                    },
-                    animation: {
-                        'fade-in': 'fadeIn 0.3s ease-in-out',
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' },
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body { background: radial-gradient(circle at top left, #f8fafc, #f1f5f9); min-height: 100vh; }
+{% extends "base.html" %}
 
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.5);
-        }
+{% block title %}文档解析工作台 - AI 教学辅助系统{% endblock %}
 
-        /* 预览内容的排版优化 */
-        .prose h1 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5em; color: #1e293b; }
-        .prose h2 { font-size: 1.25em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #334155; }
-        .prose p { margin-bottom: 0.8em; line-height: 1.6; color: #475569; }
-        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
-        .prose pre { background: #f1f5f9; padding: 1em; border-radius: 0.5em; overflow-x: auto; font-family: monospace; }
-        .prose code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25em; font-size: 0.9em; color: #0ea5e9; }
+{% block header_title %}文档解析工作台{% endblock %}
 
-        .line-clamp-2 {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-    </style>
-</head>
-<body class="font-sans text-slate-800 selection:bg-sky-100 selection:text-sky-700">
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-    <nav class="glass-panel sticky top-0 z-40 shadow-sm transition-all duration-300">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <a href="/ai_generator" class="group w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-sky-600 hover:border-sky-300 hover:shadow-md transition-all">
-                    <i class="fas fa-arrow-left text-sm group-hover:-translate-x-0.5 transition-transform"></i>
-                </a>
-                <div class="flex flex-col">
-                    <h1 class="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2">
-                        <i class="fas fa-file-invoice text-sky-500"></i>
-                        文档解析工作台
-                    </h1>
-                    <span class="text-[10px] text-slate-400 font-medium">智能识别 · 结构化提取 · 自动归档</span>
+<style>
+    /* 预览内容的排版优化 */
+    .prose h1 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5em; color: #1e293b; }
+    .prose h2 { font-size: 1.25em; font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #334155; }
+    .prose p { margin-bottom: 0.8em; line-height: 1.6; color: #475569; }
+    .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
+    .prose pre { background: #f1f5f9; padding: 1em; border-radius: 0.5em; overflow-x: auto; font-family: monospace; }
+    .prose code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25em; font-size: 0.9em; color: #0ea5e9; }
+
+    .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+</style>
+
+<!-- 顶部操作栏 -->
+<div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3">
+        <span class="bg-gradient-to-br from-sky-500 to-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-sky-200">
+            <i class="fas fa-file-invoice text-lg"></i>
+        </span>
+        <div>
+            <h1 class="text-lg font-bold text-slate-800">文档解析工作台</h1>
+            <p class="text-xs text-slate-400">智能识别 · 结构化提取 · 自动归档</p>
+        </div>
+    </div>
+    <div class="flex items-center gap-3">
+        <a href="{{ url_for('student.list_page') }}" class="bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 text-emerald-700 border border-emerald-200 text-xs font-bold px-4 py-2.5 rounded-full transition shadow-sm hover:shadow-md flex items-center">
+            <i class="fas fa-users mr-1.5"></i> 班级学生
+        </a>
+        <a href="{{ url_for('library.index') }}" class="bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold px-4 py-2.5 rounded-full transition shadow-sm hover:shadow-md flex items-center">
+            <i class="fas fa-database mr-1.5"></i> 资产文档库
+        </a>
+    </div>
+</div>
+
+<!-- 主内容区 -->
+<div class="bg-white rounded-2xl shadow-soft border border-slate-100 overflow-hidden">
+
+    <!-- Tab 切换区 -->
+    <div class="flex items-center space-x-6 px-6 pt-6 border-b border-slate-200/60">
+        <button onclick="switchMainTab('workstation')" id="tab-btn-workstation" class="text-sm font-bold text-slate-700 border-b-2 border-sky-500 pb-3 px-2 transition-all">
+            <i class="fas fa-file-invoice mr-2"></i>文档解析工作台
+        </button>
+        {% if user.is_admin %}
+        <button onclick="switchMainTab('signatures')" id="tab-btn-signatures" class="text-sm font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-600 pb-3 px-2 transition-all">
+            <i class="fas fa-signature mr-2"></i>签名集管理
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- 工作台内容 -->
+    <div id="main-workstation" class="p-6 space-y-6 animate-fade-in">
+        <div class="flex flex-wrap gap-3 text-xs font-bold">
+            <button onclick="switchPanel('upload')" id="tab-upload"
+                    class="px-4 py-2 rounded-full bg-sky-50 text-sky-600 border border-sky-100 shadow-sm transition">
+                <i class="fas fa-cloud-upload-alt mr-1"></i> 上传解析
+            </button>
+            <button onclick="switchPanel('paste')" id="tab-paste"
+                    class="px-4 py-2 rounded-full bg-white text-slate-400 border border-slate-100 hover:text-slate-600 transition">
+                <i class="fas fa-paste mr-1"></i> 粘贴入库
+            </button>
+            <button onclick="switchPanel('ai')" id="tab-ai"
+                    class="px-4 py-2 rounded-full bg-white text-slate-400 border border-slate-100 hover:text-slate-600 transition">
+                <i class="fas fa-wand-magic-sparkles mr-1"></i> AI 辅助生成
+            </button>
+        </div>
+
+        <!-- 上传解析面板 -->
+        <div id="panel-upload" class="space-y-4">
+            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-700">上传文件并解析</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">支持 PDF / Word / Markdown / 图片。</p>
                 </div>
+                <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+                    <span class="uppercase">类型</span>
+                    <select id="uploadDocType" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200">
+                        <option value="exam">试卷</option>
+                        <option value="standard">评分标准</option>
+                        <option value="syllabus">课程教学大纲</option>
+                        <option value="plan">课程考核计划表</option>
+                    </select>
+                </div>
+                <label class="flex-1 border-2 border-dashed border-slate-200 rounded-xl bg-white/70 p-6 text-center cursor-pointer hover:border-sky-300 hover:bg-sky-50 transition">
+                    <input id="uploadFileInput" type="file" class="hidden" accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp,.xlsx,.xls,.csv">
+                    <div id="uploadFileDisplay" class="text-slate-400 text-sm space-y-2">
+                        <div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto text-sky-500">
+                            <i class="fas fa-file-upload"></i>
+                        </div>
+                        <p class="text-xs font-bold text-slate-600">点击选择文件</p>
+                        <p class="text-[10px] text-slate-400">将自动调用智能解析器</p>
+                    </div>
+                </label>
+                <button id="uploadParseBtn"
+                        class="mt-2 bg-sky-500 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-sky-600 transition">
+                    <i class="fas fa-bolt mr-1"></i> 解析并入库
+                </button>
+                <p id="uploadStatus" class="text-[11px] text-slate-400"></p>
+            </div>
+        </div>
+
+        <!-- 粘贴入库面板 -->
+        <div id="panel-paste" class="hidden space-y-4">
+            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm h-full">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-700">粘贴内容并保存</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">AI 将自动提取标题并规范化 Markdown 格式。</p>
+                    </div>
+                    <div class="flex items-center gap-2 bg-white rounded-lg p-1 border border-slate-200">
+                        <select id="pasteDocType" class="bg-transparent text-xs font-bold text-slate-600 px-2 py-1 focus:outline-none cursor-pointer">
+                            <option value="exam">类型：试卷</option>
+                            <option value="standard">类型：评分标准</option>
+                            <option value="syllabus">类型：教学大纲</option>
+                            <option value="plan">类型：考核计划表</option>
+                        </select>
+                    </div>
+                </div>
+
+                <textarea id="pasteContent"
+                          class="flex-1 min-h-[350px] border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 resize-none font-mono leading-relaxed"
+                          placeholder="请在此粘贴试卷题目或评分标准内容..."></textarea>
+
+                <div class="flex items-center justify-between gap-3 text-xs">
+                    <button id="pasteClearBtn" class="text-slate-400 hover:text-rose-500 font-bold px-2">
+                        <i class="fas fa-eraser mr-1"></i> 清空
+                    </button>
+                    <div class="flex items-center gap-3">
+                        <span id="pasteStatus" class="text-[11px] text-slate-400"></span>
+                        <button id="pasteSaveBtn" class="bg-white text-slate-500 font-bold px-4 py-2.5 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition">
+                            <i class="fas fa-save mr-1"></i> 直接保存
+                        </button>
+                        <button id="pasteParseSaveBtn" class="bg-amber-500 text-white font-bold px-5 py-2.5 rounded-lg shadow-md hover:bg-amber-600 transition shadow-amber-200/50">
+                            <i class="fas fa-magic mr-1"></i> 智能解析并入库
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI 辅助生成面板 -->
+        <div id="panel-ai" class="hidden space-y-4">
+            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-700">AI 辅助生成</h3>
+                        <p class="text-[11px] text-slate-400 mt-1">根据提示词与附件（图片/文档）生成结构化内容。</p>
+                    </div>
+                    <div class="flex items-center gap-2 bg-white rounded-lg p-1 border border-slate-200">
+                        <select id="aiDocType" class="bg-transparent text-xs font-bold text-slate-600 px-2 py-1 focus:outline-none cursor-pointer">
+                            <option value="exam">生成目标：试卷</option>
+                            <option value="standard">生成目标：评分标准</option>
+                            <option value="syllabus">生成目标：教学大纲</option>
+                            <option value="plan">生成目标：考核计划表</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+                    <div class="md:col-span-2 flex flex-col">
+                        <label class="text-[11px] text-slate-400 font-bold mb-2 ml-1">
+                            <i class="fas fa-keyboard mr-1"></i> 生成要求 / 提示词
+                        </label>
+                        <textarea id="aiPrompt"
+                                  class="flex-1 min-h-[200px] w-full border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 resize-none shadow-sm"
+                                  placeholder="例如：请帮我生成一份 Python 期末考试卷，包含 10 道选择题（关于列表和字典），2 道编程题（一道是爬虫，一道是数据分析）。总分100分。"></textarea>
+                    </div>
+
+                    <div class="md:col-span-1 flex flex-col h-full">
+                        <label class="text-[11px] text-slate-400 font-bold mb-2 ml-1">
+                            <i class="fas fa-layer-group mr-1"></i> 参考素材库
+                        </label>
+
+                        <div class="flex-1 flex flex-col border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
+                            <div class="p-3 bg-slate-50 border-b border-slate-100 space-y-2">
+                                <div class="relative">
+                                    <select id="aiExistingSelect" class="w-full bg-white border border-slate-200 text-slate-600 text-xs rounded-lg pl-2 pr-8 py-2 focus:outline-none focus:border-purple-300 appearance-none cursor-pointer">
+                                        <option value="">+ 从文档库选择...</option>
+                                    </select>
+                                    <div class="absolute right-3 top-2.5 text-slate-400 pointer-events-none">
+                                        <i class="fas fa-chevron-down text-xs"></i>
+                                    </div>
+                                </div>
+
+                                <label class="block w-full border border-dashed border-slate-300 rounded-lg p-2 text-center bg-white hover:bg-purple-50 hover:border-purple-300 cursor-pointer transition group">
+                                    <input id="aiFiles" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp">
+                                    <div class="flex items-center justify-center gap-2 text-slate-500 group-hover:text-purple-600">
+                                        <i class="fas fa-cloud-upload-alt text-xs"></i>
+                                        <span class="text-xs font-bold">上传新素材</span>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div class="flex-1 bg-slate-50/50 p-3 overflow-y-auto custom-scrollbar">
+                                <div id="aiMaterialList" class="space-y-2">
+                                    <div id="aiMaterialEmpty" class="h-full flex flex-col items-center justify-center text-slate-300 py-4">
+                                        <i class="fas fa-folder-open text-2xl mb-2 opacity-50"></i>
+                                        <span class="text-[10px]">暂无参考素材</span>
+                                    </div>
+                                </div>
+                                <div id="aiFileEmptyState" class="hidden"></div>
+                                <div id="aiFileList" class="space-y-1 mt-2"></div>
+                            </div>
+
+                            <div class="bg-white border-t border-slate-100 p-2 text-center">
+                                <p class="text-[10px] text-slate-400">已选 <span id="aiTotalCount" class="font-bold text-purple-600">0</span> 个文件</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-2">
+                    <p id="aiStatus" class="text-[11px] text-slate-400 font-medium"></p>
+                    <button id="aiGenerateBtn"
+                            class="bg-purple-600 text-white font-bold px-8 py-2.5 rounded-xl shadow-md hover:bg-purple-700 transition shadow-purple-200/50 flex items-center">
+                        <i class="fas fa-wand-magic-sparkles mr-2"></i> 开始智能生成
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 签名集管理内容 -->
+    <div id="main-signatures" class="hidden p-6 space-y-6 animate-fade-in">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 p-4 bg-slate-50/50 rounded-xl">
+            <div>
+                <h2 class="font-bold text-slate-700 text-lg">电子签名库</h2>
+                <p class="text-xs text-slate-500 mt-1">管理用于文档导出的电子签名文件 (PNG/JPG)。</p>
             </div>
 
             <div class="flex items-center gap-3">
-                <a href="/student" class="group relative flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-full shadow-sm hover:shadow-lg hover:border-emerald-300 transition-all duration-300">
-                    <div class="flex flex-col items-end">
-                        <span class="text-xs font-bold text-emerald-700 group-hover:text-emerald-600 transition-colors">班级学生</span>
-                        <span class="text-[9px] text-emerald-500 group-hover:text-emerald-400 transition-colors">Class Manager</span>
-                    </div>
-                    <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300">
-                        <i class="fas fa-users text-xs group-hover:scale-110 transition-transform"></i>
-                    </div>
-                    <div class="absolute inset-0 rounded-full border border-emerald-400 opacity-0 scale-95 group-hover:opacity-20 group-hover:scale-100 transition-all duration-500"></div>
-                </a>
-                <a href="/library/view" class="group relative flex items-center gap-3 px-5 py-2 bg-white border border-slate-200 rounded-full shadow-sm hover:shadow-lg hover:border-sky-200 transition-all duration-300">
-                    <div class="flex flex-col items-end">
-                        <span class="text-xs font-bold text-slate-700 group-hover:text-sky-600 transition-colors">资产文档库</span>
-                        <span class="text-[9px] text-slate-400 group-hover:text-sky-400 transition-colors">View Library</span>
-                    </div>
-                    <div class="w-8 h-8 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center group-hover:bg-sky-500 group-hover:text-white transition-all duration-300">
-                        <i class="fas fa-database text-xs group-hover:scale-110 transition-transform"></i>
-                    </div>
-                    <div class="absolute inset-0 rounded-full border border-sky-500 opacity-0 scale-95 group-hover:opacity-20 group-hover:scale-100 transition-all duration-500"></div>
-                </a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="max-w-6xl mx-auto p-4 md:p-8 space-y-8">
-
-        <div class="flex items-center space-x-6 mb-2 border-b border-slate-200/60">
-            <button onclick="switchMainTab('workstation')" id="tab-btn-workstation" class="text-lg font-bold text-slate-700 border-b-2 border-sky-500 pb-3 px-2 transition-all">
-                <i class="fas fa-file-invoice mr-2"></i>文档解析工作台
-            </button>
-            {% if user.is_admin %}
-            <button onclick="switchMainTab('signatures')" id="tab-btn-signatures" class="text-lg font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-600 pb-3 px-2 transition-all">
-                <i class="fas fa-signature mr-2"></i>签名集管理
-            </button>
-            {% endif %}
-        </div>
-
-        <div id="main-workstation" class="space-y-8 animate-fade-in">
-
-            <div class="bg-white rounded-3xl shadow-soft border border-slate-100 overflow-hidden">
-                <div class="px-6 pt-6">
-                    <div class="flex flex-wrap gap-3 text-xs font-bold">
-                        <button onclick="switchPanel('upload')" id="tab-upload"
-                                class="px-4 py-2 rounded-full bg-sky-50 text-sky-600 border border-sky-100 shadow-sm transition">
-                            <i class="fas fa-cloud-upload-alt mr-1"></i> 上传解析
-                        </button>
-                        <button onclick="switchPanel('paste')" id="tab-paste"
-                                class="px-4 py-2 rounded-full bg-white text-slate-400 border border-slate-100 hover:text-slate-600 transition">
-                            <i class="fas fa-paste mr-1"></i> 粘贴入库
-                        </button>
-                        <button onclick="switchPanel('ai')" id="tab-ai"
-                                class="px-4 py-2 rounded-full bg-white text-slate-400 border border-slate-100 hover:text-slate-600 transition">
-                            <i class="fas fa-wand-magic-sparkles mr-1"></i> AI 辅助生成
-                        </button>
-                    </div>
+                <div id="sigUploadStatus" class="hidden text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 flex items-center gap-2">
+                    <i class="fas fa-circle-notch fa-spin text-sky-500"></i>
+                    <span id="sigUploadText" class="text-slate-600">正在处理...</span>
                 </div>
 
-                <div class="p-6">
-                    <div id="panel-upload" class="space-y-4">
-                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm">
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-700">上传文件并解析</h3>
-                                <p class="text-[11px] text-slate-400 mt-1">支持 PDF / Word / Markdown / 图片。</p>
-                            </div>
-                            <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
-                                <span class="uppercase">类型</span>
-                                <select id="uploadDocType" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200">
-                                    <option value="exam">试卷</option>
-                                    <option value="standard">评分标准</option>
-                                    <option value="syllabus">课程教学大纲</option>
-                                    <option value="plan">课程考核计划表</option>
-                                </select>
-                            </div>
-                            <label class="flex-1 border-2 border-dashed border-slate-200 rounded-xl bg-white/70 p-6 text-center cursor-pointer hover:border-sky-300 hover:bg-sky-50 transition">
-                                <input id="uploadFileInput" type="file" class="hidden" accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp,.xlsx,.xls,.csv">
-                                <div id="uploadFileDisplay" class="text-slate-400 text-sm space-y-2">
-                                    <div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto text-sky-500">
-                                        <i class="fas fa-file-upload"></i>
-                                    </div>
-                                    <p class="text-xs font-bold text-slate-600">点击选择文件</p>
-                                    <p class="text-[10px] text-slate-400">将自动调用智能解析器</p>
-                                </div>
-                            </label>
-                            <button id="uploadParseBtn"
-                                    class="mt-2 bg-sky-500 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-sky-600 transition">
-                                <i class="fas fa-bolt mr-1"></i> 解析并入库
-                            </button>
-                            <p id="uploadStatus" class="text-[11px] text-slate-400"></p>
-                        </div>
-                    </div>
-
-                    <div id="panel-paste" class="hidden space-y-4">
-                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm h-full">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h3 class="text-sm font-bold text-slate-700">粘贴内容并保存</h3>
-                                    <p class="text-[11px] text-slate-400 mt-1">AI 将自动提取标题并规范化 Markdown 格式。</p>
-                                </div>
-                                <div class="flex items-center gap-2 bg-white rounded-lg p-1 border border-slate-200">
-                                    <select id="pasteDocType" class="bg-transparent text-xs font-bold text-slate-600 px-2 py-1 focus:outline-none cursor-pointer">
-                                        <option value="exam">类型：试卷</option>
-                                        <option value="standard">类型：评分标准</option>
-                                        <option value="syllabus">类型：教学大纲</option>
-                                        <option value="plan">类型：考核计划表</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <textarea id="pasteContent"
-                                      class="flex-1 min-h-[350px] border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 resize-none font-mono leading-relaxed"
-                                      placeholder="请在此粘贴试卷题目或评分标准内容..."></textarea>
-
-                            <div class="flex items-center justify-between gap-3 text-xs">
-                                <button id="pasteClearBtn" class="text-slate-400 hover:text-rose-500 font-bold px-2">
-                                    <i class="fas fa-eraser mr-1"></i> 清空
-                                </button>
-                                <div class="flex items-center gap-3">
-                                    <span id="pasteStatus" class="text-[11px] text-slate-400"></span>
-                                    <button id="pasteSaveBtn" class="bg-white text-slate-500 font-bold px-4 py-2.5 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition">
-                                        <i class="fas fa-save mr-1"></i> 直接保存
-                                    </button>
-                                    <button id="pasteParseSaveBtn" class="bg-amber-500 text-white font-bold px-5 py-2.5 rounded-lg shadow-md hover:bg-amber-600 transition shadow-amber-200/50">
-                                        <i class="fas fa-magic mr-1"></i> 智能解析并入库
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="panel-ai" class="hidden space-y-4">
-                        <div class="bg-slate-50 border border-slate-100 rounded-2xl p-6 flex flex-col gap-4 shadow-sm">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <h3 class="text-sm font-bold text-slate-700">AI 辅助生成</h3>
-                                    <p class="text-[11px] text-slate-400 mt-1">根据提示词与附件（图片/文档）生成结构化内容。</p>
-                                </div>
-                                <div class="flex items-center gap-2 bg-white rounded-lg p-1 border border-slate-200">
-                                    <select id="aiDocType" class="bg-transparent text-xs font-bold text-slate-600 px-2 py-1 focus:outline-none cursor-pointer">
-                                        <option value="exam">生成目标：试卷</option>
-                                        <option value="standard">生成目标：评分标准</option>
-                                        <option value="syllabus">生成目标：教学大纲</option>
-                                        <option value="plan">生成目标：考核计划表</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-                                <div class="md:col-span-2 flex flex-col">
-                                    <label class="text-[11px] text-slate-400 font-bold mb-2 ml-1">
-                                        <i class="fas fa-keyboard mr-1"></i> 生成要求 / 提示词
-                                    </label>
-                                    <textarea id="aiPrompt"
-                                              class="flex-1 min-h-[200px] w-full border border-slate-200 rounded-xl p-4 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 resize-none shadow-sm"
-                                              placeholder="例如：请帮我生成一份 Python 期末考试卷，包含 10 道选择题（关于列表和字典），2 道编程题（一道是爬虫，一道是数据分析）。总分100分。"></textarea>
-                                </div>
-
-
-                                <div class="md:col-span-1 flex flex-col h-full">
-                                    <label class="text-[11px] text-slate-400 font-bold mb-2 ml-1">
-                                        <i class="fas fa-layer-group mr-1"></i> 参考素材库
-                                    </label>
-
-                                    <div class="flex-1 flex flex-col border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
-                                        <div class="p-3 bg-slate-50 border-b border-slate-100 space-y-2">
-                                            <div class="relative">
-                                                <select id="aiExistingSelect" class="w-full bg-white border border-slate-200 text-slate-600 text-xs rounded-lg pl-2 pr-8 py-2 focus:outline-none focus:border-purple-300 appearance-none cursor-pointer">
-                                                    <option value="">+ 从文档库选择...</option>
-                                                </select>
-                                                <div class="absolute right-3 top-2.5 text-slate-400 pointer-events-none">
-                                                    <i class="fas fa-chevron-down text-xs"></i>
-                                                </div>
-                                            </div>
-
-                                            <label class="block w-full border border-dashed border-slate-300 rounded-lg p-2 text-center bg-white hover:bg-purple-50 hover:border-purple-300 cursor-pointer transition group">
-                                                <input id="aiFiles" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.bmp,.webp">
-                                                <div class="flex items-center justify-center gap-2 text-slate-500 group-hover:text-purple-600">
-                                                    <i class="fas fa-cloud-upload-alt text-xs"></i>
-                                                    <span class="text-xs font-bold">上传新素材</span>
-                                                </div>
-                                            </label>
-                                        </div>
-
-                                        <div class="flex-1 bg-slate-50/50 p-3 overflow-y-auto">
-                                            <div id="aiMaterialList" class="space-y-2">
-                                                <div id="aiMaterialEmpty" class="h-full flex flex-col items-center justify-center text-slate-300 py-4">
-                                                    <i class="fas fa-folder-open text-2xl mb-2 opacity-50"></i>
-                                                    <span class="text-[10px]">暂无参考素材</span>
-                                                </div>
-                                            </div>
-                                            <div id="aiFileEmptyState" class="hidden"></div>
-                                            <div id="aiFileList" class="space-y-1 mt-2"></div>
-                                        </div>
-
-                                        <div class="bg-white border-t border-slate-100 p-2 text-center">
-                                            <p class="text-[10px] text-slate-400">已选 <span id="aiTotalCount" class="font-bold text-purple-600">0</span> 个文件</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center justify-between pt-2">
-                                <p id="aiStatus" class="text-[11px] text-slate-400 font-medium"></p>
-                                <button id="aiGenerateBtn"
-                                        class="bg-purple-600 text-white font-bold px-8 py-2.5 rounded-xl shadow-md hover:bg-purple-700 transition shadow-purple-200/50 flex items-center">
-                                    <i class="fas fa-wand-magic-sparkles mr-2"></i> 开始智能生成
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <label class="cursor-pointer bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-xl shadow-lg shadow-sky-200/50 transition flex items-center group">
+                    <i class="fas fa-images mr-2 group-hover:scale-110 transition-transform"></i> 批量上传签名
+                    <input type="file" id="uploadSigInput" class="hidden" multiple accept=".png,.jpg,.jpeg">
+                </label>
             </div>
         </div>
 
-        <div id="main-signatures" class="hidden space-y-8 animate-fade-in">
-             <div class="bg-white rounded-3xl shadow-soft border border-slate-100 overflow-hidden">
-                <div class="p-6 border-b border-slate-50 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div>
-                        <h2 class="font-bold text-slate-700 text-lg">电子签名库</h2>
-                        <p class="text-xs text-slate-500 mt-1">管理用于文档导出的电子签名文件 (PNG/JPG)。</p>
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                         <div id="sigUploadStatus" class="hidden text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 flex items-center gap-2">
-                            <i class="fas fa-circle-notch fa-spin text-sky-500"></i>
-                            <span id="sigUploadText" class="text-slate-600">正在处理...</span>
-                        </div>
-
-                        <label class="cursor-pointer bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-xl shadow-lg shadow-sky-200/50 transition flex items-center group">
-                            <i class="fas fa-images mr-2 group-hover:scale-110 transition-transform"></i> 批量上传签名
-                            <input type="file" id="uploadSigInput" class="hidden" multiple accept=".png,.jpg,.jpeg">
-                        </label>
-                    </div>
-                </div>
-
-                <div class="p-6">
-                     <div class="mb-6 flex items-center justify-between">
-                        <div class="relative max-w-sm w-full">
-                            <input type="text" id="sigSearch" onkeyup="loadSignatures()" placeholder="搜索签名名称..." class="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 outline-none">
-                            <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-                        </div>
-                        <span class="text-xs text-slate-400" id="sigCountDisplay"></span>
-                    </div>
-
-                    <div id="sigGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                        </div>
-                </div>
+        <div class="mb-6 flex items-center justify-between">
+            <div class="relative max-w-sm w-full">
+                <input type="text" id="sigSearch" onkeyup="loadSignatures()" placeholder="搜索签名名称..." class="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-sky-200 outline-none">
+                <i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i>
             </div>
+            <span class="text-xs text-slate-400" id="sigCountDisplay"></span>
         </div>
 
-    </div>
-
-        <div id="imgPreviewModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center bg-black/80 backdrop-blur-sm" onclick="closePreviewModal(event)">
-            <div class="relative max-w-[90vw] max-h-[90vh] animate-fade-in">
-                <button onclick="document.getElementById('imgPreviewModal').classList.add('hidden'); event.stopPropagation();" class="absolute -top-3 -right-3 w-8 h-8 bg-white text-slate-600 hover:text-rose-500 rounded-full shadow-lg flex items-center justify-center transition-colors z-10">
-                    <i class="fas fa-times"></i>
-                </button>
-                <div class="p-6 rounded-2xl shadow-2xl" style="background-color: #ffffff; background-image: linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;">
-                    <img id="imgPreviewSrc" src="" class="max-w-[80vw] max-h-[75vh] object-contain" style="filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));">
-                </div>
-            </div>
+        <div id="sigGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         </div>
     </div>
+</div>
 
-    <script>
-        // --- 全局状态变量 ---
-        let fileCache = {};
-        let currentPreviewFileId = null;
-        let materialFiles = [];
-        let materialExistingIds = new Set();
-        let activeTab = 'workstation';
+<!-- 图片预览模态框 -->
+<div id="imgPreviewModal" class="fixed inset-0 z-[60] hidden flex items-center justify-center bg-black/80 backdrop-blur-sm" onclick="closePreviewModal(event)">
+    <div class="relative max-w-[90vw] max-h-[90vh] animate-fade-in">
+        <button onclick="document.getElementById('imgPreviewModal').classList.add('hidden'); event.stopPropagation();" class="absolute -top-3 -right-3 w-8 h-8 bg-white text-slate-600 hover:text-rose-500 rounded-full shadow-lg flex items-center justify-center transition-colors z-10">
+            <i class="fas fa-times"></i>
+        </button>
+        <div class="p-6 rounded-2xl shadow-2xl" style="background-color: #ffffff; background-image: linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;">
+            <img id="imgPreviewSrc" src="" class="max-w-[80vw] max-h-[75vh] object-contain" style="filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));">
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-        document.addEventListener('DOMContentLoaded', () => {
-            loadFiles();
-            initActions();
-            switchPanel('upload');
-            // 初始化 Tab 状态
-            switchMainTab('workstation');
-        });
+{% block scripts %}
+<script>
+    // --- 全局状态变量 ---
+    let fileCache = {};
+    let currentPreviewFileId = null;
+    let materialFiles = [];
+    let materialExistingIds = new Set();
+    let activeTab = 'workstation';
 
-        // 刷新当前 Tab 数据
-        function refreshCurrentTab() {
-            if (activeTab === 'workstation') loadFiles();
-            else loadSignatures();
-        }
+    document.addEventListener('DOMContentLoaded', () => {
+        loadFiles();
+        initActions();
+        switchPanel('upload');
+        switchMainTab('workstation');
+    });
 
-        // --- 核心 Tab 切换逻辑 ---
-        function switchMainTab(tab) {
-            activeTab = tab;
-            const wsDiv = document.getElementById('main-workstation');
-            const sigDiv = document.getElementById('main-signatures');
-            const wsBtn = document.getElementById('tab-btn-workstation');
-            const sigBtn = document.getElementById('tab-btn-signatures');
+    function refreshCurrentTab() {
+        if (activeTab === 'workstation') loadFiles();
+        else loadSignatures();
+    }
 
-            if(tab === 'workstation') {
-                wsDiv.classList.remove('hidden');
-                sigDiv.classList.add('hidden');
-                wsBtn.classList.replace('text-slate-400', 'text-slate-700');
-                wsBtn.classList.replace('border-transparent', 'border-sky-500');
+    // --- 核心 Tab 切换逻辑 ---
+    function switchMainTab(tab) {
+        activeTab = tab;
+        const wsDiv = document.getElementById('main-workstation');
+        const sigDiv = document.getElementById('main-signatures');
+        const wsBtn = document.getElementById('tab-btn-workstation');
+        const sigBtn = document.getElementById('tab-btn-signatures');
+
+        if(tab === 'workstation') {
+            wsDiv.classList.remove('hidden');
+            sigDiv.classList.add('hidden');
+            wsBtn.classList.replace('text-slate-400', 'text-slate-700');
+            wsBtn.classList.replace('border-transparent', 'border-sky-500');
+            if(sigBtn) {
                 sigBtn.classList.replace('text-slate-700', 'text-slate-400');
                 sigBtn.classList.replace('border-sky-500', 'border-transparent');
-                loadFiles(); // 切换回来时刷新一次
-            } else {
-                wsDiv.classList.add('hidden');
-                sigDiv.classList.remove('hidden');
+            }
+            loadFiles();
+        } else {
+            wsDiv.classList.add('hidden');
+            sigDiv.classList.remove('hidden');
+            if(sigBtn) {
                 sigBtn.classList.replace('text-slate-400', 'text-slate-700');
                 sigBtn.classList.replace('border-transparent', 'border-sky-500');
-                wsBtn.classList.replace('text-slate-700', 'text-slate-400');
-                wsBtn.classList.replace('border-sky-500', 'border-transparent');
-                loadSignatures(); // 切换时加载签名
             }
+            wsBtn.classList.replace('text-slate-700', 'text-slate-400');
+            wsBtn.classList.replace('border-sky-500', 'border-transparent');
+            loadSignatures();
         }
+    }
 
-        // --- 签名集管理逻辑 (新增优化) ---
-        function loadSignatures() {
-            const query = document.getElementById('sigSearch').value;
-            const grid = document.getElementById('sigGrid');
-            const countDisplay = document.getElementById('sigCountDisplay');
+    // --- 签名集管理逻辑 ---
+    function loadSignatures() {
+        const searchEl = document.getElementById('sigSearch');
+        const query = searchEl ? searchEl.value : '';
+        const grid = document.getElementById('sigGrid');
+        const countDisplay = document.getElementById('sigCountDisplay');
 
-            grid.innerHTML = '<div class="col-span-full text-center text-slate-400 py-10"><i class="fas fa-spinner fa-spin mr-2"></i>正在加载签名库...</div>';
+        grid.innerHTML = '<div class="col-span-full text-center text-slate-400 py-10"><i class="fas fa-spinner fa-spin mr-2"></i>正在加载签名库...</div>';
 
-            fetch(`/api/signatures/list?q=${encodeURIComponent(query)}`)
-                .then(res => res.json())
-                .then(data => {
-                    grid.innerHTML = '';
-                    countDisplay.textContent = `共 ${data.length} 个签名`;
+        fetch(`/api/signatures/list?q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(data => {
+                grid.innerHTML = '';
+                countDisplay.textContent = `共 ${data.length} 个签名`;
 
-                    if(data.length === 0) {
-                        grid.innerHTML = `
-                            <div class="col-span-full flex flex-col items-center justify-center text-slate-400 py-12">
-                                <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3 text-slate-300">
-                                    <i class="fas fa-signature text-2xl"></i>
-                                </div>
-                                <p>暂无签名文件，请点击上方“批量上传”添加。</p>
-                            </div>`;
-                        return;
-                    }
+                if(data.length === 0) {
+                    grid.innerHTML = `
+                        <div class="col-span-full flex flex-col items-center justify-center text-slate-400 py-12">
+                            <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3 text-slate-300">
+                                <i class="fas fa-signature text-2xl"></i>
+                            </div>
+                            <p>暂无签名文件，请点击上方"批量上传"添加。</p>
+                        </div>`;
+                    return;
+                }
 
-                    data.forEach(sig => {
-                        const deleteBtn = sig.is_owner ?
-                            `<button onclick="deleteSignature(${sig.id}); event.stopPropagation();" class="absolute top-2 right-2 bg-white/90 text-rose-400 hover:text-rose-600 w-7 h-7 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><i class="fas fa-trash-alt text-xs"></i></button>` : '';
+                data.forEach(sig => {
+                    const deleteBtn = sig.is_owner ?
+                        `<button onclick="deleteSignature(${sig.id}); event.stopPropagation();" class="absolute top-2 right-2 bg-white/90 text-rose-400 hover:text-rose-600 w-7 h-7 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><i class="fas fa-trash-alt text-xs"></i></button>` : '';
 
-                        // 棋盘格背景样式（更好展示透明PNG签名）
-                        const checkerStyle = `background-image: linear-gradient(45deg, #f1f5f9 25%, transparent 25%), linear-gradient(-45deg, #f1f5f9 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f1f5f9 75%), linear-gradient(-45deg, transparent 75%, #f1f5f9 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0px;`;
+                    const checkerStyle = `background-image: linear-gradient(45deg, #f1f5f9 25%, transparent 25%), linear-gradient(-45deg, #f1f5f9 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f1f5f9 75%), linear-gradient(-45deg, transparent 75%, #f1f5f9 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0px;`;
 
-                        const card = `
-                            <div class="group relative bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-sky-300 hover:-translate-y-1 transition-all duration-300">
-                                <div class="h-32 flex items-center justify-center cursor-pointer overflow-hidden p-4 relative" style="${checkerStyle} background-color: #ffffff;" onclick="previewSig(${sig.id})">
-                                    <img src="/api/signatures/image/${sig.id}" class="max-h-full max-w-full object-contain drop-shadow-md transition-transform duration-300 group-hover:scale-110" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
-                                    <div class="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <div class="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
-                                            <i class="fas fa-search-plus text-sky-500 mr-1"></i>
-                                            <span class="text-xs font-bold text-slate-600">预览</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                ${deleteBtn}
-                                <div class="p-3 border-t border-slate-100 bg-slate-50/50">
-                                    <h4 class="text-sm font-bold text-slate-700 truncate" title="${escapeHtml(sig.name)}">${escapeHtml(sig.name)}</h4>
-                                    <div class="flex justify-between items-center mt-2">
-                                        <span class="text-[10px] text-slate-400 truncate max-w-[100px] bg-white px-2 py-0.5 rounded-full border border-slate-100">
-                                            <i class="fas fa-user text-[8px] mr-1"></i>${escapeHtml(sig.uploader_name)}
-                                        </span>
-                                        <a href="/api/signatures/image/${sig.id}" download="${escapeHtml(sig.name)}.png" class="text-slate-400 hover:text-sky-500 text-sm transition-colors p-1 hover:bg-sky-50 rounded" title="下载原图" onclick="event.stopPropagation()">
-                                            <i class="fas fa-download"></i>
-                                        </a>
+                    const card = `
+                        <div class="group relative bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-sky-300 hover:-translate-y-1 transition-all duration-300">
+                            <div class="h-32 flex items-center justify-center cursor-pointer overflow-hidden p-4 relative" style="${checkerStyle} background-color: #ffffff;" onclick="previewSig(${sig.id})">
+                                <img src="/api/signatures/image/${sig.id}" class="max-h-full max-w-full object-contain drop-shadow-md transition-transform duration-300 group-hover:scale-110" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div class="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                                        <i class="fas fa-search-plus text-sky-500 mr-1"></i>
+                                        <span class="text-xs font-bold text-slate-600">预览</span>
                                     </div>
                                 </div>
                             </div>
-                        `;
-                        grid.innerHTML += card;
-                    });
-                })
-                .catch(err => {
-                    grid.innerHTML = '<div class="col-span-full text-center text-rose-400 py-10">加载失败，请刷新重试</div>';
+                            ${deleteBtn}
+                            <div class="p-3 border-t border-slate-100 bg-slate-50/50">
+                                <h4 class="text-sm font-bold text-slate-700 truncate" title="${escapeHtml(sig.name)}">${escapeHtml(sig.name)}</h4>
+                                <div class="flex justify-between items-center mt-2">
+                                    <span class="text-[10px] text-slate-400 truncate max-w-[100px] bg-white px-2 py-0.5 rounded-full border border-slate-100">
+                                        <i class="fas fa-user text-[8px] mr-1"></i>${escapeHtml(sig.uploader_name)}
+                                    </span>
+                                    <a href="/api/signatures/image/${sig.id}" download="${escapeHtml(sig.name)}.png" class="text-slate-400 hover:text-sky-500 text-sm transition-colors p-1 hover:bg-sky-50 rounded" title="下载原图" onclick="event.stopPropagation()">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    grid.innerHTML += card;
                 });
-        }
-
-        // [改进] 批量上传逻辑
-        document.getElementById('uploadSigInput').addEventListener('change', async function(e) {
-            if(!this.files.length) return;
-            const files = Array.from(this.files);
-
-            // UI 状态
-            const statusBox = document.getElementById('sigUploadStatus');
-            const statusText = document.getElementById('sigUploadText');
-            statusBox.classList.remove('hidden', 'bg-emerald-50', 'bg-rose-50', 'bg-slate-100');
-            statusBox.classList.add('bg-slate-100');
-
-            let successCount = 0;
-            let failCount = 0;
-            const total = files.length;
-
-            // 循环处理文件（前端并发控制）
-            const promises = files.map(file => {
-                if(file.size > 5 * 1024 * 1024) {
-                    failCount++;
-                    statusText.textContent = `上传中: ${successCount}/${total} (1 文件超大)`;
-                    return Promise.resolve(); // 跳过大文件
-                }
-
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('name', file.name.split('.')[0]); // 默认使用文件名去扩展名
-
-                return fetch('/api/signatures/upload', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if(data.status === 'success') successCount++;
-                    else failCount++;
-                    // 实时更新状态
-                    statusText.textContent = `处理中... 成功: ${successCount}, 失败: ${failCount}`;
-                })
-                .catch(() => {
-                    failCount++;
-                    statusText.textContent = `处理中... 成功: ${successCount}, 失败: ${failCount}`;
-                });
+            })
+            .catch(err => {
+                grid.innerHTML = '<div class="col-span-full text-center text-rose-400 py-10">加载失败，请刷新重试</div>';
             });
+    }
 
-            // 等待所有完成
-            await Promise.all(promises);
+    // 批量上传逻辑
+    document.getElementById('uploadSigInput').addEventListener('change', async function(e) {
+        if(!this.files.length) return;
+        const files = Array.from(this.files);
 
-            // 最终结果展示
-            if (failCount === 0) {
-                statusBox.classList.replace('bg-slate-100', 'bg-emerald-50');
-                statusBox.innerHTML = `<i class="fas fa-check-circle text-emerald-500"></i> <span class="text-emerald-700">全部成功 (${successCount}个)</span>`;
-            } else {
-                statusBox.classList.replace('bg-slate-100', 'bg-amber-50');
-                statusBox.innerHTML = `<i class="fas fa-exclamation-circle text-amber-500"></i> <span class="text-amber-700">完成: ${successCount} 成功, ${failCount} 失败</span>`;
+        const statusBox = document.getElementById('sigUploadStatus');
+        const statusText = document.getElementById('sigUploadText');
+        statusBox.classList.remove('hidden', 'bg-emerald-50', 'bg-rose-50', 'bg-slate-100');
+        statusBox.classList.add('bg-slate-100');
+
+        let successCount = 0;
+        let failCount = 0;
+        const total = files.length;
+
+        const promises = files.map(file => {
+            if(file.size > 5 * 1024 * 1024) {
+                failCount++;
+                statusText.textContent = `上传中: ${successCount}/${total} (1 文件超大)`;
+                return Promise.resolve();
             }
 
-            loadSignatures(); // 刷新网格
-            this.value = ''; // 重置 Input 允许重复上传
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('name', file.name.split('.')[0]);
 
-            // 3秒后隐藏状态
-            setTimeout(() => {
-                statusBox.classList.add('hidden');
-            }, 4000);
-        });
-
-        function deleteSignature(id) {
-            if(!confirm('确定删除此签名？无法恢复。')) return;
-            fetch('/api/signatures/delete', {
+            return fetch('/api/signatures/upload', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({id})
+                body: formData
             })
             .then(res => res.json())
             .then(data => {
-                if(data.status === 'success') loadSignatures();
-                else alert(data.msg);
+                if(data.status === 'success') successCount++;
+                else failCount++;
+                statusText.textContent = `处理中... 成功: ${successCount}, 失败: ${failCount}`;
+            })
+            .catch(() => {
+                failCount++;
+                statusText.textContent = `处理中... 成功: ${successCount}, 失败: ${failCount}`;
             });
+        });
+
+        await Promise.all(promises);
+
+        if (failCount === 0) {
+            statusBox.classList.replace('bg-slate-100', 'bg-emerald-50');
+            statusBox.innerHTML = `<i class="fas fa-check-circle text-emerald-500"></i> <span class="text-emerald-700">全部成功 (${successCount}个)</span>`;
+        } else {
+            statusBox.classList.replace('bg-slate-100', 'bg-amber-50');
+            statusBox.innerHTML = `<i class="fas fa-exclamation-circle text-amber-500"></i> <span class="text-amber-700">完成: ${successCount} 成功, ${failCount} 失败</span>`;
         }
 
-        function previewSig(id) {
-            document.getElementById('imgPreviewSrc').src = `/api/signatures/image/${id}`;
-            document.getElementById('imgPreviewModal').classList.remove('hidden');
-        }
+        loadSignatures();
+        this.value = '';
 
-        function closePreviewModal(event) {
-            // 只有点击背景时才关闭，点击图片内容不关闭
-            if (event.target.id === 'imgPreviewModal') {
-                document.getElementById('imgPreviewModal').classList.add('hidden');
-            }
-        }
+        setTimeout(() => {
+            statusBox.classList.add('hidden');
+        }, 4000);
+    });
 
-        function removeMaterial(type, key) {
-            if (type === 'existing') {
-                materialExistingIds.delete(parseInt(key));
-                document.getElementById('aiExistingSelect').value = "";
-            } else {
-                materialFiles.splice(key, 1);
-            }
+    function deleteSignature(id) {
+        if(!confirm('确定删除此签名？无法恢复。')) return;
+        fetch('/api/signatures/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') loadSignatures();
+            else alert(data.msg);
+        });
+    }
+
+    function previewSig(id) {
+        document.getElementById('imgPreviewSrc').src = `/api/signatures/image/${id}`;
+        document.getElementById('imgPreviewModal').classList.remove('hidden');
+    }
+
+    function closePreviewModal(event) {
+        if (event.target.id === 'imgPreviewModal') {
+            document.getElementById('imgPreviewModal').classList.add('hidden');
+        }
+    }
+
+    function removeMaterial(type, key) {
+        if (type === 'existing') {
+            materialExistingIds.delete(parseInt(key));
+            document.getElementById('aiExistingSelect').value = "";
+        } else {
+            materialFiles.splice(key, 1);
+        }
+        renderAiMaterials();
+    }
+
+    // 监听下拉框选择
+    document.getElementById('aiExistingSelect').addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val) {
+            materialExistingIds.add(parseInt(val));
             renderAiMaterials();
+            e.target.value = "";
         }
+    });
 
-        // 监听下拉框选择
-        document.getElementById('aiExistingSelect').addEventListener('change', (e) => {
-            const val = e.target.value;
-            if (val) {
-                materialExistingIds.add(parseInt(val));
-                renderAiMaterials();
-                e.target.value = "";
+    // 监听 AI 上传
+    document.getElementById('aiFiles').addEventListener('change', (e) => {
+        if (e.target.files.length) {
+            Array.from(e.target.files).forEach(f => materialFiles.push(f));
+            renderAiMaterials();
+            e.target.value = '';
+        }
+    });
+
+    function getFileIconConfig(name) {
+        name = name.toLowerCase();
+        if(name.endsWith('.pdf')) return { icon: 'fa-file-pdf', bg: 'bg-rose-50', text: 'text-rose-500' };
+        if(name.endsWith('.doc') || name.endsWith('.docx')) return { icon: 'fa-file-word', bg: 'bg-blue-50', text: 'text-blue-600' };
+        if(name.endsWith('.jpg') || name.endsWith('.png')) return { icon: 'fa-file-image', bg: 'bg-purple-50', text: 'text-purple-500' };
+        if(name.endsWith('.txt') || name.endsWith('.md')) return { icon: 'fa-file-alt', bg: 'bg-slate-100', text: 'text-slate-500' };
+        return { icon: 'fa-file', bg: 'bg-slate-100', text: 'text-slate-500' };
+    }
+
+    function escapeHtml(text) {
+        if (!text) return text;
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function switchPanel(panel) {
+        const panels = ['upload', 'paste', 'ai'];
+        const colorMap = {
+            upload: ['bg-sky-50', 'text-sky-600', 'border-sky-100'],
+            paste: ['bg-amber-50', 'text-amber-600', 'border-amber-100'],
+            ai: ['bg-purple-50', 'text-purple-600', 'border-purple-100']
+        };
+        panels.forEach(p => {
+            document.getElementById(`panel-${p}`).classList.toggle('hidden', p !== panel);
+            const tab = document.getElementById(`tab-${p}`);
+            const activeClasses = colorMap[p];
+            if (p === panel) {
+                tab.classList.add(...activeClasses);
+                tab.classList.remove('text-slate-400', 'bg-white', 'border-slate-100');
+            } else {
+                tab.classList.remove(...activeClasses);
+                tab.classList.add('text-slate-400', 'bg-white', 'border-slate-100');
+            }
+        });
+    }
+
+    function setStatus(element, message, state = 'info') {
+        if (!element) return;
+        element.textContent = message;
+        element.classList.remove('text-slate-400', 'text-emerald-600', 'text-rose-500');
+        if (state === 'success') {
+            element.classList.add('text-emerald-600');
+        } else if (state === 'error') {
+            element.classList.add('text-rose-500');
+        } else {
+            element.classList.add('text-slate-400');
+        }
+    }
+
+    // 加载下拉框数据
+    function loadFiles() {
+        const select = document.getElementById('aiExistingSelect');
+        if (!select) return;
+
+        const defaultOption = select.options[0];
+        select.innerHTML = '';
+        select.appendChild(defaultOption);
+
+        fetch('/api/my_parsed_files')
+            .then(res => res.json())
+            .then(data => {
+                data.forEach(f => {
+                    fileCache[f.id] = f;
+                    const option = document.createElement('option');
+                    option.value = f.id;
+                    const name = f.original_name.length > 20 ? f.original_name.substring(0, 20) + '...' : f.original_name;
+                    option.textContent = name;
+                    select.appendChild(option);
+                });
+            })
+            .catch(err => console.error("加载文档列表失败:", err));
+    }
+
+    // 渲染已选素材 UI
+    function renderAiMaterials() {
+        const listContainer = document.getElementById('aiMaterialList');
+        const emptyState = document.getElementById('aiMaterialEmpty');
+        const totalCountSpan = document.getElementById('aiTotalCount');
+
+        Array.from(listContainer.children).forEach(child => {
+            if (child.id !== 'aiMaterialEmpty') {
+                listContainer.removeChild(child);
             }
         });
 
-        // 监听 AI 上传
-        document.getElementById('aiFiles').addEventListener('change', (e) => {
-            if (e.target.files.length) {
-                Array.from(e.target.files).forEach(f => materialFiles.push(f));
-                renderAiMaterials();
-                e.target.value = '';
-            }
+        let totalCount = 0;
+
+        materialExistingIds.forEach(id => {
+            const f = fileCache[id];
+            if (!f) return;
+
+            totalCount++;
+            const item = document.createElement('div');
+            item.className = "flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 text-xs group hover:border-purple-300 transition";
+            item.innerHTML = `
+                <div class="flex items-center gap-2 truncate">
+                    <i class="fas fa-database text-purple-400"></i>
+                    <span class="truncate text-slate-600" title="${escapeHtml(f.original_name)}">${escapeHtml(f.original_name)}</span>
+                </div>
+                <button onclick="removeMaterial('existing', '${id}')" class="text-slate-300 hover:text-rose-500 px-1">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            listContainer.appendChild(item);
         });
 
-        function getFileIconConfig(name) {
-            name = name.toLowerCase();
-            if(name.endsWith('.pdf')) return { icon: 'fa-file-pdf', bg: 'bg-rose-50', text: 'text-rose-500' };
-            if(name.endsWith('.doc') || name.endsWith('.docx')) return { icon: 'fa-file-word', bg: 'bg-blue-50', text: 'text-blue-600' };
-            if(name.endsWith('.jpg') || name.endsWith('.png')) return { icon: 'fa-file-image', bg: 'bg-purple-50', text: 'text-purple-500' };
-            if(name.endsWith('.txt') || name.endsWith('.md')) return { icon: 'fa-file-alt', bg: 'bg-slate-100', text: 'text-slate-500' };
-            return { icon: 'fa-file', bg: 'bg-slate-100', text: 'text-slate-500' };
+        materialFiles.forEach((file, index) => {
+            totalCount++;
+            const config = getFileIconConfig(file.name);
+            const item = document.createElement('div');
+            item.className = "flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 text-xs group hover:border-purple-300 transition";
+            item.innerHTML = `
+                <div class="flex items-center gap-2 truncate">
+                    <i class="fas ${config.icon} ${config.text}"></i>
+                    <span class="truncate text-slate-600" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                    <span class="text-[10px] text-slate-400 bg-slate-50 px-1 rounded">新上传</span>
+                </div>
+                <button onclick="removeMaterial('new', ${index})" class="text-slate-300 hover:text-rose-500 px-1">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            listContainer.appendChild(item);
+        });
+
+        if (totalCount === 0) {
+            emptyState.classList.remove('hidden');
+            emptyState.classList.add('flex');
+        } else {
+            emptyState.classList.add('hidden');
+            emptyState.classList.remove('flex');
         }
 
-        function escapeHtml(text) {
-            if (!text) return text;
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        }
+        if (totalCountSpan) totalCountSpan.textContent = totalCount;
+    }
 
-        function saveFileContent() {
-            if (!currentPreviewFileId) return;
-            const newContent = document.getElementById('editContent').value;
-            const loadingEl = document.getElementById('modalLoading');
-            loadingEl.classList.remove('hidden');
+    function initActions() {
+        const handleSuccessRedirect = (statusEl, msg) => {
+            setStatus(statusEl, `${msg} 正在跳转至文档库...`, 'success');
+            document.body.style.cursor = 'wait';
+            setTimeout(() => {
+                window.location.href = '/library/view';
+            }, 1000);
+        };
 
-            fetch('/api/update_file_content', {
+        // 1. 上传解析逻辑
+        const uploadInput = document.getElementById('uploadFileInput');
+        const uploadDisplay = document.getElementById('uploadFileDisplay');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const uploadBtn = document.getElementById('uploadParseBtn');
+
+        uploadInput.addEventListener('change', () => {
+            if (!uploadInput.files.length) return;
+            const file = uploadInput.files[0];
+            uploadDisplay.innerHTML = `
+                <div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto text-sky-500">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <p class="text-xs font-bold text-slate-600">${escapeHtml(file.name)}</p>
+                <p class="text-[10px] text-slate-400">已准备上传</p>
+            `;
+        });
+
+        uploadBtn.addEventListener('click', () => {
+            if (!uploadInput.files.length) {
+                setStatus(uploadStatus, '请先选择需要解析的文件。', 'error');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', uploadInput.files[0]);
+            formData.append('doc_type', document.getElementById('uploadDocType').value);
+
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中，大约需要5分钟...';
+            setStatus(uploadStatus, '系统正在调用解析器，请稍候。');
+
+            fetch('/api/parse_file_asset', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        handleSuccessRedirect(uploadStatus, '解析成功！');
+                    } else {
+                        setStatus(uploadStatus, data.msg || '解析失败，请重试。', 'error');
+                        uploadBtn.disabled = false;
+                        uploadBtn.innerHTML = '<i class="fas fa-bolt mr-1"></i> 解析并入库';
+                    }
+                })
+                .catch(() => {
+                    setStatus(uploadStatus, '解析失败，请检查网络连接。', 'error');
+                    uploadBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="fas fa-bolt mr-1"></i> 解析并入库';
+                });
+        });
+
+        // 2. 粘贴解析逻辑
+        const pasteClearBtn = document.getElementById('pasteClearBtn');
+        const pasteSaveBtn = document.getElementById('pasteSaveBtn');
+        const pasteParseSaveBtn = document.getElementById('pasteParseSaveBtn');
+        const pasteStatus = document.getElementById('pasteStatus');
+        const pasteContent = document.getElementById('pasteContent');
+
+        pasteClearBtn.addEventListener('click', () => {
+            pasteContent.value = '';
+            setStatus(pasteStatus, '');
+        });
+
+        pasteSaveBtn.addEventListener('click', () => {
+            const content = pasteContent.value.trim();
+            if (!content) { setStatus(pasteStatus, '内容不能为空。', 'error'); return; }
+
+            pasteSaveBtn.disabled = true;
+            fetch('/api/save_pasted_document', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ content: content, doc_type: document.getElementById('pasteDocType').value })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    handleSuccessRedirect(pasteStatus, '保存成功！');
+                } else {
+                    setStatus(pasteStatus, data.msg || '保存失败', 'error');
+                    pasteSaveBtn.disabled = false;
+                }
+            })
+            .catch(() => { pasteSaveBtn.disabled = false; });
+        });
+
+        pasteParseSaveBtn.addEventListener('click', () => {
+            const content = pasteContent.value.trim();
+            if (!content) {
+                setStatus(pasteStatus, '内容不能为空。', 'error');
+                return;
+            }
+            pasteParseSaveBtn.disabled = true;
+            pasteParseSaveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中，大约需要5分钟...';
+            setStatus(pasteStatus, 'AI 正在解析并规整内容，大约需要5分钟，请稍候。');
+
+            fetch('/api/parse_and_save_pasted_document', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    id: currentPreviewFileId,
-                    content: newContent
+                    content: content,
+                    doc_type: document.getElementById('pasteDocType').value
                 })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    if (fileCache[currentPreviewFileId]) {
-                        fileCache[currentPreviewFileId].parsed_content = newContent;
-                    }
-                    const parser = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : (t => t);
-                    document.getElementById('previewContent').innerHTML = parser(newContent);
-                    toggleEditMode(false);
-                    loadFiles();
-                    alert('保存成功');
+                    handleSuccessRedirect(pasteStatus, '智能解析成功！');
                 } else {
-                    alert('保存失败: ' + data.msg);
+                    setStatus(pasteStatus, data.msg || '解析保存失败，请重试。', 'error');
+                    pasteParseSaveBtn.disabled = false;
+                    pasteParseSaveBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> 解析并保存';
                 }
             })
-            .catch(err => alert('网络错误: ' + err))
-            .finally(() => {
-                loadingEl.classList.add('hidden');
+            .catch(() => {
+                setStatus(pasteStatus, '解析保存失败，请检查网络连接。', 'error');
+                pasteParseSaveBtn.disabled = false;
+                pasteParseSaveBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> 解析并保存';
             });
-        }
+        });
 
-        function closePreview() {
-            const modal = document.getElementById('previewModal');
-            const contentDiv = document.getElementById('modalContent');
-            contentDiv.classList.remove('scale-100', 'opacity-100');
-            contentDiv.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-            }, 300);
-        }
+        // 3. AI 生成逻辑
+        const aiGenerateBtn = document.getElementById('aiGenerateBtn');
 
-        function deleteFile(id) {
-            if(!confirm('确定要删除这个文件及其解析记录吗？')) return;
-            fetch('/api/delete_file_asset', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({id: id})
-            })
-            .then(res => res.json())
-            .then(data => {
-                if(data.msg === '删除成功') loadFiles();
-                else alert('删除失败: ' + data.msg);
-            });
-        }
-
-        function switchPanel(panel) {
-            const panels = ['upload', 'paste', 'ai'];
-            const colorMap = {
-                upload: ['bg-sky-50', 'text-sky-600', 'border-sky-100'],
-                paste: ['bg-amber-50', 'text-amber-600', 'border-amber-100'],
-                ai: ['bg-purple-50', 'text-purple-600', 'border-purple-100']
-            };
-            panels.forEach(p => {
-                document.getElementById(`panel-${p}`).classList.toggle('hidden', p !== panel);
-                const tab = document.getElementById(`tab-${p}`);
-                const activeClasses = colorMap[p];
-                if (p === panel) {
-                    tab.classList.add(...activeClasses);
-                    tab.classList.remove('text-slate-400', 'bg-white', 'border-slate-100');
-                } else {
-                    tab.classList.remove(...activeClasses);
-                    tab.classList.add('text-slate-400', 'bg-white', 'border-slate-100');
-                }
-            });
-        }
-
-        function setStatus(element, message, state = 'info') {
-            if (!element) return;
-            element.textContent = message;
-            element.classList.remove('text-slate-400', 'text-emerald-600', 'text-rose-500');
-            if (state === 'success') {
-                element.classList.add('text-emerald-600');
-            } else if (state === 'error') {
-                element.classList.add('text-rose-500');
-            } else {
-                element.classList.add('text-slate-400');
+        aiGenerateBtn.addEventListener('click', () => {
+            const prompt = document.getElementById('aiPrompt').value.trim();
+            if (!prompt && materialFiles.length === 0 && materialExistingIds.size === 0) {
+                setStatus(document.getElementById('aiStatus'), '请输入提示词或选择/上传参考素材。', 'error');
+                return;
             }
-        }
+            const formData = new FormData();
+            formData.append('prompt', prompt);
+            formData.append('doc_type', document.getElementById('aiDocType').value);
+            materialFiles.forEach(f => formData.append('files', f));
+            materialExistingIds.forEach(id => formData.append('existing_file_ids', id));
 
-        // =======================
-        // [修复 1] 加载下拉框数据
-        // =======================
-        function loadFiles() {
-            // 只需要填充 AI 生成面板的下拉框
-            const select = document.getElementById('aiExistingSelect');
-            if (!select) return;
+            const btn = document.getElementById('aiGenerateBtn');
+            const statusEl = document.getElementById('aiStatus');
 
-            // 保持第一个默认选项 "+ 从文档库选择..."
-            const defaultOption = select.options[0];
-            select.innerHTML = '';
-            select.appendChild(defaultOption);
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 生成中...';
+            setStatus(statusEl, 'AI 正在阅读素材并生成内容，请稍候...');
 
-            // 调用后端接口获取所有已解析文件
-            fetch('/api/my_parsed_files')
-                .then(res => res.json())
-                .then(data => {
-                    data.forEach(f => {
-                        // 更新缓存，供后续 renderAiMaterials 使用
-                        fileCache[f.id] = f;
-
-                        // 创建下拉选项
-                        const option = document.createElement('option');
-                        option.value = f.id;
-                        // 截断过长的文件名
-                        const name = f.original_name.length > 20 ? f.original_name.substring(0, 20) + '...' : f.original_name;
-                        option.textContent = name;
-                        select.appendChild(option);
-                    });
-                })
-                .catch(err => console.error("加载文档列表失败:", err));
-        }
-
-        // =======================
-        // [修复 2] 渲染已选素材 UI
-        // =======================
-        function renderAiMaterials() {
-            const listContainer = document.getElementById('aiMaterialList');
-            const emptyState = document.getElementById('aiMaterialEmpty');
-            const totalCountSpan = document.getElementById('aiTotalCount');
-
-            // 清空列表（保留空状态元素，稍后控制显示隐藏）
-            // 这里我们需要重新构建列表内容
-            // 先移除除 emptyState 以外的所有元素
-            Array.from(listContainer.children).forEach(child => {
-                if (child.id !== 'aiMaterialEmpty') {
-                    listContainer.removeChild(child);
-                }
-            });
-
-            let totalCount = 0;
-
-            // 1. 渲染已存在的库文件 (Existing Files)
-            materialExistingIds.forEach(id => {
-                const f = fileCache[id];
-                if (!f) return;
-
-                totalCount++;
-                const item = document.createElement('div');
-                item.className = "flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 text-xs group hover:border-purple-300 transition";
-                item.innerHTML = `
-                    <div class="flex items-center gap-2 truncate">
-                        <i class="fas fa-database text-purple-400"></i>
-                        <span class="truncate text-slate-600" title="${escapeHtml(f.original_name)}">${escapeHtml(f.original_name)}</span>
-                    </div>
-                    <button onclick="removeMaterial('existing', '${id}')" class="text-slate-300 hover:text-rose-500 px-1">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-                listContainer.appendChild(item);
-            });
-
-            // 2. 渲染新上传的文件 (New Uploads)
-            materialFiles.forEach((file, index) => {
-                totalCount++;
-                const config = getFileIconConfig(file.name);
-                const item = document.createElement('div');
-                item.className = "flex items-center justify-between bg-white border border-slate-200 rounded-lg p-2 text-xs group hover:border-purple-300 transition";
-                item.innerHTML = `
-                    <div class="flex items-center gap-2 truncate">
-                        <i class="fas ${config.icon} ${config.text}"></i>
-                        <span class="truncate text-slate-600" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
-                        <span class="text-[10px] text-slate-400 bg-slate-50 px-1 rounded">新上传</span>
-                    </div>
-                    <button onclick="removeMaterial('new', ${index})" class="text-slate-300 hover:text-rose-500 px-1">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-                listContainer.appendChild(item);
-            });
-
-            // 3. 状态控制
-            if (totalCount === 0) {
-                emptyState.classList.remove('hidden');
-                emptyState.classList.add('flex');
-            } else {
-                emptyState.classList.add('hidden');
-                emptyState.classList.remove('flex');
-            }
-
-            if (totalCountSpan) totalCountSpan.textContent = totalCount;
-        }
-
-        function initActions() {
-            // === [新增] 通用跳转处理函数 ===
-            const handleSuccessRedirect = (statusEl, msg) => {
-                setStatus(statusEl, `${msg} 正在跳转至文档库...`, 'success');
-                // 禁用页面交互防止重复点击，增加转圈效果
-                document.body.style.cursor = 'wait';
-                setTimeout(() => {
-                    window.location.href = '/library/view';
-                }, 1000); // 1秒延迟，让用户看清成功提示
-            };
-
-            // 1. 上传解析逻辑
-            const uploadInput = document.getElementById('uploadFileInput');
-            const uploadDisplay = document.getElementById('uploadFileDisplay');
-            const uploadStatus = document.getElementById('uploadStatus');
-            const uploadBtn = document.getElementById('uploadParseBtn');
-
-            uploadInput.addEventListener('change', () => {
-                if (!uploadInput.files.length) return;
-                const file = uploadInput.files[0];
-                uploadDisplay.innerHTML = `
-                    <div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto text-sky-500">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                    <p class="text-xs font-bold text-slate-600">${escapeHtml(file.name)}</p>
-                    <p class="text-[10px] text-slate-400">已准备上传</p>
-                `;
-            });
-
-            uploadBtn.addEventListener('click', () => {
-                if (!uploadInput.files.length) {
-                    setStatus(uploadStatus, '请先选择需要解析的文件。', 'error');
-                    return;
-                }
-                const formData = new FormData();
-                formData.append('file', uploadInput.files[0]);
-                formData.append('doc_type', document.getElementById('uploadDocType').value);
-
-                uploadBtn.disabled = true;
-                uploadBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中，大约需要5分钟...';
-                setStatus(uploadStatus, '系统正在调用解析器，请稍候。');
-
-                fetch('/api/parse_file_asset', { method: 'POST', body: formData })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            // [修改] 调用自动跳转
-                            handleSuccessRedirect(uploadStatus, '解析成功！');
-                        } else {
-                            setStatus(uploadStatus, data.msg || '解析失败，请重试。', 'error');
-                            uploadBtn.disabled = false;
-                            uploadBtn.innerHTML = '<i class="fas fa-bolt mr-1"></i> 解析并入库';
-                        }
-                    })
-                    .catch(() => {
-                        setStatus(uploadStatus, '解析失败，请检查网络连接。', 'error');
-                        uploadBtn.disabled = false;
-                        uploadBtn.innerHTML = '<i class="fas fa-bolt mr-1"></i> 解析并入库';
-                    });
-            });
-
-            // 2. 粘贴解析逻辑
-            const pasteClearBtn = document.getElementById('pasteClearBtn');
-            const pasteSaveBtn = document.getElementById('pasteSaveBtn');
-            const pasteParseSaveBtn = document.getElementById('pasteParseSaveBtn');
-            const pasteStatus = document.getElementById('pasteStatus');
-            const pasteContent = document.getElementById('pasteContent');
-
-            pasteClearBtn.addEventListener('click', () => {
-                pasteContent.value = '';
-                setStatus(pasteStatus, '');
-            });
-
-            pasteSaveBtn.addEventListener('click', () => {
-                // ... (纯保存逻辑保持不变，如果需要纯保存也跳转，可以在这里加，但通常纯保存可能还需要继续编辑，建议保持现状或根据需求加) ...
-                const content = pasteContent.value.trim();
-                if (!content) { setStatus(pasteStatus, '内容不能为空。', 'error'); return; }
-
-                pasteSaveBtn.disabled = true;
-                fetch('/api/save_pasted_document', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ content: content, doc_type: document.getElementById('pasteDocType').value })
-                })
+            fetch('/api/ai_generate_document', { method: 'POST', body: formData })
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                         // [修改] 纯保存也建议跳转，或者清空让用户继续。这里假设保存即完成
-                        handleSuccessRedirect(pasteStatus, '保存成功！');
+                        handleSuccessRedirect(statusEl, 'AI 生成成功！');
                     } else {
-                        setStatus(pasteStatus, data.msg || '保存失败', 'error');
-                        pasteSaveBtn.disabled = false;
-                    }
-                })
-                .catch(() => { pasteSaveBtn.disabled = false; });
-            });
-
-            pasteParseSaveBtn.addEventListener('click', () => {
-                const content = pasteContent.value.trim();
-                if (!content) {
-                    setStatus(pasteStatus, '内容不能为空。', 'error');
-                    return;
-                }
-                pasteParseSaveBtn.disabled = true;
-                pasteParseSaveBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 解析中，大约需要5分钟...';
-                setStatus(pasteStatus, 'AI 正在解析并规整内容，大约需要5分钟，请稍候。');
-
-                fetch('/api/parse_and_save_pasted_document', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        content: content,
-                        doc_type: document.getElementById('pasteDocType').value
-                    })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        // [修改] 调用自动跳转
-                        handleSuccessRedirect(pasteStatus, '智能解析成功！');
-                    } else {
-                        setStatus(pasteStatus, data.msg || '解析保存失败，请重试。', 'error');
-                        pasteParseSaveBtn.disabled = false;
-                        pasteParseSaveBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> 解析并保存';
+                        setStatus(statusEl, data.msg || '生成失败，请重试。', 'error');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i> 开始智能生成';
                     }
                 })
                 .catch(() => {
-                    setStatus(pasteStatus, '解析保存失败，请检查网络连接。', 'error');
-                    pasteParseSaveBtn.disabled = false;
-                    pasteParseSaveBtn.innerHTML = '<i class="fas fa-magic mr-1"></i> 解析并保存';
+                    setStatus(statusEl, '网络错误。', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i> 开始智能生成';
                 });
-            });
+        });
+    }
 
-            // 3. AI 生成逻辑
-            const aiGenerateBtn = document.getElementById('aiGenerateBtn');
-            const aiStatus = document.getElementById('aiStatus');
+    function goToExportPage() {
+        if (!currentPreviewFileId) return;
+        window.location.href = `/export_page/${currentPreviewFileId}`;
+    }
 
-            aiGenerateBtn.addEventListener('click', () => {
-                const prompt = document.getElementById('aiPrompt').value.trim();
-                if (!prompt && materialFiles.length === 0 && materialExistingIds.size === 0) {
-                    setStatus(document.getElementById('aiStatus'), '请输入提示词或选择/上传参考素材。', 'error');
-                    return;
-                }
-                const formData = new FormData();
-                formData.append('prompt', prompt);
-                formData.append('doc_type', document.getElementById('aiDocType').value);
-                materialFiles.forEach(f => formData.append('files', f));
-                materialExistingIds.forEach(id => formData.append('existing_file_ids', id));
-
-                const btn = document.getElementById('aiGenerateBtn');
-                const statusEl = document.getElementById('aiStatus');
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 生成中...';
-                setStatus(statusEl, 'AI 正在阅读素材并生成内容，请稍候...');
-
-                fetch('/api/ai_generate_document', { method: 'POST', body: formData })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                             // [修改] 调用自动跳转
-                            handleSuccessRedirect(statusEl, 'AI 生成成功！');
-                        } else {
-                            setStatus(statusEl, data.msg || '生成失败，请重试。', 'error');
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i> 开始智能生成';
-                        }
-                    })
-                    .catch(() => {
-                        setStatus(statusEl, '网络错误。', 'error');
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i> 开始智能生成';
-                    });
-            });
-        }
-
-        function goToExportPage() {
-            if (!currentPreviewFileId) return;
-            window.location.href = `/export_page/${currentPreviewFileId}`;
-        }
-    </script>
-</body>
-</html>
+    // --- 暴露函数到全局作用域（供 onclick 调用）---
+    window.switchPanel = switchPanel;
+    window.switchMainTab = switchMainTab;
+    window.loadSignatures = loadSignatures;
+    window.deleteSignature = deleteSignature;
+    window.previewSig = previewSig;
+    window.closePreviewModal = closePreviewModal;
+    window.removeMaterial = removeMaterial;
+    window.renderAiMaterials = renderAiMaterials;
+    window.initActions = initActions;
+</script>
+{% endblock %}

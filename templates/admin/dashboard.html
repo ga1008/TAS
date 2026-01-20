@@ -1,188 +1,158 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <title>AI服务配置中心 - 系统管理</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        sky: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7' },
-                        indigo: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5' },
-                        purple: { 50: '#faf5ff', 100: '#f3e8ff', 500: '#a855f7', 600: '#9333ea' },
-                        slate: { 800: '#1e293b', 500: '#64748b' }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body { background: radial-gradient(circle at top left, #f8fafc, #f0f9ff 80%); }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.6);
-        }
-    </style>
-</head>
-<body class="min-h-screen font-sans text-slate-800">
+{% extends "base.html" %}
 
-    <nav class="glass-panel sticky top-0 z-40 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <a href="/" class="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:border-rose-200 transition-all shadow-sm group">
-                    <i class="fas fa-arrow-left text-sm group-hover:-translate-x-0.5 transition-transform"></i>
-                </a>
-                <h1 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <span class="bg-gradient-to-br from-rose-500 to-rose-600 text-white w-8 h-8 rounded-lg flex items-center justify-center shadow-lg shadow-rose-200">
-                        <i class="fas fa-cog text-sm"></i>
-                    </span>
-                    AI服务配置中心
-                </h1>
-            </div>
+{% block title %}AI服务配置中心 - 系统管理{% endblock %}
+
+{% block header_title %}AI服务配置中心{% endblock %}
+
+{% block content %}
+<style>
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+</style>
+
+<div class="max-w-7xl mx-auto space-y-6">
+    <!-- 头部操作栏 -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-xl font-bold text-slate-700">服务提供商管理</h2>
+            <p class="text-sm text-slate-500 mt-1">配置和管理AI模型服务商</p>
         </div>
-    </nav>
-
-    <div class="max-w-7xl mx-auto px-4 py-8 space-y-6">
-
-        <div class="flex justify-between items-center mb-6">
-            <div>
-                <h2 class="text-xl font-bold text-slate-700">服务提供商管理</h2>
-                <p class="text-sm text-slate-500 mt-1">配置和管理AI模型服务商</p>
-            </div>
-            <button onclick="openAddProviderModal()" class="flex items-center gap-2 px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl shadow-lg shadow-sky-200 hover:shadow-sky-300 transition-all transform hover:-translate-y-0.5 font-bold text-sm">
-                <i class="fas fa-server"></i> 新增服务商
-            </button>
-        </div>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-            <div class="flex items-center gap-3 {{ 'bg-rose-50 text-rose-600 border-rose-200' if category == 'error' else 'bg-emerald-50 text-emerald-600 border-emerald-200' }} px-4 py-3 rounded-xl border mb-4 shadow-sm animate-fade-in">
-                <i class="fas {{ 'fa-exclamation-circle' if category == 'error' else 'fa-check-circle' }}"></i>
-                <span class="font-medium">{{ message }}</span>
-                <button onclick="this.parentElement.remove()" class="ml-auto text-current opacity-50 hover:opacity-100 transition-opacity">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            {% endfor %}
-        {% endif %}
-        {% endwith %}
-
-        <div class="space-y-6">
-            {% for provider in providers %}
-            <div class="glass-panel rounded-2xl shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-300">
-                <div class="absolute top-0 left-0 w-full h-1.5 {{ 'bg-emerald-500' if provider.is_enabled else 'bg-slate-300' }}"></div>
-
-                <div class="bg-slate-50/50 px-6 py-4 flex justify-between items-center border-b border-slate-100">
-                    <div class="flex items-center gap-3">
-                        <span class="px-3 py-1 rounded-full text-xs font-bold {{ 'bg-emerald-100 text-emerald-700 border border-emerald-200' if provider.is_enabled else 'bg-slate-100 text-slate-500 border border-slate-200' }}">
-                            {{ '运行中' if provider.is_enabled else '已停用' }}
-                        </span>
-                        <h3 class="text-lg font-bold text-slate-800">{{ provider.name }}</h3>
-                        <span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">({{ provider.provider_type }})</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="editProvider({{ provider|tojson }})" class="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200">
-                            <i class="fas fa-edit mr-1"></i> 配置
-                        </button>
-                        {% if provider.is_enabled %}
-                        <a href="{{ url_for('admin.toggle_provider', p_id=provider.id, state=0) }}" class="px-3 py-1.5 text-xs font-bold text-orange-600 hover:bg-orange-50 rounded-lg transition-colors border border-orange-200">
-                            <i class="fas fa-pause mr-1"></i> 停用
-                        </a>
-                        {% else %}
-                        <a href="{{ url_for('admin.toggle_provider', p_id=provider.id, state=1) }}" class="px-3 py-1.5 text-xs font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200">
-                            <i class="fas fa-play mr-1"></i> 启用
-                        </a>
-                        {% endif %}
-                        <a href="{{ url_for('admin.delete_provider', p_id=provider.id) }}" onclick="return confirm('确定删除该厂商及其所有模型吗？')" class="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200">
-                            <i class="fas fa-trash mr-1"></i>
-                        </a>
-                    </div>
-                </div>
-                <div class="px-6 py-5">
-                    <div class="flex flex-wrap items-center gap-6 mb-5 pb-4 border-b border-slate-100">
-                        <div class="flex-1 min-w-[200px]">
-                            <span class="text-xs text-slate-500 font-medium">Base URL:</span>
-                            <code class="block mt-1 text-sm text-slate-700 bg-slate-50 px-2 py-1 rounded">{{ provider.base_url }}</code>
-                        </div>
-                        <div>
-                            <span class="text-xs text-slate-500 font-medium">Max Concurrent:</span>
-                            <span class="block mt-1 text-lg font-bold text-indigo-600">{{ provider.max_concurrent_requests }}</span>
-                        </div>
-                        <div class="ml-auto">
-                            <button onclick="addModel({{ provider.id }}, '{{ provider.name }}')" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md shadow-indigo-200 transition-all transform hover:-translate-y-0.5">
-                                <i class="fas fa-plus mr-1"></i> 添加模型
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="overflow-x-auto rounded-xl border border-slate-100">
-                        <table class="min-w-full">
-                            <thead class="bg-slate-50 border-b border-slate-100">
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">模型名称</th>
-                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">能力类型</th>
-                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">权重</th>
-                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">状态</th>
-                                    <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-slate-50">
-                                {% for model in provider.models %}
-                                <tr class="hover:bg-sky-50/30 transition-colors">
-                                    <td class="px-4 py-3 text-sm text-slate-700 font-medium">{{ model.model_name }}</td>
-                                    <td class="px-4 py-3">
-                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold
-                                            {{ 'bg-purple-100 text-purple-700 border border-purple-200' if model.capability == 'thinking' else 'bg-sky-100 text-sky-700 border border-sky-200' if model.capability == 'standard' else 'bg-orange-100 text-orange-700 border border-orange-200' }}">
-                                            {{ model.capability }}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-3 text-sm text-slate-600 font-semibold">{{ model.weight }}</td>
-                                    <td class="px-4 py-3">
-                                        <i class="fas fa-circle text-xs {{ 'text-emerald-500' if model.is_enabled else 'text-slate-300' }}"></i>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <button onclick='editModel({{ model|tojson }})' class="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
-                                                编辑
-                                            </button>
-                                            {% if model.is_enabled %}
-                                            <a href="{{ url_for('admin.toggle_model', m_id=model.id, state=0) }}" class="text-xs text-orange-600 hover:text-orange-800 font-medium transition-colors">
-                                                停用
-                                            </a>
-                                            {% else %}
-                                            <a href="{{ url_for('admin.toggle_model', m_id=model.id, state=1) }}" class="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">
-                                                启用
-                                            </a>
-                                            {% endif %}
-                                            <a href="{{ url_for('admin.delete_model', m_id=model.id) }}" onclick="return confirm('删除此模型？')" class="text-xs text-rose-600 hover:text-rose-800 font-medium transition-colors">
-                                                删除
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-slate-400 text-sm">
-                                        <i class="fas fa-inbox text-2xl mb-2 block opacity-20"></i>
-                                        暂无配置模型
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
+        <button onclick="openAddProviderModal()" class="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 text-white rounded-xl shadow-lg shadow-sky-200 hover:shadow-sky-300 transition-all transform hover:-translate-y-0.5 font-bold text-sm">
+            <i class="fas fa-server"></i> 新增服务商
+        </button>
     </div>
 
+    <!-- 提示消息 -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="flex items-center gap-3 {{ 'bg-rose-50 text-rose-600 border-rose-200' if category == 'error' else 'bg-emerald-50 text-emerald-600 border-emerald-200' }} px-4 py-3 rounded-xl border shadow-sm animate-fade-in">
+            <i class="fas {{ 'fa-exclamation-circle' if category == 'error' else 'fa-check-circle' }}"></i>
+            <span class="font-medium">{{ message }}</span>
+            <button onclick="this.parentElement.remove()" class="ml-auto text-current opacity-50 hover:opacity-100 transition-opacity">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <!-- 服务商列表 -->
+    <div class="space-y-6">
+        {% for provider in providers %}
+        <div class="glass-panel rounded-2xl shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-300 relative">
+            <div class="absolute top-0 left-0 w-full h-1.5 {{ 'bg-emerald-500' if provider.is_enabled else 'bg-slate-300' }}"></div>
+
+            <div class="bg-slate-50/50 px-6 py-4 flex justify-between items-center border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <span class="px-3 py-1 rounded-full text-xs font-bold {{ 'bg-emerald-100 text-emerald-700 border border-emerald-200' if provider.is_enabled else 'bg-slate-100 text-slate-500 border border-slate-200' }}">
+                        {{ '运行中' if provider.is_enabled else '已停用' }}
+                    </span>
+                    <h3 class="text-lg font-bold text-slate-800">{{ provider.name }}</h3>
+                    <span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">({{ provider.provider_type }})</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="editProvider({{ provider|tojson }})" class="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200">
+                        <i class="fas fa-edit mr-1"></i> 配置
+                    </button>
+                    {% if provider.is_enabled %}
+                    <a href="{{ url_for('admin.toggle_provider', p_id=provider.id, state=0) }}" class="px-3 py-1.5 text-xs font-bold text-orange-600 hover:bg-orange-50 rounded-lg transition-colors border border-orange-200">
+                        <i class="fas fa-pause mr-1"></i> 停用
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('admin.toggle_provider', p_id=provider.id, state=1) }}" class="px-3 py-1.5 text-xs font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200">
+                        <i class="fas fa-play mr-1"></i> 启用
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('admin.delete_provider', p_id=provider.id) }}" onclick="return confirm('确定删除该厂商及其所有模型吗？')" class="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200">
+                        <i class="fas fa-trash mr-1"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="px-6 py-5">
+                <div class="flex flex-wrap items-center gap-6 mb-5 pb-4 border-b border-slate-100">
+                    <div class="flex-1 min-w-[200px]">
+                        <span class="text-xs text-slate-500 font-medium">Base URL:</span>
+                        <code class="block mt-1 text-sm text-slate-700 bg-slate-50 px-2 py-1 rounded">{{ provider.base_url }}</code>
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-500 font-medium">Max Concurrent:</span>
+                        <span class="block mt-1 text-lg font-bold text-indigo-600">{{ provider.max_concurrent_requests }}</span>
+                    </div>
+                    <div class="ml-auto">
+                        <button onclick="addModel({{ provider.id }}, '{{ provider.name }}')" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md shadow-indigo-200 transition-all transform hover:-translate-y-0.5">
+                            <i class="fas fa-plus mr-1"></i> 添加模型
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-100">
+                    <table class="min-w-full">
+                        <thead class="bg-slate-50 border-b border-slate-100">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">模型名称</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">能力类型</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">权重</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">状态</th>
+                                <th class="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-slate-50">
+                            {% for model in provider.models %}
+                            <tr class="hover:bg-sky-50/30 transition-colors">
+                                <td class="px-4 py-3 text-sm text-slate-700 font-medium">{{ model.model_name }}</td>
+                                <td class="px-4 py-3">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold
+                                        {{ 'bg-purple-100 text-purple-700 border border-purple-200' if model.capability == 'thinking' else 'bg-sky-100 text-sky-700 border border-sky-200' if model.capability == 'standard' else 'bg-orange-100 text-orange-700 border border-orange-200' }}">
+                                        {{ model.capability }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-slate-600 font-semibold">{{ model.weight }}</td>
+                                <td class="px-4 py-3">
+                                    <i class="fas fa-circle text-xs {{ 'text-emerald-500' if model.is_enabled else 'text-slate-300' }}"></i>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center gap-2">
+                                        <button onclick='editModel({{ model|tojson }})' class="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                                            编辑
+                                        </button>
+                                        {% if model.is_enabled %}
+                                        <a href="{{ url_for('admin.toggle_model', m_id=model.id, state=0) }}" class="text-xs text-orange-600 hover:text-orange-800 font-medium transition-colors">
+                                            停用
+                                        </a>
+                                        {% else %}
+                                        <a href="{{ url_for('admin.toggle_model', m_id=model.id, state=1) }}" class="text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors">
+                                            启用
+                                        </a>
+                                        {% endif %}
+                                        <a href="{{ url_for('admin.delete_model', m_id=model.id) }}" onclick="return confirm('删除此模型？')" class="text-xs text-rose-600 hover:text-rose-800 font-medium transition-colors">
+                                            删除
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="px-4 py-8 text-center text-slate-400 text-sm">
+                                    <i class="fas fa-inbox text-2xl mb-2 block opacity-20"></i>
+                                    暂无配置模型
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 模态框们 -->
 <div id="addProviderModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-all duration-300">
     <div class="glass-panel rounded-2xl shadow-2xl w-full max-w-lg transform transition-all duration-300 scale-95 opacity-0 modal-content">
         <form action="{{ url_for('admin.add_provider') }}" method="POST">
@@ -406,5 +376,4 @@
     });
 </script>
 
-</body>
-</html>
+{% endblock %}

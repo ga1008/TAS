@@ -1,125 +1,812 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
-{% block title %}教务系统连接测试 - TAS{% endblock %}
+{% block title %}教务系统同步 - TAS{% endblock %}
+
+{% block header_title %}教务系统同步{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-link me-2"></i>教务系统连接测试</h5>
-                </div>
-                <div class="card-body">
-                    <div class="alert alert-info mb-3">
-                        <small><i class="fas fa-info-circle"></i> 此页面仅用于测试教务系统连通性，账号密码仅在本次会话中使用，不会保存到数据库。</small>
+<style>
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .info-card {
+        background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.9) 100%);
+        border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+
+    .status-badge-connected {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+    }
+
+    .status-badge-disconnected {
+        background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+        box-shadow: 0 4px 14px rgba(148, 163, 184, 0.3);
+    }
+
+    .feature-card {
+        transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+    }
+
+    @keyframes pulse-ring {
+        0% { transform: scale(0.8); opacity: 1; }
+        100% { transform: scale(1.3); opacity: 0; }
+    }
+
+    .pulse-ring::before {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 2px solid currentColor;
+        animation: pulse-ring 2s ease-out infinite;
+    }
+</style>
+
+<div class="max-w-5xl mx-auto space-y-6">
+
+    <!-- 页面标题区 -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-xl font-bold text-slate-700 flex items-center gap-3">
+                <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                    <i class="fas fa-university"></i>
+                </span>
+                教务系统同步
+            </h2>
+            <p class="text-sm text-slate-500 mt-1 ml-13">连接教务系统，同步课程表、学生名单与教学任务</p>
+        </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- 左侧：连接状态卡片 -->
+        <div class="lg:col-span-2 space-y-6">
+
+            <!-- 连接状态面板 -->
+            <div id="statusPanel" class="glass-panel rounded-2xl shadow-lg overflow-hidden">
+                <div class="p-6">
+                    <!-- 加载中状态 -->
+                    <div id="loadingState" class="flex flex-col items-center justify-center py-12">
+                        <i class="fas fa-circle-notch fa-spin text-indigo-500 text-3xl mb-4"></i>
+                        <p class="text-slate-500">正在检查连接状态...</p>
                     </div>
 
-                    <form id="jwxt-login-form">
-                        <div class="mb-3">
-                            <label for="username" class="form-label">教工号/学号</label>
-                            <input type="text" class="form-control" id="username" name="username" required placeholder="请输入教务系统账号">
-                        </div>
-                        <div class="mb-3">
-                            <label for="password" class="form-label">密码</label>
-                            <input type="password" class="form-control" id="password" name="password" required placeholder="请输入教务系统密码">
-                        </div>
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary" id="btn-connect">
-                                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                                <span class="btn-text">立即连接</span>
-                            </button>
-                        </div>
-                    </form>
+                    <!-- 已连接状态 -->
+                    <div id="connectedState" class="hidden">
+                        <div class="flex items-start gap-6">
+                            <!-- 状态图标 -->
+                            <div class="relative flex-shrink-0">
+                                <div class="w-20 h-20 rounded-2xl status-badge-connected flex items-center justify-center text-white">
+                                    <i class="fas fa-link text-3xl"></i>
+                                </div>
+                                <div class="absolute -bottom-1 -right-1 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-md">
+                                    <i class="fas fa-check-circle text-emerald-500 text-lg"></i>
+                                </div>
+                            </div>
 
-                    <div id="result-area" class="mt-4 d-none">
-                        <h6 class="border-bottom pb-2">连接结果</h6>
-                        
-                        <div id="success-box" class="alert alert-success d-none">
-                            <i class="fas fa-check-circle me-2"></i>连接成功！
-                            <hr>
-                            <div class="row">
-                                <div class="col-4 text-muted">姓名:</div>
-                                <div class="col-8 fw-bold" id="res-name">--</div>
-                                <div class="col-4 text-muted">学院:</div>
-                                <div class="col-8 fw-bold" id="res-college">--</div>
-                                <div class="col-4 text-muted">角色:</div>
-                                <div class="col-8 fw-bold" id="res-role">--</div>
+                            <!-- 状态信息 -->
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <h3 class="text-lg font-bold text-slate-800">已连接教务系统</h3>
+                                    <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                        <i class="fas fa-circle text-[6px] mr-1.5 animate-pulse"></i>在线
+                                    </span>
+                                    <!-- 存储模式标签 -->
+                                    <span id="storageModeBadge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 hidden">
+                                        <i class="fas fa-database mr-1"></i><span id="storageModeText">持久保存</span>
+                                    </span>
+                                </div>
+
+                                <div class="space-y-3 mt-4">
+                                    <div class="flex items-center gap-3 bg-slate-50 px-4 py-3 rounded-xl">
+                                        <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
+                                            <i class="fas fa-user"></i>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-slate-400 font-medium">教工号</span>
+                                            <p id="displayUsername" class="text-sm font-bold text-slate-700">--</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div class="flex items-center gap-3 bg-slate-50 px-4 py-3 rounded-xl">
+                                            <div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">
+                                                <i class="fas fa-id-card"></i>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs text-slate-400 font-medium">姓名</span>
+                                                <p id="displayName" class="text-sm font-bold text-slate-700">--</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-3 bg-slate-50 px-4 py-3 rounded-xl">
+                                            <div class="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center text-sky-600">
+                                                <i class="fas fa-building"></i>
+                                            </div>
+                                            <div>
+                                                <span class="text-xs text-slate-400 font-medium">学院</span>
+                                                <p id="displayCollege" class="text-sm font-bold text-slate-700 truncate max-w-[120px]">--</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center gap-3 bg-slate-50 px-4 py-3 rounded-xl">
+                                        <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600">
+                                            <i class="fas fa-clock"></i>
+                                        </div>
+                                        <div>
+                                            <span class="text-xs text-slate-400 font-medium">上次同步</span>
+                                            <p id="displayLastCheck" class="text-sm font-bold text-slate-700">--</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div id="error-box" class="alert alert-danger d-none">
-                            <i class="fas fa-exclamation-triangle me-2"></i><span id="error-msg">连接失败</span>
+                        <!-- 操作按钮 -->
+                        <div class="flex items-center gap-3 mt-6 pt-6 border-t border-slate-100">
+                            <button onclick="openUpdateModal()" class="flex-1 flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transition-all transform hover:-translate-y-0.5 font-bold text-sm">
+                                <i class="fas fa-sync-alt"></i> 更新账号信息
+                            </button>
+                            <button onclick="refreshInfo()" id="btnRefreshInfo" class="px-5 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all font-medium text-sm">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                            <button onclick="confirmDisconnect()" class="px-5 py-3 bg-white border border-rose-200 text-rose-600 rounded-xl hover:bg-rose-50 hover:border-rose-300 transition-all font-medium text-sm">
+                                <i class="fas fa-unlink"></i>
+                            </button>
                         </div>
                     </div>
 
+                    <!-- 未连接状态 -->
+                    <div id="disconnectedState" class="hidden">
+                        <div class="flex flex-col items-center text-center py-8">
+                            <div class="relative mb-6">
+                                <div class="w-24 h-24 rounded-2xl status-badge-disconnected flex items-center justify-center text-white">
+                                    <i class="fas fa-unlink text-4xl"></i>
+                                </div>
+                            </div>
+
+                            <h3 class="text-xl font-bold text-slate-700 mb-2">尚未连接教务系统</h3>
+                            <p class="text-slate-500 text-sm max-w-md mb-8">
+                                连接教务系统后，您可以自动同步课程表、学生名单等教学数据，<br>
+                                大幅提升工作效率。
+                            </p>
+
+                            <button onclick="openBindModal()" class="flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-xl shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transition-all transform hover:-translate-y-0.5 font-bold">
+                                <i class="fas fa-link"></i> 立即绑定教务系统
+                            </button>
+                        </div>
+                    </div>
                 </div>
+            </div>
+
+            <!-- 功能介绍卡片 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="feature-card info-card rounded-xl p-5">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-100 to-sky-50 flex items-center justify-center text-sky-600 mb-4">
+                        <i class="fas fa-calendar-alt text-xl"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-700 mb-1">课程表同步</h4>
+                    <p class="text-xs text-slate-500 leading-relaxed">自动获取本学期课程安排，无需手动录入</p>
+                </div>
+
+                <div class="feature-card info-card rounded-xl p-5">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center text-purple-600 mb-4">
+                        <i class="fas fa-users text-xl"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-700 mb-1">学生名单</h4>
+                    <p class="text-xs text-slate-500 leading-relaxed">一键导入选课学生，包含学号、姓名等信息</p>
+                </div>
+
+                <div class="feature-card info-card rounded-xl p-5">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center text-emerald-600 mb-4">
+                        <i class="fas fa-tasks text-xl"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-700 mb-1">教学任务</h4>
+                    <p class="text-xs text-slate-500 leading-relaxed">同步教学任务安排，便于统一管理</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：安全提示 -->
+        <div class="space-y-6">
+            <div class="info-card rounded-2xl p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-700">安全保障</h4>
+                </div>
+
+                <ul class="space-y-3 text-sm text-slate-600">
+                    <li class="flex items-start gap-2">
+                        <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
+                        <span>数据传输全程加密 (HTTPS)</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
+                        <span>密码本地加密存储</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
+                        <span>仅用于教学数据同步</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
+                        <span>支持随时解除绑定</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="info-card rounded-2xl p-6">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-amber-200">
+                        <i class="fas fa-lightbulb"></i>
+                    </div>
+                    <h4 class="font-bold text-slate-700">使用提示</h4>
+                </div>
+
+                <ul class="space-y-3 text-sm text-slate-600">
+                    <li class="flex items-start gap-2">
+                        <span class="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+                        <span>使用教务系统账号密码绑定</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+                        <span>选择<b class="text-indigo-600">"记住登录"</b>将保存到数据库，下次无需重复登录</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
+                        <span>不勾选则仅在当前会话有效，关闭浏览器后需重新登录</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
+                        <span>教务密码变更后需重新绑定</span>
+                    </li>
+                </ul>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
+<!-- 绑定/更新弹窗 -->
+<div id="bindModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-all duration-300">
+    <div class="glass-panel rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content">
+        <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+            <h5 id="modalTitle" class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                    <i class="fas fa-university text-sm"></i>
+                </span>
+                绑定教务系统
+            </h5>
+            <button type="button" onclick="closeModal('bindModal')" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex items-center justify-center">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form id="bindForm" onsubmit="submitBind(event)" class="px-6 py-5 space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">教工号 / 学号</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <input type="text" id="inputUsername" name="username"
+                           class="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all"
+                           placeholder="请输入您的账号" required>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">密码</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <input type="password" id="inputPassword" name="password"
+                           class="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all"
+                           placeholder="请输入教务系统密码" required>
+                </div>
+            </div>
+
+            <!-- 记住登录切换 -->
+            <div class="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600">
+                        <i class="fas fa-save"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-700">记住登录信息</p>
+                        <p id="rememberHint" class="text-xs text-slate-400">保存到数据库，下次无需重新登录</p>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="inputRemember" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+            </div>
+
+            <!-- 错误提示 -->
+            <div id="bindError" class="hidden items-center gap-2 bg-rose-50 text-rose-600 text-sm font-medium p-3 rounded-xl border border-rose-100">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="bindErrorMsg"></span>
+            </div>
+
+            <!-- 成功提示 -->
+            <div id="bindSuccess" class="hidden items-center gap-2 bg-emerald-50 text-emerald-600 text-sm font-medium p-3 rounded-xl border border-emerald-100">
+                <i class="fas fa-check-circle"></i>
+                <span id="bindSuccessMsg">登录验证成功！</span>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4">
+                <button type="button" onclick="testLogin()" id="btnTest" class="px-4 py-2 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors">
+                    <i class="fas fa-vial mr-1"></i> 测试登录
+                </button>
+                <button type="submit" id="btnSubmit" class="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transition-all transform hover:-translate-y-0.5">
+                    <i class="fas fa-link mr-1"></i> <span id="btnSubmitText">绑定并保存</span>
+                </button>
+            </div>
+        </form>
+
+        <div class="px-6 pb-5">
+            <p class="text-xs text-slate-400 text-center">
+                <i class="fas fa-shield-alt mr-1"></i> 数据传输全程加密，仅用于教学数据同步
+            </p>
+        </div>
+    </div>
+</div>
+
 <script>
-$(document).ready(function() {
-    $('#jwxt-login-form').on('submit', function(e) {
-        e.preventDefault();
-        
-        // UI Reset
-        const $btn = $('#btn-connect');
-        const $spinner = $btn.find('.spinner-border');
-        const $btnText = $btn.find('.btn-text');
-        
-        $btn.prop('disabled', true);
-        $spinner.removeClass('d-none');
-        $btnText.text('正在连接...');
-        
-        $('#result-area').addClass('d-none');
-        $('#success-box, #error-box').addClass('d-none');
+(function() {
+    'use strict';
 
-        // Data
-        const formData = {
-            username: $('#username').val().trim(),
-            password: $('#password').val()
+    // 状态变量（使用 window 前缀避免重复声明问题）
+    window._jwxtState = {
+        isConnected: false,
+        currentBinding: null,
+        isUpdateMode: false,
+        isPersistent: false  // 当前是否持久保存
+    };
+
+    // 页面初始化 - 兼容直接访问和 SPA 导航
+    function initPage() {
+        const statusPanel = document.getElementById('statusPanel');
+        if (!statusPanel) return; // 不在此页面
+
+        // 重置状态
+        window._jwxtState.isConnected = false;
+        window._jwxtState.currentBinding = null;
+        window._jwxtState.isUpdateMode = false;
+
+        checkStatus();
+    }
+
+    // 立即执行一次（处理 SPA 导航的情况）
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(initPage, 0);
+    }
+    // 监听 DOMContentLoaded（处理直接访问的情况）
+    document.addEventListener('DOMContentLoaded', initPage);
+    // 监听 SPA 导航完成事件
+    window.addEventListener('spa:navigated', initPage);
+
+    // 检查连接状态
+    async function checkStatus() {
+        showLoading();
+
+        try {
+            const res = await fetch('/jwxt/status');
+            const data = await res.json();
+
+            if (data.linked) {
+                window._jwxtState.isConnected = true;
+                window._jwxtState.currentBinding = data;
+                showConnectedState(data);
+                // 异步获取详细信息
+                refreshInfo();
+            } else if (data.status === 'expired') {
+                // 凭证已失效，显示特殊提示
+                window._jwxtState.isConnected = false;
+                showDisconnectedState();
+                showToast('登录凭证已失效，请重新登录', 'error');
+                // 预填充用户名后弹出登录窗口
+                setTimeout(() => {
+                    openBindModal();
+                    if (data.username) {
+                        document.getElementById('inputUsername').value = data.username;
+                    }
+                }, 500);
+            } else {
+                window._jwxtState.isConnected = false;
+                showDisconnectedState();
+                // 自动弹出绑定窗口
+                setTimeout(() => openBindModal(), 500);
+            }
+        } catch (e) {
+            console.error('检查状态失败:', e);
+            showDisconnectedState();
+        }
+    }
+
+    // 显示加载状态
+    function showLoading() {
+        document.getElementById('loadingState').classList.remove('hidden');
+        document.getElementById('connectedState').classList.add('hidden');
+        document.getElementById('disconnectedState').classList.add('hidden');
+    }
+
+    // 显示已连接状态
+    function showConnectedState(data) {
+        document.getElementById('loadingState').classList.add('hidden');
+        document.getElementById('connectedState').classList.remove('hidden');
+        document.getElementById('disconnectedState').classList.add('hidden');
+
+        document.getElementById('displayUsername').textContent = data.username || '--';
+        document.getElementById('displayLastCheck').textContent = data.last_check || '--';
+
+        // 显示存储模式标签
+        const badge = document.getElementById('storageModeBadge');
+        const modeText = document.getElementById('storageModeText');
+        const isPersistent = data.persistent || data.source === 'database';
+        window._jwxtState.isPersistent = isPersistent;
+
+        badge.classList.remove('hidden');
+        if (isPersistent) {
+            badge.className = 'px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-200';
+            modeText.innerHTML = '<i class="fas fa-database mr-1"></i>持久保存';
+        } else {
+            badge.className = 'px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200';
+            modeText.innerHTML = '<i class="fas fa-clock mr-1"></i>临时会话';
+        }
+    }
+
+    // 显示未连接状态
+    function showDisconnectedState() {
+        document.getElementById('loadingState').classList.add('hidden');
+        document.getElementById('connectedState').classList.add('hidden');
+        document.getElementById('disconnectedState').classList.remove('hidden');
+    }
+
+    // 刷新详细信息
+    async function refreshInfo() {
+        const btn = document.getElementById('btnRefreshInfo');
+        const icon = btn.querySelector('i');
+        icon.classList.add('fa-spin');
+
+        try {
+            const res = await fetch('/jwxt/info');
+            const data = await res.json();
+
+            if (data.code === 200 && data.data) {
+                document.getElementById('displayName').textContent = data.data.name || '已同步';
+                document.getElementById('displayCollege').textContent = data.data.college || '未知学院';
+                document.getElementById('displayUsername').textContent = data.data.username || window._jwxtState.currentBinding?.username || '--';
+                // 更新存储模式
+                if (data.data.source) {
+                    const isPersistent = data.data.persistent || data.data.source === 'database';
+                    window._jwxtState.isPersistent = isPersistent;
+                    const badge = document.getElementById('storageModeBadge');
+                    const modeText = document.getElementById('storageModeText');
+                    badge.classList.remove('hidden');
+                    if (isPersistent) {
+                        badge.className = 'px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-200';
+                        modeText.innerHTML = '<i class="fas fa-database mr-1"></i>持久保存';
+                    } else {
+                        badge.className = 'px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200';
+                        modeText.innerHTML = '<i class="fas fa-clock mr-1"></i>临时会话';
+                    }
+                }
+            } else if (data.need_reauth) {
+                // 凭证失效，切换到未连接状态
+                window._jwxtState.isConnected = false;
+                showDisconnectedState();
+                showToast('账号验证失败，请重新登录', 'error');
+                setTimeout(() => openBindModal(), 300);
+            }
+        } catch (e) {
+            console.error('获取信息失败:', e);
+        } finally {
+            icon.classList.remove('fa-spin');
+        }
+    }
+
+    // 打开绑定弹窗
+    function openBindModal() {
+        window._jwxtState.isUpdateMode = false;
+        document.getElementById('modalTitle').innerHTML = `
+            <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <i class="fas fa-university text-sm"></i>
+            </span>
+            绑定教务系统
+        `;
+        document.getElementById('btnSubmitText').textContent = '绑定并保存';
+        document.getElementById('bindForm').reset();
+
+        // 默认选中"记住登录"
+        document.getElementById('inputRemember').checked = true;
+        updateRememberHint(true);
+
+        hideBindError();
+        hideBindSuccess();
+        openModal('bindModal');
+    }
+
+    // 打开更新弹窗
+    function openUpdateModal() {
+        window._jwxtState.isUpdateMode = true;
+        document.getElementById('modalTitle').innerHTML = `
+            <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center text-white shadow-lg shadow-sky-200">
+                <i class="fas fa-sync-alt text-sm"></i>
+            </span>
+            更新账号信息
+        `;
+        document.getElementById('btnSubmitText').textContent = '更新并保存';
+
+        // 预填充用户名
+        if (window._jwxtState.currentBinding && window._jwxtState.currentBinding.username) {
+            document.getElementById('inputUsername').value = window._jwxtState.currentBinding.username;
+        }
+        document.getElementById('inputPassword').value = '';
+
+        // 预设 remember 状态（保持与当前存储模式一致）
+        document.getElementById('inputRemember').checked = window._jwxtState.isPersistent;
+        updateRememberHint(window._jwxtState.isPersistent);
+
+        hideBindError();
+        hideBindSuccess();
+        openModal('bindModal');
+    }
+
+    // 通用模态框控制
+    function openModal(modalId) {
+        const modal = document.getElementById(modalId);
+        const content = modal.querySelector('.modal-content');
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            content.classList.remove('scale-95', 'opacity-0');
+            content.classList.add('scale-100', 'opacity-100');
+        }, 10);
+
+        // 聚焦输入框
+        setTimeout(() => {
+            const firstInput = modal.querySelector('input:not([type="hidden"])');
+            if (firstInput) firstInput.focus();
+        }, 300);
+    }
+
+    function closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        const content = modal.querySelector('.modal-content');
+        content.classList.remove('scale-100', 'opacity-100');
+        content.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 300);
+    }
+
+    // 点击背景关闭
+    document.getElementById('bindModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal('bindModal');
+    });
+
+    // ESC 关闭
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('bindModal');
+            if (!modal.classList.contains('hidden')) {
+                closeModal('bindModal');
+            }
+        }
+    });
+
+    // 测试登录
+    async function testLogin() {
+        const username = document.getElementById('inputUsername').value.trim();
+        const password = document.getElementById('inputPassword').value;
+
+        if (!username || !password) {
+            showBindError('请输入账号和密码');
+            return;
+        }
+
+        const btn = document.getElementById('btnTest');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 验证中...';
+
+        hideBindError();
+        hideBindSuccess();
+
+        try {
+            const res = await fetch('/jwxt/test_login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                showBindSuccess(`验证成功！${data.data?.name ? '欢迎 ' + data.data.name : ''}`);
+            } else {
+                showBindError(data.msg || '登录验证失败');
+            }
+        } catch (e) {
+            showBindError('网络错误，请重试');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    // 提交绑定/更新
+    async function submitBind(e) {
+        e.preventDefault();
+
+        const username = document.getElementById('inputUsername').value.trim();
+        const password = document.getElementById('inputPassword').value;
+        const remember = document.getElementById('inputRemember').checked;
+
+        if (!username || !password) {
+            showBindError('请输入账号和密码');
+            return;
+        }
+
+        const btn = document.getElementById('btnSubmit');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i> 处理中...';
+
+        hideBindError();
+        hideBindSuccess();
+
+        const endpoint = window._jwxtState.isUpdateMode ? '/jwxt/update' : '/jwxt/connect';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, remember })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && (data.code === 200 || data.msg === '连接成功' || data.msg === '更新成功')) {
+                const modeText = remember ? '（已持久保存）' : '（仅本次会话有效）';
+                showToast((window._jwxtState.isUpdateMode ? '更新成功！' : '绑定成功！') + modeText, 'success');
+                closeModal('bindModal');
+
+                // 更新状态
+                window._jwxtState.currentBinding = { username, ...data.data };
+                window._jwxtState.isConnected = true;
+                window._jwxtState.isPersistent = remember;
+                showConnectedState({ username, last_check: '刚刚', persistent: remember });
+
+                // 更新显示
+                if (data.data) {
+                    document.getElementById('displayName').textContent = data.data.name || '已同步';
+                    document.getElementById('displayCollege').textContent = data.data.college || '未知学院';
+                }
+            } else {
+                showBindError(data.msg || '操作失败');
+            }
+        } catch (e) {
+            showBindError('网络错误，请重试');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    // 确认解绑
+    function confirmDisconnect() {
+        if (!confirm('确定要解除绑定吗？\n\n解除后需要重新输入账号密码才能使用教务同步功能。')) {
+            return;
+        }
+
+        fetch('/jwxt/disconnect', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                showToast('已解除绑定', 'success');
+                window._jwxtState.isConnected = false;
+                window._jwxtState.currentBinding = null;
+                showDisconnectedState();
+            })
+            .catch(e => {
+                showToast('解除绑定失败', 'error');
+            });
+    }
+
+    // 错误/成功提示
+    function showBindError(msg) {
+        const el = document.getElementById('bindError');
+        document.getElementById('bindErrorMsg').textContent = msg;
+        el.classList.remove('hidden');
+        el.classList.add('flex');
+    }
+
+    function hideBindError() {
+        const el = document.getElementById('bindError');
+        el.classList.add('hidden');
+        el.classList.remove('flex');
+    }
+
+    function showBindSuccess(msg) {
+        const el = document.getElementById('bindSuccess');
+        document.getElementById('bindSuccessMsg').textContent = msg;
+        el.classList.remove('hidden');
+        el.classList.add('flex');
+    }
+
+    function hideBindSuccess() {
+        const el = document.getElementById('bindSuccess');
+        el.classList.add('hidden');
+        el.classList.remove('flex');
+    }
+
+    // 更新"记住登录"提示文字
+    function updateRememberHint(checked) {
+        const hint = document.getElementById('rememberHint');
+        if (checked) {
+            hint.textContent = '保存到数据库，下次无需重新登录';
+        } else {
+            hint.textContent = '仅在当前会话有效，关闭浏览器后失效';
+        }
+    }
+
+    // 绑定 remember 切换事件
+    document.getElementById('inputRemember').addEventListener('change', function() {
+        updateRememberHint(this.checked);
+    });
+
+    // Toast 提示
+    function showToast(message, type = 'info') {
+        // 优先使用全局 Toast
+        if (typeof window.showToast === 'function' && window.showToast !== showToast) {
+            window.showToast(message, type);
+            return;
+        }
+
+        // 备用：创建简单版本
+        const colors = {
+            success: 'bg-emerald-500',
+            error: 'bg-rose-500',
+            info: 'bg-indigo-500'
         };
 
-        // AJAX Request
-        $.ajax({
-            url: '/jwxt/connect',  // 对应后端蓝图路由
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify(formData),
-            success: function(resp) {
-                // Handle Success
-                $('#result-area').removeClass('d-none');
-                $('#success-box').removeClass('d-none');
-                
-                $('#res-name').text(resp.data.name || '未知');
-                $('#res-college').text(resp.data.college || '未知');
-                $('#res-role').text(resp.data.role || '未知');
-            },
-            error: function(xhr) {
-                // Handle Error
-                $('#result-area').removeClass('d-none');
-                $('#error-box').removeClass('d-none');
-                
-                let msg = "未知错误";
-                if (xhr.responseJSON && xhr.responseJSON.msg) {
-                    msg = xhr.responseJSON.msg;
-                } else if (xhr.statusText) {
-                    msg = xhr.statusText;
-                }
-                $('#error-msg').text(msg);
-            },
-            complete: function() {
-                // Reset UI
-                $btn.prop('disabled', false);
-                $spinner.addClass('d-none');
-                $btnText.text('立即连接');
-            }
-        });
-    });
-});
+        const toast = document.createElement('div');
+        toast.className = `fixed top-20 right-8 z-[9999] px-5 py-3 rounded-xl text-white font-medium shadow-lg ${colors[type]} transform translate-x-full transition-transform duration-300`;
+        toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i>${message}`;
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => toast.classList.remove('translate-x-full'), 10);
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // 暴露函数到全局作用域（供 onclick 调用）
+    window.openUpdateModal = openUpdateModal;
+    window.refreshInfo = refreshInfo;
+    window.confirmDisconnect = confirmDisconnect;
+    window.openBindModal = openBindModal;
+    window.closeModal = closeModal;
+    window.openModal = openModal;
+    window.submitBind = submitBind;
+    window.testLogin = testLogin;
+
+})();
 </script>
+
 {% endblock %}

@@ -10,6 +10,7 @@ from blueprints.export import bp as export_bp
 from blueprints.grading import bp as grading_bp
 from blueprints.library import bp as library_bp
 from blueprints.main import bp as main_bp
+from blueprints.notifications import bp as notifications_bp
 from blueprints.signatures import bp as signatures_bp
 from blueprints.student import bp as student_bp
 from blueprints.jwxt import bp as jwxt_bp
@@ -74,6 +75,7 @@ def create_app():
     app.register_blueprint(export_bp)
     app.register_blueprint(student_bp)
     app.register_blueprint(jwxt_bp)
+    app.register_blueprint(notifications_bp)
 
     return app
 

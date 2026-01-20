@@ -19,11 +19,18 @@ bp = Blueprint('ai_gen', __name__)
 
 @bp.route('/ai_generator')
 def ai_generator_page():
+    """生成批改核心页面 - 仅包含生成表单"""
     ref_task_id = request.args.get('ref_task_id')
     ref_task = None
     if ref_task_id:
         ref_task = db.get_ai_task_by_id(ref_task_id)
 
+    return render_template('ai_generator.html', ref_task=ref_task, user=g.user)
+
+
+@bp.route('/ai_core_list')
+def ai_core_list_page():
+    """批改核心列表页面 - 显示所有核心和任务状态"""
     GraderFactory.load_graders()
     strategies = GraderFactory.get_all_strategies()
     display_list = []
@@ -59,7 +66,7 @@ def ai_generator_page():
 
         is_owner = (t.get('created_by') == g.user['id'])
 
-        # === 【修改点 1】: 过滤他人的失败/进行中任务，保持列表干净 ===
+        # 过滤他人的失败/进行中任务，保持列表干净
         # 如果任务失败，且不是我创建的，则不显示
         if t['status'] == 'failed' and not is_owner:
             continue
@@ -99,11 +106,13 @@ def ai_generator_page():
 
     display_list.sort(key=lambda x: x['created_at'], reverse=True)
 
-    return render_template('ai_generator.html', ref_task=ref_task, graders=display_list, user=g.user)
+    return render_template('ai_core_list.html', graders=display_list, user=g.user)
 
 
 @bp.route('/api/create_grader_task', methods=['POST'])
 def create_task():
+    from blueprints.notifications import NotificationService
+
     name = request.form.get('task_name')
     strictness = request.form.get('strictness', 'standard')
     extra_desc = request.form.get('extra_desc', '')
@@ -124,13 +133,17 @@ def create_task():
     _, exam_text = FileService.extract_text_from_file(exam_path)
     _, std_text = FileService.extract_text_from_file(std_path)
 
+    user_id = g.user['id']
     task_id = db.insert_ai_task(name, "pending", "提交中...", exam_path, std_path, strictness, extra_desc, max_score,
-                                g.user['id'], course_name)
+                                user_id, course_name)
 
-    # 启动线程
+    # 创建任务提交通知
+    NotificationService.notify_task_created(user_id, task_id, name)
+
+    # 启动线程（传入 user_id 和 task_name 以便在状态变更时更新通知）
     app_config = current_app.config  # 传递 config 给线程
     t = threading.Thread(target=AiService.generate_grader_worker,
-                         args=(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config, course_name))
+                         args=(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config, course_name, user_id, name))
     t.start()
 
     return jsonify({"msg": "任务已提交", "task_id": task_id})

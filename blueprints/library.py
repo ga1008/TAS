@@ -464,6 +464,44 @@ def delete_file_asset():
     return jsonify({"msg": "删除成功"})
 
 
+@bp.route('/api/reparse_file', methods=['POST'])
+def reparse_file():
+    """【新增】重新解析已上传的文件"""
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json or {}
+    file_id = data.get('file_id')
+    doc_type = data.get('doc_type', 'exam')
+
+    if not file_id:
+        return jsonify({"msg": "缺少文件ID"}), 400
+
+    file_record = db.get_file_by_id(file_id)
+    if not file_record:
+        return jsonify({"msg": "文件不存在"}), 404
+
+    # 权限检查
+    if int(file_record['uploaded_by']) != int(g.user['id']) and not g.user.get('is_admin'):
+        return jsonify({"msg": "无权操作此文件"}), 403
+
+    try:
+        # 调用智能解析
+        success, content, meta = AiService.smart_parse_content(file_id, doc_type)
+
+        if not success:
+            return jsonify({"msg": content or "解析失败"}), 400
+
+        return jsonify({
+            "status": "success",
+            "msg": "解析成功",
+            "parsed_content": content[:500] if content else ""  # 返回前500字符预览
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"msg": f"解析失败: {str(e)}"}), 500
+
+
 @bp.route('/api/ai_generate_document', methods=['POST'])
 def ai_generate_document():
     """【补全】AI 生成文档（支持图片上传）"""

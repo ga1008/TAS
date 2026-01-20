@@ -3,7 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}AI服务后台{% endblock %}</title>
+    <title>{% block title %}AI 教学辅助系统{% endblock %}</title>
+
+    <!-- Tailwind CSS (统一加载，支持 SPA 导航) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+                        sky: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7' },
+                        slate: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a' },
+                        indigo: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+                        emerald: { 50: '#ecfdf5', 100: '#d1fae5', 500: '#10b981', 600: '#059669' },
+                        rose: { 50: '#fff1f2', 100: '#ffe4e6', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48' },
+                        amber: { 50: '#fffbeb', 100: '#fef3c7', 400: '#fbbf24', 500: '#f59e0b', 900: '#78350f' },
+                        purple: { 50: '#faf5ff', 100: '#f3e8ff', 400: '#c084fc', 500: '#a855f7', 600: '#9333ea' }
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 40px -10px rgba(0, 0, 0, 0.08)',
+                        'glow': '0 0 20px rgba(99, 102, 241, 0.15)'
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+                        'slide-in': 'slideIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.4s ease-out forwards',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'shake': 'shake 0.5s ease-in-out'
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        fadeInUp: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        slideIn: { '0%': { transform: 'translateX(-10px)', opacity: '0' }, '100%': { transform: 'translateX(0)', opacity: '1' } },
+                        slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        shake: {
+                            '0%, 100%': { transform: 'translateX(0)' },
+                            '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-4px)' },
+                            '20%, 40%, 60%, 80%': { transform: 'translateX(4px)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
 
     <script src="/static/js/marked.min.js"></script>
     <script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}"></script>
@@ -13,36 +57,674 @@
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/all.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-
     <link href="{{ url_for('static', filename='css/ai_chat.css') }}" rel="stylesheet">
 
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --topbar-height: 64px;
+            --primary-color: #4f46e5; /* Indigo 600 */
+            --bg-gradient: radial-gradient(at 0% 0%, #f8fafc 0, transparent 50%),
+                           radial-gradient(at 50% 0%, #e0e7ff 0, transparent 50%),
+                           radial-gradient(at 100% 0%, #f1f5f9 0, transparent 50%);
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.5);
+            --text-main: #1e293b; /* Slate 800 */
+            --text-muted: #64748b; /* Slate 500 */
+        }
+
+        body {
+            background-image: var(--bg-gradient);
+            background-color: #f8fafc;
+            background-attachment: fixed;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden; /* 禁止 Body 滚动，由 Main 滚动 */
+        }
+
+        /* 1. 侧边栏 (Sidebar) */
+        .app-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border-right: var(--glass-border);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.02);
+        }
+
+        .sidebar-header {
+            height: var(--topbar-height);
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            border-bottom: 1px solid rgba(0,0,0,0.03);
+        }
+
+        .sidebar-header i { margin-right: 12px; }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        /* 菜单项样式 */
+        .nav-category {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 16px 12px 8px;
+        }
+
+        .nav-item {
+            margin-bottom: 4px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            color: var(--text-muted);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            background-color: #eff6ff;
+            color: var(--primary-color);
+            transform: translateX(4px);
+        }
+
+        .nav-link.active {
+            background-color: #e0e7ff;
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .nav-link i.fa-fw {
+            width: 24px;
+            text-align: center;
+            margin-right: 8px;
+            font-size: 1rem;
+        }
+
+        /* 子菜单 */
+        .submenu {
+            padding-left: 36px;
+            display: none; /* 默认折叠 */
+            margin-top: 4px;
+        }
+
+        .submenu .nav-link {
+            font-size: 0.9rem;
+            padding: 8px 12px;
+        }
+
+        .nav-link .arrow {
+            margin-left: auto;
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+        }
+
+        .nav-link.expanded .arrow {
+            transform: rotate(90deg);
+        }
+
+        /* 底部用户信息 */
+        .sidebar-footer {
+            padding: 16px;
+            border-top: 1px solid rgba(0,0,0,0.03);
+            background: rgba(255,255,255,0.4);
+        }
+
+        /* 2. 顶部栏 (Top Bar) */
+        .app-topbar {
+            position: fixed;
+            top: 0;
+            left: var(--sidebar-width);
+            right: 0;
+            height: var(--topbar-height);
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(12px);
+            border-bottom: var(--glass-border);
+            z-index: 900;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+        }
+
+        .topbar-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-glass {
+            background: white;
+            border: 1px solid #e2e8f0;
+            color: var(--text-muted);
+            padding: 6px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .btn-glass:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        /* 3. 主内容区 (Main Content) */
+        .app-main {
+            margin-left: var(--sidebar-width);
+            margin-top: var(--topbar-height);
+            height: calc(100vh - var(--topbar-height));
+            overflow-y: auto;
+            padding: 32px;
+            scroll-behavior: smooth;
+        }
+
+        /* 适配原有 Bootstrap Alert */
+        .alert-container {
+            margin-bottom: 24px;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('main.index') }}">
-                <i class="fas fa-book-open"></i> 教学辅助系统
-            </a>
+
+    <aside class="app-sidebar">
+        <div class="sidebar-header">
+            <i class="fas fa-cube"></i> TAS 教学辅助
         </div>
-    </nav>
 
-    <div class="container main-content">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-info alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        <nav class="sidebar-content">
 
-        {% block content %}{% endblock %}
-    </div>
+            <div class="nav-item">
+                <a href="{{ url_for('main.index') }}" class="nav-link" id="menu-home">
+                    <i class="fas fa-home fa-fw"></i> 仪表盘
+                </a>
+            </div>
+
+            <div class="nav-category">教学管理</div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link toggle-submenu">
+                    <i class="fas fa-chalkboard-teacher fa-fw"></i> 课程与批改
+                    <i class="fas fa-chevron-right arrow"></i>
+                </a>
+                <div class="submenu">
+                    <a href="{{ url_for('main.index') }}" class="nav-link" id="menu-grading">作业批改</a>
+                    <a href="/new_class" class="nav-link" id="menu-newclass">新建班级</a>
+                </div>
+            </div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link toggle-submenu">
+                    <i class="fas fa-user-graduate fa-fw"></i> 学生管理
+                    <i class="fas fa-chevron-right arrow"></i>
+                </a>
+                <div class="submenu">
+                    <a href="{{ url_for('student.list_page') }}" class="nav-link" id="menu-student-list">学生名单</a>
+                    <a href="{{ url_for('student.import_page') }}" class="nav-link" id="menu-student-import">导入学生</a>
+                </div>
+            </div>
+
+            <div class="nav-category">资源与工具</div>
+
+            <div class="nav-item">
+                <a href="#" class="nav-link toggle-submenu">
+                    <i class="fas fa-magic fa-fw"></i> AI 批改核心
+                    <i class="fas fa-chevron-right arrow"></i>
+                </a>
+                <div class="submenu">
+                    <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="nav-link" id="menu-ai-gen">生成核心</a>
+                    <a href="{{ url_for('ai_gen.ai_core_list_page') }}" class="nav-link" id="menu-ai-list">核心列表</a>
+                </div>
+            </div>
+
+             <div class="nav-item">
+                <a href="{{ url_for('library.file_manager_page') }}" class="nav-link" id="menu-export">
+                    <i class="fas fa-file-export fa-fw"></i> 文档解析
+                </a>
+            </div>
+
+            <div class="nav-item">
+                <a href="{{ url_for('library.index') }}" class="nav-link" id="menu-library">
+                    <i class="fas fa-folder-open fa-fw"></i> 文档&导出
+                </a>
+            </div>
+
+            <div class="nav-category">系统</div>
+
+            <div class="nav-item">
+                <a href="{{ url_for('jwxt.page_connect') }}" class="nav-link" id="menu-jwxt">
+                    <i class="fas fa-university fa-fw"></i> 教务系统同步
+                </a>
+            </div>
+
+            <div class="nav-item">
+                <a href="javascript:void(0);" onclick="handleAdminAccess()" class="nav-link" id="menu-admin">
+                    <i class="fas fa-cog fa-fw"></i> 管理员后台
+                </a>
+            </div>
+             <div class="nav-item">
+                <a href="{{ url_for('auth.logout') }}" class="nav-link text-danger">
+                    <i class="fas fa-sign-out-alt fa-fw"></i> 退出登录
+                </a>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="d-flex align-items-center gap-2 text-muted small">
+                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div>
+                    <div class="fw-bold text-dark">{{ user.get('username', 'Teacher') }}</div>
+                    <div style="font-size: 0.75rem;">在线</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <header class="app-topbar">
+        <div class="d-flex align-items-center text-muted">
+            <span id="page-title-display" class="fw-bold text-dark">{% block header_title %}TAS{% endblock %}</span>
+        </div>
+
+        <div class="topbar-actions">
+            <button onclick="history.back()" class="btn-glass" title="返回上一页">
+                <i class="fas fa-arrow-left"></i> 返回
+            </button>
+
+            <a href="{{ url_for('main.index') }}" class="btn-glass" title="回到首页">
+                <i class="fas fa-home"></i> 首页
+            </a>
+
+            {# 通知中心组件 #}
+            {% include 'components/notification_center.html' %}
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div id="spa-content">
+            <div class="alert-container">
+                {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-info alert-dismissible fade show shadow-sm border-0" role="alert" style="background: white; border-left: 4px solid var(--primary-color);">
+                                <i class="fas fa-info-circle me-2 text-primary"></i> {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+
+            <div class="fade-in-up">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </main>
+
+    <!-- SPA 路由器 - 实现无刷新导航 -->
+    <script src="{{ url_for('static', filename='js/spa_router.js') }}"></script>
+
+    <script>
+        $(document).ready(function() {
+            // 菜单折叠逻辑 (子菜单展开/收起)
+            $('.toggle-submenu').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const $this = $(this);
+                const $submenu = $this.next('.submenu');
+
+                // 切换当前子菜单
+                $this.toggleClass('expanded');
+                $submenu.slideToggle(200);
+            });
+
+            // 监听 SPA 导航完成事件，重新绑定页面内的事件
+            window.addEventListener('spa:navigated', function(e) {
+                // 触发 Bootstrap 组件重新初始化（如有需要）
+                if (typeof bootstrap !== 'undefined') {
+                    // 重新初始化 tooltips
+                    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                    tooltipTriggerList.map(function (tooltipTriggerEl) {
+                        return new bootstrap.Tooltip(tooltipTriggerEl);
+                    });
+
+                    // 重新初始化 popovers
+                    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+                    popoverTriggerList.map(function (popoverTriggerEl) {
+                        return new bootstrap.Popover(popoverTriggerEl);
+                    });
+                }
+            });
+        });
+    </script>
 
     {% block scripts %}{% endblock %}
 
+    <!-- 管理员登录弹窗 -->
+    <div id="admin-login-modal" class="fixed inset-0 z-[9999] hidden">
+        <!-- 背景遮罩 -->
+        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeAdminLoginModal()"></div>
+
+        <!-- 弹窗内容 -->
+        <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div id="admin-login-content" class="relative w-full max-w-md bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/50 transform transition-all duration-300 scale-95 opacity-0">
+
+                <!-- 关闭按钮 -->
+                <button onclick="closeAdminLoginModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-all">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+
+                <!-- 弹窗头部 -->
+                <div class="p-8 pb-0">
+                    <div class="text-center mb-8">
+                        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-200 mb-4 transform transition hover:scale-105 duration-300">
+                            <i class="fas fa-shield-alt text-2xl"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-slate-800 tracking-tight mb-1">管理员验证</h2>
+                        <p class="text-sm text-slate-400 flex items-center justify-center gap-2">
+                            <i class="fas fa-lock text-xs"></i>
+                            请验证管理员身份以继续
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 表单区域 -->
+                <div class="px-8 pb-8">
+                    <form id="admin-login-form" onsubmit="submitAdminLogin(event)" class="space-y-5">
+                        <div class="group">
+                            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">管理员账号</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                                    <i class="fas fa-user-shield"></i>
+                                </div>
+                                <input type="text" name="admin_username" id="admin-username" required autocomplete="username"
+                                       class="block w-full pl-11 pr-4 py-3 bg-slate-50 border-0 text-slate-800 rounded-xl ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all duration-200 shadow-sm"
+                                       placeholder="请输入管理员账号">
+                            </div>
+                        </div>
+
+                        <div class="group">
+                            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">管理员密码</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                                    <i class="fas fa-key"></i>
+                                </div>
+                                <input type="password" name="admin_password" id="admin-password" required autocomplete="current-password"
+                                       class="block w-full pl-11 pr-4 py-3 bg-slate-50 border-0 text-slate-800 rounded-xl ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all duration-200 shadow-sm"
+                                       placeholder="请输入管理员密码">
+                            </div>
+                        </div>
+
+                        <!-- 错误提示 -->
+                        <div id="admin-login-error" class="hidden items-center gap-2 bg-rose-50 text-rose-600 text-sm font-medium p-3 rounded-xl border border-rose-100">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span id="admin-login-error-msg"></span>
+                        </div>
+
+                        <button type="submit" id="admin-login-btn" class="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-indigo-200 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:shadow-indigo-300/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform hover:-translate-y-0.5 group">
+                            <i class="fas fa-sign-in-alt mr-2 group-hover:translate-x-1 transition-transform"></i>
+                            <span id="admin-login-btn-text">安全登录</span>
+                        </button>
+                    </form>
+
+                    <p class="mt-6 text-center text-xs text-slate-400">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        仅限授权管理员访问
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员登录弹窗控制脚本 -->
+    <script>
+        // 管理员入口处理函数
+        async function handleAdminAccess() {
+            try {
+                // 先检查当前用户是否已是管理员
+                const response = await fetch('/admin/check_status');
+                const data = await response.json();
+
+                if (data.is_admin) {
+                    // 已经是管理员，直接跳转到控制台
+                    window.location.href = '/admin/';
+                } else {
+                    // 不是管理员，弹出登录窗口
+                    openAdminLoginModal();
+                }
+            } catch (error) {
+                console.error('检查管理员状态失败:', error);
+                // 发生错误时也弹出登录窗口
+                openAdminLoginModal();
+            }
+        }
+
+        // 打开管理员登录弹窗
+        function openAdminLoginModal() {
+            const modal = document.getElementById('admin-login-modal');
+            const content = document.getElementById('admin-login-content');
+
+            // 清空表单和错误
+            document.getElementById('admin-login-form').reset();
+            hideAdminLoginError();
+
+            // 显示弹窗
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+
+            // 触发动画
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+
+            // 聚焦到用户名输入框
+            setTimeout(() => {
+                document.getElementById('admin-username').focus();
+            }, 300);
+        }
+
+        // 关闭管理员登录弹窗
+        function closeAdminLoginModal() {
+            const modal = document.getElementById('admin-login-modal');
+            const content = document.getElementById('admin-login-content');
+
+            // 触发关闭动画
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+
+            // 延迟隐藏
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }, 300);
+        }
+
+        // 显示错误信息
+        function showAdminLoginError(message) {
+            const errorDiv = document.getElementById('admin-login-error');
+            const errorMsg = document.getElementById('admin-login-error-msg');
+            errorMsg.textContent = message;
+            errorDiv.classList.remove('hidden');
+            errorDiv.classList.add('flex');
+
+            // 震动效果
+            const content = document.getElementById('admin-login-content');
+            content.classList.add('animate-[shake_0.5s_ease-in-out]');
+            setTimeout(() => {
+                content.classList.remove('animate-[shake_0.5s_ease-in-out]');
+            }, 500);
+        }
+
+        // 隐藏错误信息
+        function hideAdminLoginError() {
+            const errorDiv = document.getElementById('admin-login-error');
+            errorDiv.classList.add('hidden');
+            errorDiv.classList.remove('flex');
+        }
+
+        // 设置按钮加载状态
+        function setAdminLoginLoading(loading) {
+            const btn = document.getElementById('admin-login-btn');
+            const btnText = document.getElementById('admin-login-btn-text');
+            const icon = btn.querySelector('i');
+
+            if (loading) {
+                btn.disabled = true;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+                icon.className = 'fas fa-circle-notch fa-spin mr-2';
+                btnText.textContent = '验证中...';
+            } else {
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                icon.className = 'fas fa-sign-in-alt mr-2 group-hover:translate-x-1 transition-transform';
+                btnText.textContent = '安全登录';
+            }
+        }
+
+        // 提交管理员登录
+        async function submitAdminLogin(event) {
+            event.preventDefault();
+            hideAdminLoginError();
+
+            const username = document.getElementById('admin-username').value.trim();
+            const password = document.getElementById('admin-password').value;
+
+            if (!username || !password) {
+                showAdminLoginError('请输入账号和密码');
+                return;
+            }
+
+            setAdminLoginLoading(true);
+
+            try {
+                const response = await fetch('/admin/ajax_login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // 登录成功，跳转到管理员控制台
+                    window.location.href = data.redirect || '/admin/';
+                } else {
+                    showAdminLoginError(data.message || '登录失败');
+                    setAdminLoginLoading(false);
+                }
+            } catch (error) {
+                console.error('登录请求失败:', error);
+                showAdminLoginError('网络错误，请稍后重试');
+                setAdminLoginLoading(false);
+            }
+        }
+
+        // ESC 键关闭弹窗
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('admin-login-modal');
+                if (!modal.classList.contains('hidden')) {
+                    closeAdminLoginModal();
+                }
+            }
+        });
+    </script>
+
+    <!-- 全局 Toast 提示容器 -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[10000] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- 全局 Toast 函数 -->
+    <script>
+        /**
+         * 显示 Toast 提示
+         * @param {string} message - 提示信息
+         * @param {string} type - 类型: 'success', 'error', 'warning', 'info'
+         * @param {number} duration - 显示时长(毫秒), 默认 3000
+         */
+        window.showToast = function(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            // 图标和颜色配置
+            const config = {
+                success: { icon: 'fa-check-circle', bg: 'bg-emerald-500', text: 'text-emerald-500' },
+                error: { icon: 'fa-exclamation-circle', bg: 'bg-rose-500', text: 'text-rose-500' },
+                warning: { icon: 'fa-exclamation-triangle', bg: 'bg-amber-500', text: 'text-amber-500' },
+                info: { icon: 'fa-info-circle', bg: 'bg-indigo-500', text: 'text-indigo-500' }
+            };
+            const cfg = config[type] || config.info;
+
+            // 创建 Toast 元素
+            const toast = document.createElement('div');
+            toast.className = `
+                pointer-events-auto flex items-center gap-3 px-4 py-3
+                bg-white/95 backdrop-blur-xl rounded-xl shadow-lg shadow-slate-200/50
+                border border-white/50 transform translate-x-full opacity-0
+                transition-all duration-300 ease-out max-w-sm
+            `;
+            toast.innerHTML = `
+                <div class="w-8 h-8 rounded-full ${cfg.bg} flex items-center justify-center flex-shrink-0">
+                    <i class="fas ${cfg.icon} text-white text-sm"></i>
+                </div>
+                <span class="text-sm font-medium text-slate-700 flex-1">${message}</span>
+                <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            `;
+
+            container.appendChild(toast);
+
+            // 触发进入动画
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-full', 'opacity-0');
+                toast.classList.add('translate-x-0', 'opacity-100');
+            });
+
+            // 自动移除
+            setTimeout(() => {
+                toast.classList.remove('translate-x-0', 'opacity-100');
+                toast.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        };
+    </script>
 
     <button id="ai-chat-fab" title="AI 助手">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -52,82 +734,28 @@
 
     <div id="ai-chat-modal">
         <div class="ai-chat-container">
-
             <div class="ai-chat-history-panel" id="ai-chat-history-panel">
-                <div class="history-header">
-                    <h4>对话历史</h4>
-                </div>
-                <div class="history-list" id="ai-chat-history-list">
-                    <div class="history-item-skeleton"></div>
-                    <div class="history-item-skeleton"></div>
-                </div>
+                <div class="history-header"><h4>对话历史</h4></div>
+                <div class="history-list" id="ai-chat-history-list"></div>
             </div>
-
             <div class="ai-chat-main-panel">
                 <div class="ai-chat-header">
                     <h3 id="ai-chat-current-title">AI 助手</h3>
                     <div class="header-buttons">
-                        <button id="ai-chat-btn-new" class="chat-btn" title="新对话">
-                            <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14m-7-7h14"/></svg>
-                        </button>
-                        <button id="ai-chat-btn-fullscreen" class="chat-btn" title="全屏">
-                            <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-                            </svg>
-                        </button>
-                        <button id="ai-chat-btn-close" class="chat-btn" title="关闭">
-                            <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                        </button>
+                        <button id="ai-chat-btn-new" class="chat-btn"><i class="fas fa-plus"></i></button>
+                        <button id="ai-chat-btn-close" class="chat-btn"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
-
-                <div class="ai-chat-messages" id="ai-chat-messages-box">
-                    <div class="ai-chat-message system">
-                        <div class="bubble">
-                            你好！我是你的AI助手。
-                            <br>
-                            - 开启 <i class="fas fa-search" style="font-size: 0.8em;"></i> (深度思考) 可查询题库。
-                            <br>
-                            - 关闭 <i class="fas fa-search" style="font-size: 0.8em;"></i> (深度思考) 进行常规对话。
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ai-chat-attachment-previews" id="ai-chat-previews">
-                    </div>
-
+                <div class="ai-chat-messages" id="ai-chat-messages-box"></div>
                 <div class="ai-chat-input-area">
                     <div class="input-row">
-                        <input type="file" id="ai-chat-file-input" accept="image/*" multiple style="display: none;">
-
-                        <div class="left-buttons">
-                            <button id="ai-deep-think-btn" class="chat-btn deep-think" title="深度思考 (查询题库)">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-
-                        <textarea id="ai-chat-textarea" placeholder="输入消息" rows="1"></textarea>
-
-                        <div class="right-buttons">
-                            <button id="ai-chat-btn-attach" class="chat-btn attach" title="上传图片">
-                                <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.49"/></svg>
-                            </button>
-                            <button id="ai-chat-btn-send" class="chat-btn send" title="发送">
-                                <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-                            </button>
-                        </div>
+                        <textarea id="ai-chat-textarea" placeholder="输入消息..."></textarea>
+                        <button id="ai-chat-btn-send" class="chat-btn send"><i class="fas fa-paper-plane"></i></button>
                     </div>
                 </div>
-            </div> <div class="resizer resizer-top"></div>
-            <div class="resizer resizer-right"></div>
-            <div class="resizer resizer-bottom"></div>
-            <div class="resizer resizer-left"></div>
-            <div class="resizer resizer-top-left"></div>
-            <div class="resizer resizer-top-right"></div>
-            <div class="resizer resizer-bottom-left"></div>
-            <div class="resizer resizer-bottom-right"></div>
+            </div>
         </div>
     </div>
 
-    </body>
+</body>
 </html>

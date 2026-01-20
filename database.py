@@ -268,9 +268,47 @@ class Database:
                        )
                        ''')
 
+        # 11. 教务系统账号绑定表 [NEW]
+        # 用于存储用户的教务系统账号，以便下次自动登录
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS jwxt_bindings
+                       (
+                           id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                           user_id       INTEGER NOT NULL UNIQUE,
+                           jwxt_username TEXT    NOT NULL,
+                           jwxt_password TEXT    NOT NULL, -- 实际生产中建议使用 AES 加密存储
+                           cookies       TEXT,             -- 预留：存储 Session Cookies 缓存
+                           is_active     BOOLEAN   DEFAULT 1,
+                           last_check_at TIMESTAMP,
+                           created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                       )
+                       ''')
+
+        # 12. 通知表 [NEW]
+        # 用于存储系统通知、任务状态更新等消息
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS notifications
+                       (
+                           id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                           user_id       INTEGER NOT NULL,            -- 接收通知的用户
+                           type          TEXT    NOT NULL,            -- 通知类型: task_pending, task_processing, task_success, task_failed, system
+                           title         TEXT    NOT NULL,            -- 通知标题
+                           message       TEXT,                        -- 通知内容
+                           detail        TEXT,                        -- 详细信息
+                           link          TEXT,                        -- 相关链接
+                           related_id    TEXT,                        -- 关联的实体 ID (如 task_id, grader_id)
+                           is_read       BOOLEAN   DEFAULT 0,         -- 是否已读
+                           created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                       )
+                       ''')
+
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_capability ON ai_models (capability)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_file_hash ON file_assets (file_hash)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_notification_user ON notifications (user_id, is_read)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_notification_related ON notifications (related_id)')
 
         conn.commit()
         self._init_super_admin(cursor, conn)
@@ -299,6 +337,9 @@ class Database:
         # 学生详细信息表迁移（如果表已存在但缺少字段）
         self._migrate_table(cursor, conn, "student_details", "status", "TEXT DEFAULT 'normal'")
 
+        # 教务系统绑定表迁移
+        self._migrate_table(cursor, conn, "jwxt_bindings", "cookies", "TEXT")
+
     def _migrate_table(self, cursor, conn, table, column, type_def):
         """辅助函数：检查列是否存在，不存在则添加"""
         try:
@@ -324,39 +365,44 @@ class Database:
     def get_document_library_tree(self, user_id, is_admin=False):
         """
         获取文档库的目录树结构：学年 -> 学期 -> 课程 -> 适用人群
+        优化：即使 academic_year 为空，也根据 course_name 分组
         """
         conn = self.get_connection()
         # 聚合查询，找出所有存在的组合
         if is_admin:
             sql = '''
-                  SELECT DISTINCT academic_year, \
-                                  semester, \
-                                  course_name, \
-                                  cohort_tag
+                  SELECT DISTINCT
+                      COALESCE(academic_year, '未分类') as academic_year,
+                      semester,
+                      course_name,
+                      cohort_tag
                   FROM file_assets
-                  WHERE academic_year IS NOT NULL
-                  ORDER BY academic_year DESC, semester ASC, course_name \
+                  WHERE course_name IS NOT NULL AND course_name != ''
+                  ORDER BY academic_year DESC, semester ASC, course_name
                   '''
             return [dict(row) for row in conn.execute(sql).fetchall()]
         else:
             sql = '''
-                  SELECT DISTINCT academic_year, \
-                                  semester, \
-                                  course_name, \
-                                  cohort_tag
+                  SELECT DISTINCT
+                      COALESCE(academic_year, '未分类') as academic_year,
+                      semester,
+                      course_name,
+                      cohort_tag
                   FROM file_assets
-                  WHERE uploaded_by = ? \
-                    AND academic_year IS NOT NULL
-                  ORDER BY academic_year DESC, semester ASC, course_name \
+                  WHERE uploaded_by = ?
+                    AND course_name IS NOT NULL AND course_name != ''
+                  ORDER BY academic_year DESC, semester ASC, course_name
                   '''
             return [dict(row) for row in conn.execute(sql, (user_id,)).fetchall()]
 
-    def get_files_by_filter(self, user_id, doc_category=None, year=None, course=None, cohort=None, search=None, is_admin=False):
+    def get_files_by_filter(self, user_id, doc_category=None, year=None, course=None, cohort=None, search=None, is_admin=False, include_unparsed=False):
         """
         [增强版] 高级筛选接口
+        :param include_unparsed: 是否包含未解析的文件
         """
         conn = self.get_connection()
-        sql = "SELECT f.*, u.username as uploader_name FROM file_assets f LEFT JOIN users u ON f.uploaded_by = u.id WHERE f.parsed_content IS NOT NULL"
+        # 修改：默认显示所有文件，不强制要求已解析
+        sql = "SELECT f.*, u.username as uploader_name FROM file_assets f LEFT JOIN users u ON f.uploaded_by = u.id WHERE 1=1"
         params = []
 
         # 权限控制：管理员可以看全部，普通用户只能看自己的
@@ -377,10 +423,11 @@ class Database:
             sql += " AND f.cohort_tag = ?"
             params.append(cohort)
 
-        # [新增] 模糊搜索
+        # [增强] 模糊搜索：支持文件名和内容搜索
         if search:
-            sql += " AND f.original_name LIKE ?"
-            params.append(f"%{search}%")
+            sql += " AND (f.original_name LIKE ? OR f.parsed_content LIKE ? OR f.course_name LIKE ?)"
+            search_pattern = f"%{search}%"
+            params.extend([search_pattern, search_pattern, search_pattern])
 
         sql += " ORDER BY f.created_at DESC"
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
@@ -1035,4 +1082,224 @@ class Database:
         conn = self.get_connection()
         row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         return dict(row) if row else None
+
+    def save_jwxt_binding(self, user_id, username, password):
+        """保存或更新教务系统绑定信息"""
+        conn = self.get_connection()
+        # 使用 INSERT OR REPLACE 或先删后插确保唯一性
+        conn.execute("DELETE FROM jwxt_bindings WHERE user_id=?", (user_id,))
+        conn.execute('''
+                     INSERT INTO jwxt_bindings (user_id, jwxt_username, jwxt_password, is_active, last_check_at)
+                     VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+                     ''', (user_id, username, password))
+        conn.commit()
+
+    def get_jwxt_binding(self, user_id, only_active=False):
+        """
+        获取用户的教务绑定信息
+        :param user_id: 用户ID
+        :param only_active: 是否只获取激活状态的绑定
+        """
+        conn = self.get_connection()
+        if only_active:
+            row = conn.execute(
+                "SELECT * FROM jwxt_bindings WHERE user_id=? AND is_active=1",
+                (user_id,)
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM jwxt_bindings WHERE user_id=?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+    def update_jwxt_binding_status(self, user_id, is_active):
+        """更新教务绑定的激活状态"""
+        conn = self.get_connection()
+        conn.execute('''
+            UPDATE jwxt_bindings SET is_active = ?, last_check_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        ''', (1 if is_active else 0, user_id))
+        conn.commit()
+
+    def update_jwxt_last_check(self, user_id):
+        """更新最后检查时间"""
+        conn = self.get_connection()
+        conn.execute('''
+            UPDATE jwxt_bindings SET last_check_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        ''', (user_id,))
+        conn.commit()
+
+    def delete_jwxt_binding(self, user_id):
+        """解除绑定"""
+        conn = self.get_connection()
+        conn.execute("DELETE FROM jwxt_bindings WHERE user_id=?", (user_id,))
+        conn.commit()
+
+    # ================= 通知管理 [NEW] =================
+
+    def create_notification(self, user_id, notif_type, title, message=None, detail=None, link=None, related_id=None):
+        """
+        创建一条通知
+        :param user_id: 接收通知的用户 ID
+        :param notif_type: 通知类型 (task_pending, task_processing, task_success, task_failed, system)
+        :param title: 通知标题
+        :param message: 通知内容
+        :param detail: 详细信息
+        :param link: 相关链接
+        :param related_id: 关联的实体 ID
+        :return: 新创建的通知 ID
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO notifications (user_id, type, title, message, detail, link, related_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, notif_type, title, message, detail, link, related_id))
+        conn.commit()
+        return cursor.lastrowid
+
+    def create_task_notification(self, user_id, task_id, task_name, status, log_info=None, grader_id=None):
+        """
+        创建任务状态变更通知的便捷方法
+        :param user_id: 接收通知的用户 ID
+        :param task_id: 任务 ID
+        :param task_name: 任务名称
+        :param status: 任务状态 (pending, processing, success, failed)
+        :param log_info: 日志信息
+        :param grader_id: 批改核心 ID (用于生成链接)
+        """
+        # 状态对应的通知配置
+        status_config = {
+            'pending': {'type': 'task_pending', 'title': '任务排队中'},
+            'processing': {'type': 'task_processing', 'title': '正在生成批改核心'},
+            'success': {'type': 'task_success', 'title': '批改核心生成完成'},
+            'failed': {'type': 'task_failed', 'title': '批改核心生成失败'}
+        }
+
+        config = status_config.get(status)
+        if not config:
+            return None
+
+        # 构建链接
+        link = f"/grader/{grader_id}" if grader_id else None
+
+        # 截取 log_info
+        detail = None
+        if log_info:
+            detail = log_info[:100] + '...' if len(log_info) > 100 else log_info
+
+        return self.create_notification(
+            user_id=user_id,
+            notif_type=config['type'],
+            title=config['title'],
+            message=task_name,
+            detail=detail,
+            link=link,
+            related_id=f"task_{task_id}"
+        )
+
+    def get_notifications(self, user_id, limit=20, include_read=False):
+        """
+        获取用户的通知列表
+        :param user_id: 用户 ID
+        :param limit: 返回数量限制
+        :param include_read: 是否包含已读通知
+        :return: 通知列表
+        """
+        conn = self.get_connection()
+        sql = '''
+            SELECT * FROM notifications
+            WHERE user_id = ?
+        '''
+        params = [user_id]
+
+        if not include_read:
+            sql += " AND is_read = 0"
+
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        return [dict(row) for row in conn.execute(sql, params).fetchall()]
+
+    def get_unread_notification_count(self, user_id):
+        """获取用户未读通知数量"""
+        conn = self.get_connection()
+        row = conn.execute('''
+            SELECT COUNT(*) as count FROM notifications
+            WHERE user_id = ? AND is_read = 0
+        ''', (user_id,)).fetchone()
+        return row['count'] if row else 0
+
+    def mark_notification_read(self, notification_id, user_id):
+        """标记单条通知为已读"""
+        conn = self.get_connection()
+        conn.execute('''
+            UPDATE notifications SET is_read = 1
+            WHERE id = ? AND user_id = ?
+        ''', (notification_id, user_id))
+        conn.commit()
+
+    def mark_all_notifications_read(self, user_id):
+        """标记用户所有通知为已读"""
+        conn = self.get_connection()
+        conn.execute('''
+            UPDATE notifications SET is_read = 1
+            WHERE user_id = ? AND is_read = 0
+        ''', (user_id,))
+        conn.commit()
+
+    def delete_notification(self, notification_id, user_id):
+        """删除单条通知"""
+        conn = self.get_connection()
+        conn.execute('''
+            DELETE FROM notifications
+            WHERE id = ? AND user_id = ?
+        ''', (notification_id, user_id))
+        conn.commit()
+
+    def delete_notifications_by_related_id(self, related_id):
+        """根据关联 ID 删除通知（如任务删除时清理相关通知）"""
+        conn = self.get_connection()
+        conn.execute('''
+            DELETE FROM notifications WHERE related_id = ?
+        ''', (related_id,))
+        conn.commit()
+
+    def clean_old_notifications(self, days=30):
+        """清理超过指定天数的已读通知"""
+        conn = self.get_connection()
+        conn.execute('''
+            DELETE FROM notifications
+            WHERE is_read = 1 AND created_at < datetime('now', ?)
+        ''', (f'-{days} days',))
+        conn.commit()
+
+    def update_notification_by_related_id(self, related_id, notif_type=None, title=None, detail=None, link=None):
+        """
+        根据关联 ID 更新通知（用于任务状态变更时更新现有通知）
+        """
+        conn = self.get_connection()
+        updates = []
+        params = []
+
+        if notif_type:
+            updates.append("type = ?")
+            params.append(notif_type)
+        if title:
+            updates.append("title = ?")
+            params.append(title)
+        if detail is not None:
+            updates.append("detail = ?")
+            params.append(detail)
+        if link is not None:
+            updates.append("link = ?")
+            params.append(link)
+
+        # 状态变更时重置为未读
+        updates.append("is_read = 0")
+
+        if updates:
+            params.append(related_id)
+            sql = f"UPDATE notifications SET {', '.join(updates)} WHERE related_id = ?"
+            conn.execute(sql, params)
+            conn.commit()
 

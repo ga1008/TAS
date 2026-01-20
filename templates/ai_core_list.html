@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}批改核心列表 - AI 教学辅助系统{% endblock %}
+
+{% block header_title %}批改核心列表{% endblock %}
+
+{% block content %}
+<style>
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+    .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    @keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+</style>
+
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- 顶部操作栏 -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <span class="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-sm">
+                <i class="fas fa-layer-group text-lg"></i>
+            </span>
+            <div>
+                <h1 class="text-lg font-bold text-slate-800">批改核心列表</h1>
+                <p class="text-xs text-slate-400">管理已生成的 AI 批改核心</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button onclick="openTrash()" class="group text-slate-400 hover:text-rose-500 text-xs font-bold flex items-center transition-colors px-4 py-2 rounded-xl hover:bg-rose-50 border border-transparent hover:border-rose-100">
+                <i class="fas fa-trash-alt mr-2"></i> 回收站
+            </button>
+            <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-0.5 transition-all flex items-center gap-2">
+                <i class="fas fa-plus"></i> 生成新核心
+            </a>
+        </div>
+    </div>
+
+    <!-- 核心列表网格 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="graderGrid">
+        {% for item in graders %}
+
+            {# --- 逻辑过滤：如果是他人的失败任务，直接跳过不显示 --- #}
+            {% if item.status == 'failed' and not item.is_owner %}
+                {# continue loop implicitly by rendering nothing #}
+            {% else %}
+
+                {% if item.type == 'task' %}
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-soft relative overflow-hidden task-card group transition-all hover:shadow-md"
+                         data-task-id="{{ item.id }}" id="task-card-{{ item.id }}">
+
+                        <div class="flex justify-between items-start mb-3 relative z-10">
+                            {% if item.status == 'failed' %}
+                                <span class="flex items-center text-rose-500 text-[10px] font-bold bg-rose-50 px-2 py-1 rounded-md border border-rose-100">
+                                    <i class="fas fa-exclamation-circle mr-1"></i> 生成失败
+                                </span>
+                            {% else %}
+                                <span class="flex items-center text-indigo-600 text-[10px] font-bold bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100">
+                                    <i class="fas fa-circle-notch fa-spin mr-1.5"></i> {{ '排队中' if item.status == 'pending' else '生成中' }}
+                                </span>
+                            {% endif %}
+
+                            {% if item.status == 'failed' and item.is_owner %}
+                                <button onclick="deleteGrader('{{ item.grader_id or item.id }}')" class="text-rose-300 hover:text-rose-500 transition p-1" title="删除记录">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            {% endif %}
+                        </div>
+
+                        <h3 class="font-bold text-slate-700 text-sm mb-3 truncate pr-4" title="{{ item.task_name }}">{{ item.task_name }}</h3>
+
+                        <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 h-20 overflow-hidden relative font-mono text-[10px] text-slate-500 leading-relaxed">
+                            <p class="task-log break-all">{{ item.log_info }}</p>
+                            <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-slate-50 to-transparent"></div>
+                        </div>
+
+                        {% if item.status != 'failed' %}
+                        <div class="absolute bottom-0 left-0 h-0.5 bg-indigo-100 w-full">
+                            <div class="h-full bg-indigo-500 w-1/3 animate-[progress_2s_ease-in-out_infinite]"></div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                {% else %}
+                    <a href="/grader/{{ item.id }}" class="block group bg-white p-5 rounded-2xl border border-slate-200 shadow-soft hover:shadow-lg hover:shadow-indigo-500/10 hover:border-indigo-200 transition-all cursor-pointer relative overflow-hidden transform hover:-translate-y-1">
+
+                        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                        <div class="flex justify-between items-start mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center text-xs border border-emerald-100">
+                                    <i class="fas fa-check"></i>
+                                </span>
+                                <span class="text-[10px] font-mono text-slate-400">{{ item.id }}</span>
+                            </div>
+
+                            {% if item.is_owner %}
+                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">我</span>
+                            {% else %}
+                                <span class="text-[10px] bg-slate-50 text-slate-400 px-2 py-0.5 rounded-full flex items-center">
+                                    <i class="fas fa-user mr-1 text-[8px]"></i> {{ item.creator }}
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        <h3 class="font-bold text-slate-800 text-sm mb-4 group-hover:text-indigo-600 transition-colors line-clamp-2 h-10 leading-snug">
+                            {{ item.name }}
+                        </h3>
+
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-50 text-[10px] text-slate-400">
+                            <div class="flex items-center">
+                                 <i class="fas fa-clock mr-1.5 opacity-70"></i> {{ item.created_at[:10] }}
+                            </div>
+                            <span class="text-indigo-500 opacity-0 group-hover:opacity-100 transition-all font-bold flex items-center gap-1 -translate-x-2 group-hover:translate-x-0">
+                                进入 <i class="fas fa-chevron-right text-[8px]"></i>
+                            </span>
+                        </div>
+                    </a>
+                {% endif %} {% endif %} {% else %}
+            <div class="col-span-full py-12 flex flex-col items-center justify-center text-slate-300 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <i class="fas fa-inbox text-4xl mb-3 opacity-30"></i>
+                <p class="text-xs mb-4">暂无批改核心</p>
+                <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="text-indigo-600 hover:text-indigo-700 font-bold text-sm flex items-center gap-1">
+                    <i class="fas fa-plus"></i> 生成第一个核心
+                </a>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 回收站模态框 -->
+<div id="trashModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-sm transition-opacity" onclick="closeTrash()"></div>
+    <div id="trashContent" class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                <i class="fas fa-trash-alt text-rose-400"></i> 回收站
+            </h3>
+            <button onclick="closeTrash()" class="text-slate-400 hover:text-slate-600 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="trashList" class="flex-1 overflow-y-auto p-6 space-y-4 bg-white">
+        </div>
+    </div>
+</div>
+
+<script>
+    // ===========================
+    // 删除核心逻辑
+    // ===========================
+    function deleteGrader(id) {
+        if(!confirm('确定要删除这个生成失败的任务记录吗？')) return;
+
+        fetch('/api/delete_grader', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.msg === '已移入回收站' || data.msg === '已移除') {
+                const card = document.getElementById('task-card-' + id);
+                if(card) {
+                    card.style.opacity = '0';
+                    setTimeout(() => card.remove(), 300);
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                alert(data.msg);
+            }
+        });
+    }
+
+    // ===========================
+    // 轮询任务状态
+    // ===========================
+    setInterval(() => {
+        const pendingCards = document.querySelectorAll('.task-card');
+        if (pendingCards.length === 0) return;
+        fetch('/api/get_ai_tasks').then(res => res.json()).then(allTasks => {
+            let refresh = false;
+            pendingCards.forEach(card => {
+                const tId = parseInt(card.dataset.taskId);
+                const task = allTasks.find(t => t.id === tId);
+                if(task && (task.status === 'success')) refresh = true;
+                if(task) card.querySelector('.task-log').textContent = task.log_info;
+            });
+            if(refresh) window.location.reload();
+        });
+    }, 2000);
+
+    // ===========================
+    // 回收站逻辑
+    // ===========================
+    const trashModal = document.getElementById('trashModal');
+    const trashContent = document.getElementById('trashContent');
+
+    function openTrash() {
+        if(trashModal && trashContent) {
+            trashModal.classList.remove('hidden');
+            setTimeout(() => trashContent.classList.remove('translate-x-full'), 10);
+            fetchTrash();
+        }
+    }
+
+    function closeTrash() {
+        if(trashModal && trashContent) {
+            trashContent.classList.add('translate-x-full');
+            setTimeout(() => trashModal.classList.add('hidden'), 300);
+        }
+    }
+
+    function fetchTrash() {
+        const trashList = document.getElementById('trashList');
+        trashList.innerHTML = '<div class="text-center py-4"><i class="fas fa-circle-notch fa-spin text-indigo-500"></i></div>';
+
+        fetch('/api/get_recycled_graders').then(r=>r.json()).then(items => {
+            trashList.innerHTML = items.length ? items.map(i => `
+                <div class="bg-slate-50 border border-slate-200 p-4 rounded-xl flex justify-between items-center group hover:bg-white hover:shadow-sm transition-all">
+                    <div class="min-w-0">
+                        <div class="font-bold text-slate-700 truncate text-sm">${escapeJs(i.original_name)}</div>
+                        <div class="text-[10px] text-slate-400 font-mono mt-1">${i.grader_id}</div>
+                    </div>
+                    <button onclick="restore(${i.id})" class="text-xs bg-emerald-50 text-emerald-600 border border-emerald-100 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-100 hover:text-emerald-700 transition transform active:scale-95 ml-3 shrink-0">
+                        <i class="fas fa-trash-restore mr-1"></i> 恢复
+                    </button>
+                </div>`).join('') : '<div class="flex flex-col items-center justify-center py-12 text-slate-300"><i class="fas fa-trash-alt text-3xl mb-2 opacity-30"></i><p class="text-xs">回收站是空的</p></div>';
+        });
+    }
+
+    function restore(id) {
+        if(!confirm('确定要恢复此核心吗？')) return;
+        fetch('/api/restore_grader', {
+            method:'POST',
+            body:JSON.stringify({id}),
+            headers:{'Content-Type':'application/json'}
+        })
+        .then(r=>r.json())
+        .then(data => {
+            if(data.msg === '恢复成功') window.location.reload();
+            else alert(data.msg);
+        });
+    }
+
+    function escapeJs(str) {
+        if(!str) return '';
+        return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+
+    // 检查 URL 参数中是否有 highlight_task
+    const urlParams = new URLSearchParams(window.location.search);
+    const highlightTaskId = urlParams.get('highlight_task');
+    if (highlightTaskId) {
+        const taskCard = document.getElementById('task-card-' + highlightTaskId);
+        if (taskCard) {
+            taskCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            taskCard.classList.add('ring-2', 'ring-indigo-500', 'ring-offset-2');
+            setTimeout(() => {
+                taskCard.classList.remove('ring-2', 'ring-indigo-500', 'ring-offset-2');
+            }, 3000);
+        }
+    }
+</script>
+
+{% endblock %}

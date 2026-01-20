@@ -10,9 +10,18 @@
             theme: {
                 extend: {
                     colors: {
-                        indigo: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' },
-                        slate: { 800: '#1e293b', 700: '#334155', 400: '#94a3b8' },
-                        rose: { 500: '#f43f5e', 600: '#e11d48' }
+                        indigo: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' },
+                        slate: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a' },
+                        rose: { 50: '#fff1f2', 100: '#ffe4e6', 500: '#f43f5e', 600: '#e11d48' }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'slide-up': 'slideUp 0.4s ease-out forwards',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
                     }
                 }
             }
@@ -20,80 +29,11 @@
     </script>
     <style>
         body {
-            background: linear-gradient(135deg, #1e293b 0%, #312e81 100%);
+            background: radial-gradient(ellipse at top right, #e0e7ff 0%, transparent 50%),
+                        radial-gradient(ellipse at bottom left, #c7d2fe 0%, transparent 50%),
+                        linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e0e7ff 100%);
+            background-attachment: fixed;
         }
-    </style>
-</head>
-<body class="min-h-screen flex items-center justify-center font-sans p-4 relative overflow-hidden">
-
-    <div class="absolute top-[-20%] right-[-15%] w-[600px] h-[600px] bg-indigo-600 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-    <div class="absolute bottom-[-20%] left-[-15%] w-[600px] h-[600px] bg-purple-600 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
-
-    <div class="bg-white/95 backdrop-blur-2xl p-8 md:p-12 rounded-3xl shadow-2xl w-full max-w-md border border-white/50 relative z-10">
-
-        <div class="text-center mb-10">
-            <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-2xl shadow-rose-300 mb-6 transform transition hover:scale-105 hover:rotate-3 duration-300">
-                <i class="fas fa-shield-alt text-3xl"></i>
-            </div>
-            <h2 class="text-3xl font-bold text-slate-800 tracking-tight mb-2">系统管理</h2>
-            <p class="text-sm text-slate-500 font-medium flex items-center justify-center gap-2">
-                <i class="fas fa-lock text-xs"></i>
-                System Administrator Console
-            </p>
-        </div>
-
-        <form method="POST" class="space-y-6">
-            <div class="group">
-                <label for="username" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">管理员账号</label>
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-rose-500 transition-colors">
-                        <i class="fas fa-user-shield"></i>
-                    </div>
-                    <input type="text" name="username" id="username" required
-                           class="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border-0 text-slate-800 rounded-xl ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-rose-500 focus:bg-white transition-all duration-200 shadow-sm"
-                           placeholder="请输入管理员账号">
-                </div>
-            </div>
-
-            <div class="group">
-                <label for="password" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">管理员密码</label>
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-rose-500 transition-colors">
-                        <i class="fas fa-key"></i>
-                    </div>
-                    <input type="password" name="password" id="password" required
-                           class="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border-0 text-slate-800 rounded-xl ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-rose-500 focus:bg-white transition-all duration-200 shadow-sm"
-                           placeholder="请输入管理员密码">
-                </div>
-            </div>
-
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                <div class="flex items-center gap-2 bg-rose-50 text-rose-600 text-xs font-medium p-3 rounded-xl border border-rose-100 animate-pulse">
-                    <i class="fas fa-exclamation-triangle text-sm"></i>
-                    {{ message }}
-                </div>
-                {% endfor %}
-            {% endif %}
-            {% endwith %}
-
-            <button type="submit" class="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-rose-200 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 hover:shadow-rose-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 transition-all duration-200 transform hover:-translate-y-0.5 group">
-                <i class="fas fa-sign-in-alt mr-2 group-hover:translate-x-1 transition-transform"></i>
-                安全登录
-            </button>
-        </form>
-
-        <div class="mt-8 text-center text-xs text-slate-300 space-y-2">
-            <p class="flex items-center justify-center gap-2 text-slate-400">
-                <i class="fas fa-info-circle"></i>
-                仅限授权管理员访问
-            </p>
-            <p>&copy; 2026 Digital Tech College</p>
-        </div>
-    </div>
-
-    <style>
         @keyframes blob {
             0% { transform: translate(0px, 0px) scale(1); }
             33% { transform: translate(40px, -60px) scale(1.15); }
@@ -107,5 +47,91 @@
             animation-delay: 4s;
         }
     </style>
+</head>
+<body class="min-h-screen flex items-center justify-center font-sans p-4 relative overflow-hidden">
+
+    <!-- 装饰光球 -->
+    <div class="absolute top-[-20%] right-[-15%] w-[600px] h-[600px] bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+    <div class="absolute bottom-[-20%] left-[-15%] w-[600px] h-[600px] bg-purple-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
+    <div class="absolute top-[40%] left-[30%] w-[400px] h-[400px] bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse-slow"></div>
+
+    <!-- 登录卡片 -->
+    <div class="bg-white/90 backdrop-blur-2xl p-8 md:p-12 rounded-3xl shadow-2xl w-full max-w-md border border-white/50 relative z-10 animate-slide-up">
+
+        <!-- 头部 -->
+        <div class="text-center mb-10">
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-2xl shadow-indigo-300 mb-6 transform transition hover:scale-105 hover:rotate-3 duration-300">
+                <i class="fas fa-shield-alt text-3xl"></i>
+            </div>
+            <h2 class="text-3xl font-bold text-slate-800 tracking-tight mb-2">系统管理</h2>
+            <p class="text-sm text-slate-500 font-medium flex items-center justify-center gap-2">
+                <i class="fas fa-lock text-xs"></i>
+                System Administrator Console
+            </p>
+        </div>
+
+        <!-- 登录表单 -->
+        <form method="POST" class="space-y-6">
+            <div class="group">
+                <label for="username" class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">管理员账号</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <input type="text" name="username" id="username" required autocomplete="username"
+                           class="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border-0 text-slate-800 rounded-xl ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all duration-200 shadow-sm"
+                           placeholder="请输入管理员账号">
+                </div>
+            </div>
+
+            <div class="group">
+                <label for="password" class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">管理员密码</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                        <i class="fas fa-key"></i>
+                    </div>
+                    <input type="password" name="password" id="password" required autocomplete="current-password"
+                           class="block w-full pl-11 pr-4 py-3.5 bg-slate-50 border-0 text-slate-800 rounded-xl ring-1 ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all duration-200 shadow-sm"
+                           placeholder="请输入管理员密码">
+                </div>
+            </div>
+
+            <!-- 错误提示 -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="flex items-center gap-2 bg-rose-50 text-rose-600 text-xs font-medium p-3 rounded-xl border border-rose-100">
+                    <i class="fas fa-exclamation-triangle text-sm"></i>
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <!-- 提交按钮 -->
+            <button type="submit" class="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg shadow-indigo-200 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:shadow-indigo-300/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform hover:-translate-y-0.5 group">
+                <i class="fas fa-sign-in-alt mr-2 group-hover:translate-x-1 transition-transform"></i>
+                安全登录
+            </button>
+        </form>
+
+        <!-- 底部信息 -->
+        <div class="mt-8 text-center text-xs space-y-2">
+            <p class="flex items-center justify-center gap-2 text-slate-400">
+                <i class="fas fa-info-circle"></i>
+                仅限授权管理员访问
+            </p>
+            <p class="text-slate-300">&copy; 2026 AI Teaching Assistant System</p>
+        </div>
+
+        <!-- 返回主页链接 -->
+        <div class="mt-6 text-center">
+            <a href="{{ url_for('main.index') }}" class="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-indigo-600 transition-colors">
+                <i class="fas fa-arrow-left text-xs"></i>
+                返回首页
+            </a>
+        </div>
+    </div>
+
 </body>
 </html>
