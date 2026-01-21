@@ -1,0 +1,65 @@
+{# templates/components/ai_welcome_message.html #}
+{# AI 欢迎语组件 - 显示个性化欢迎消息 #}
+
+<div id="ai-welcome-container" class="relative overflow-hidden transition-all duration-500 ease-in-out"
+     data-page-context="{{ page_context or 'dashboard' }}"
+     style="min-height: 60px;">
+
+    {# 背景装饰 #}
+    <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-100 to-blue-50 rounded-full -mr-16 -mt-16 opacity-50 pointer-events-none"></div>
+
+    {# 加载状态 #}
+    <div id="welcome-loading" class="relative z-10 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center animate-pulse">
+            <i class="fas fa-sparkles text-sm"></i>
+        </div>
+        <p class="text-slate-500 font-medium">AI 正在为您准备欢迎语...</p>
+    </div>
+
+    {# 欢迎语内容 #}
+    <div id="welcome-content" class="relative z-10 hidden">
+        <p id="welcome-text" class="text-slate-700 font-medium text-lg leading-relaxed"></p>
+    </div>
+
+    {# 错误状态 #}
+    <div id="welcome-error" class="relative z-10 hidden">
+        <p class="text-slate-500 font-medium">欢迎语加载失败，请刷新页面重试</p>
+    </div>
+</div>
+
+{# 内联样式 #}
+<style>
+    /* 打字机光标动画 */
+    @keyframes cursor-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+
+    .typewriter-cursor::after {
+        content: '|';
+        animation: cursor-blink 1s infinite;
+        color: #6366f1;
+        margin-left: 2px;
+    }
+
+    /* 欢迎语容器渐入动画 */
+    @keyframes fade-slide-in {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    #welcome-content.animate-in {
+        animation: fade-slide-in 0.5s ease-out forwards;
+    }
+
+    /* 隐藏空状态 */
+    #ai-welcome-container:empty {
+        display: none;
+    }
+</style>

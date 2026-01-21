@@ -146,6 +146,13 @@ def create_task():
                          args=(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config, course_name, user_id, name))
     t.start()
 
+    # 刷新 AI 欢迎语缓存（在用户生成评分核心后）
+    try:
+        from services.ai_content_service import invalidate_cache
+        invalidate_cache(g.user['id'], 'ai_generator')
+    except Exception as e:
+        print(f"[AI Welcome] Cache refresh failed: {e}")
+
     return jsonify({"msg": "任务已提交", "task_id": task_id})
 
 
@@ -298,5 +305,12 @@ def create_direct_grader():
     db.insert_ai_task(name, 'success', 'Direct Created', exam_path, std_path, 'direct', '', 0, g.user['id'], grader_id, course_name)
     GraderFactory._loaded = False
     GraderFactory.load_graders()
+
+    # 刷新 AI 欢迎语缓存（在用户生成评分核心后）
+    try:
+        from services.ai_content_service import invalidate_cache
+        invalidate_cache(g.user['id'], 'ai_generator')
+    except Exception as e:
+        print(f"[AI Welcome] Cache refresh failed: {e}")
 
     return jsonify({"status": "success"})

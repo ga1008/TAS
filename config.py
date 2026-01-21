@@ -29,6 +29,9 @@ class Config:
 
     TEMPLATE_DIR = os.path.join(base_dir, 'export_core', 'templates')
 
+    # AI 欢迎语缓存配置
+    AI_WELCOME_CACHE_TTL = 4 * 60 * 60  # 4小时缓存 (秒)
+
 
 # === 基础 Prompt (保持不变的部分) ===
 BASE_CREATOR_PROMPT = """

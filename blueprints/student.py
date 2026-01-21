@@ -174,6 +174,14 @@ def api_confirm_create():
         return jsonify({"status": "success", "msg": "班级创建成功", "list_id": list_id})
     except Exception as e:
         return jsonify({"status": "error", "msg": str(e)}), 500
+    finally:
+        # 刷新 AI 欢迎语缓存（在用户导入学生后）
+        if g.user:
+            try:
+                from services.ai_content_service import invalidate_cache
+                invalidate_cache(g.user['id'], 'student_list')
+            except Exception as e:
+                print(f"[AI Welcome] Cache refresh failed: {e}")
 
 
 @bp.route('/api/detail/<int:list_id>')

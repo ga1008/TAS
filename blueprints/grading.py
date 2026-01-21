@@ -60,6 +60,13 @@ def new_class():
                     # 学生导入失败不影响班级创建，只记录错误
                     print(f"学生导入失败: {e}")
 
+            # 刷新 AI 欢迎语缓存（在用户创建班级后）
+            try:
+                from services.ai_content_service import invalidate_cache
+                invalidate_cache(g.user['id'], 'dashboard')
+            except Exception as e:
+                print(f"[AI Welcome] Cache refresh failed: {e}")
+
             return redirect(url_for('grading.grading_view', class_id=cid))
 
     GraderFactory.load_graders()
@@ -78,6 +85,15 @@ def grading_view(class_id):
 @bp.route('/api/grade_student/<int:class_id>/<string:student_id>', methods=['POST'])
 def api_grade_student(class_id, student_id):
     success, msg, data = GradingService.grade_single_student(class_id, student_id)
+
+    # 刷新 AI 欢迎语缓存（在用户批改学生作业后）
+    if success and g.user:
+        try:
+            from services.ai_content_service import invalidate_cache
+            invalidate_cache(g.user['id'], 'dashboard')
+        except Exception as e:
+            print(f"[AI Welcome] Cache refresh failed: {e}")
+
     if success: return jsonify({"status": "success", "msg": msg, "data": data})
     return jsonify({"status": "error", "msg": msg, "filename": data}), 500
 

@@ -16,6 +16,9 @@ def index():
     # 获取仪表盘数据
     dashboard_data = stats_service.get_all_data(user_id)
 
+    # 添加页面上下文用于 AI 欢迎语
+    dashboard_data['page_context'] = 'dashboard'
+
     return render_template('dashboard.html', user=g.user, **dashboard_data)
 
 

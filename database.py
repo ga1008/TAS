@@ -304,11 +304,29 @@ class Database:
                        )
                        ''')
 
+        # 13. AI 欢迎语缓存表 [NEW]
+        # 用于存储 AI 生成的欢迎语，带 TTL 缓存
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS ai_welcome_messages
+                       (
+                           id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                           user_id          INTEGER NOT NULL,
+                           page_context     TEXT    NOT NULL,        -- 页面上下文: dashboard, tasks, student_list, ai_generator, export
+                           message_content  TEXT    NOT NULL,        -- AI 生成的欢迎语文本
+                           created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           expires_at       TIMESTAMP NOT NULL,        -- 缓存过期时间
+                           context_snapshot TEXT,                       -- 生成时的上下文快照 (JSON格式，用于调试)
+                           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                       )
+                       ''')
+
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_capability ON ai_models (capability)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_file_hash ON file_assets (file_hash)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_notification_user ON notifications (user_id, is_read)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_notification_related ON notifications (related_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ai_welcome_user_page ON ai_welcome_messages(user_id, page_context)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ai_welcome_expires ON ai_welcome_messages(expires_at)')
 
         conn.commit()
         self._init_super_admin(cursor, conn)

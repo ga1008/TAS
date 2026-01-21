@@ -5,6 +5,7 @@ from flask import Flask
 
 from blueprints.admin import bp as admin_bp
 from blueprints.ai_generator import bp as ai_gen_bp
+from blueprints.ai_welcome import bp as ai_welcome_bp
 from blueprints.auth import bp as auth_bp
 from blueprints.export import bp as export_bp
 from blueprints.grading import bp as grading_bp
@@ -72,6 +73,7 @@ def create_app():
     app.register_blueprint(grading_bp)
     app.register_blueprint(library_bp)
     app.register_blueprint(ai_gen_bp)
+    app.register_blueprint(ai_welcome_bp)
     app.register_blueprint(signatures_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(student_bp)

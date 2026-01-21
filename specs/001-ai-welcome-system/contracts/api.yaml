@@ -1,0 +1,211 @@
+openapi: 3.0.3
+info:
+  title: AI Welcome Message System API
+  description: API endpoints for the AI-powered welcome message system
+  version: 1.0.0
+  contact:
+    name: AI Grading System Team
+
+servers:
+  - url: http://localhost:5010
+    description: Development server
+  - url: /api/welcome
+    description: API base path
+
+tags:
+  - name: Welcome Messages
+    description: AI-generated welcome message operations
+
+paths:
+  /messages:
+    get:
+      tags: [Welcome Messages]
+      summary: Get welcome message for current page
+      description: Fetches a cached or generates a new AI welcome message for the current page context
+      operationId: getWelcomeMessage
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: page_context
+          in: query
+          description: Page context for message
+          required: false
+          schema:
+            type: string
+            enum: [dashboard, tasks, student_list, ai_generator, export]
+            default: dashboard
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success, cached, generated, fallback]
+                  data:
+                    $ref: '#/components/schemas/WelcomeMessage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+      x-code-samples:
+        - lang: JavaScript
+          source: |
+            fetch('/api/welcome/messages?page_context=dashboard')
+              .then(r => r.json())
+              .then(data => console.log(data));
+
+  /messages/refresh:
+    post:
+      tags: [Welcome Messages]
+      summary: Refresh welcome message
+      description: Invalidates cache and generates a new welcome message
+      operationId: refreshWelcomeMessage
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: page_context
+          in: query
+          description: Page context to refresh
+          required: false
+          schema:
+            type: string
+            enum: [dashboard, tasks, student_list, ai_generator, export]
+            default: dashboard
+      responses:
+        '200':
+          description: Message refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  data:
+                    $ref: '#/components/schemas/WelcomeMessage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /fallback:
+    get:
+      tags: [Welcome Messages]
+      summary: Get fallback message
+      description: Returns a time-based fallback message when AI is unavailable
+      operationId: getFallbackMessage
+      parameters:
+        - name: time_of_day
+          in: query
+          description: Time period for fallback message
+          required: false
+          schema:
+            type: string
+            enum: [morning, afternoon, evening, night]
+      responses:
+        '200':
+          description: Fallback message returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        description: The fallback welcome message
+                      time_period:
+                        type: string
+                        description: The detected time period
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Flask session-based authentication
+
+  schemas:
+    WelcomeMessage:
+      type: object
+      description: AI-generated welcome message with metadata
+      properties:
+        id:
+          type: integer
+          description: Unique message identifier
+          example: 12345
+        user_id:
+          type: integer
+          description: User ID this message is for
+          example: 1
+        page_context:
+          type: string
+          description: Page context identifier
+          enum: [dashboard, tasks, student_list, ai_generator, export]
+          example: dashboard
+        message_content:
+          type: string
+          description: The AI-generated welcome message
+          example: "早安，李老师！新的一周开始了，您有 3 个批改任务待处理。开始高效的一天吧！"
+          minLength: 10
+          maxLength: 200
+        created_at:
+          type: string
+          format: date-time
+          description: When the message was generated
+          example: "2026-01-21T08:30:00Z"
+        expires_at:
+          type: string
+          format: date-time
+          description: When the cache expires
+          example: "2026-01-21T12:30:00Z"
+        storage_key:
+          type: string
+          description: localStorage key for tracking seen messages
+          example: "ai_welcome_seen_dashboard_12345"
+        is_new:
+          type: boolean
+          description: Whether this is a new message (user hasn't seen it)
+          example: true
+
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        message:
+          type: string
+          description: Human-readable error message
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: error
+            message: Please log in to continue
+
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            status: error
+            message: Failed to generate welcome message

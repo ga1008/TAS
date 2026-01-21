@@ -366,6 +366,17 @@
                 <i class="fas fa-home"></i> 首页
             </a>
 
+            {# AI 欢迎语组件 (紧凑版) - 登录后且在非管理页面显示 #}
+            {% if session.get('user_id') and request.path not in ['/admin', '/login', '/auth/login'] %}
+                {% set compact_page_context = 'dashboard' if request.path == '/' else
+                    'tasks' if request.path.startswith('/tasks') else
+                    'student_list' if request.path.startswith('/student') else
+                    'ai_generator' if request.path.startswith('/ai_generator') else
+                    'export' if request.path.startswith('/export') else 'dashboard' %}
+                <div class="divider-vertical mx-2"></div>
+                {% include 'components/compact_welcome_message.html' %}
+            {% endif %}
+
             {# 通知中心组件 #}
             {% include 'components/notification_center.html' %}
         </div>
@@ -756,5 +767,7 @@
         </div>
     </div>
 
+{# AI 欢迎语脚本 (紧凑模式支持) #}
+<script src="{{ url_for('static', filename='js/ai-welcome.js') }}"></script>
 </body>
 </html>
