@@ -65,53 +65,75 @@ def get_user_stats(user_id: int) -> dict:
     ''', (user_id,)).fetchone()
     pending_count = pending_count_row['count'] if pending_count_row else 0
 
+    # [新增] 获取已上传文件数
+    file_count_row = conn.execute(
+        'SELECT COUNT(*) as count FROM file_assets WHERE uploaded_by=?',
+        (user_id,)
+    ).fetchone()
+    file_count = file_count_row['count'] if file_count_row else 0
+
     return {
         'class_count': class_count,
         'student_count': student_count,
         'grader_count': grader_count,
-        'pending_task_count': pending_count
+        'pending_task_count': pending_count,
+        'file_count': file_count  # [新增]
     }
 
 
 def get_recent_actions(user_id: int, limit: int = 5) -> list:
     """
-    获取用户最近的操作
-
-    Args:
-        user_id: 用户 ID
-        limit: 返回数量限制
-
-    Returns:
-        最近操作列表
+    获取用户最近的操作（聚合：班级、评分核心、文件上传、名单导入）
     """
     conn = db.get_connection()
-    actions = []
+    all_actions = []
 
-    # 获取最近创建的班级
+    # 1. 获取最近创建的班级
     recent_classes = conn.execute('''
-        SELECT name, created_at
-        FROM classes
-        WHERE created_by = ?
-        ORDER BY created_at DESC
-        LIMIT ?
-    ''', (user_id, 3)).fetchall()
+                                  SELECT name, created_at
+                                  FROM classes
+                                  WHERE created_by = ?
+                                  ORDER BY created_at DESC LIMIT ?
+                                  ''', (user_id, limit)).fetchall()
+    for item in recent_classes:
+        all_actions.append({'desc': f"创建班级 {item['name']}", 'time': item['created_at']})
 
-    for cls in recent_classes:
-        actions.append(f"创建班级 {cls['name']}")
-
-    # 获取最近生成的评分核心
+    # 2. 获取最近生成的评分核心
     recent_graders = conn.execute('''
-        SELECT name, created_at
-        FROM ai_tasks
-        WHERE created_by = ? AND grader_id IS NOT NULL
-        ORDER BY created_at DESC
-        LIMIT ?
-    ''', (user_id, 2)).fetchone()
+                                  SELECT name, created_at
+                                  FROM ai_tasks
+                                  WHERE created_by = ?
+                                    AND grader_id IS NOT NULL
+                                  ORDER BY created_at DESC LIMIT ?
+                                  ''', (user_id, limit)).fetchall()
+    for item in recent_graders:
+        all_actions.append({'desc': f"生成评分核心 {item['name']}", 'time': item['created_at']})
 
-    if recent_graders:
-        actions.append(f"生成评分核心 {recent_graders['name']}")
+    # 3. [新增] 获取最近上传的文件
+    recent_files = conn.execute('''
+                                SELECT original_name, created_at
+                                FROM file_assets
+                                WHERE uploaded_by = ?
+                                ORDER BY created_at DESC LIMIT ?
+                                ''', (user_id, limit)).fetchall()
+    for item in recent_files:
+        all_actions.append({'desc': f"上传文件 {item['original_name']}", 'time': item['created_at']})
 
-    return actions[:limit]
+    # 4. [新增] 获取最近导入的学生名单
+    recent_lists = conn.execute('''
+                                SELECT class_name, created_at
+                                FROM student_lists
+                                WHERE uploaded_by = ?
+                                ORDER BY created_at DESC LIMIT ?
+                                ''', (user_id, limit)).fetchall()
+    for item in recent_lists:
+        all_actions.append({'desc': f"导入名单 {item['class_name']}", 'time': item['created_at']})
+
+    # 按时间倒序排序并取前 N 条
+    # 注意：SQLite 的时间格式通常是字符串，可以直接比较
+    all_actions.sort(key=lambda x: x['time'], reverse=True)
+
+    return [action['desc'] for action in all_actions[:limit]]
 
 
 @bp.route('/api/welcome/messages', methods=['GET'])

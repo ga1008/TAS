@@ -18,7 +18,8 @@
 
     {# 欢迎语内容 #}
     <div id="welcome-content" class="relative z-10 hidden">
-        <p id="welcome-text" class="text-slate-700 font-medium text-lg leading-relaxed"></p>
+        {# 添加 whitespace-pre-line 以保留AI生成的换行符，leading-relaxed 增加行间距 #}
+        <p id="welcome-text" class="text-slate-700 font-medium text-lg leading-relaxed whitespace-pre-line"></p>
     </div>
 
     {# 错误状态 #}

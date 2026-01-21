@@ -1,0 +1,271 @@
+<div id="jwxtLoginModal" class="fixed inset-0 z-[1050] hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md transition-opacity duration-300 opacity-0 custom-backdrop"
+         id="jwxtModalBackdrop"
+         onclick="closeJwxtModal()"></div>
+
+    <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+        <div id="jwxtModalPanel"
+             class="relative transform overflow-hidden rounded-3xl bg-white/90 backdrop-blur-xl text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md scale-95 opacity-0 border border-white/50 z-10">
+
+            <div class="h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+
+            <button onclick="closeJwxtModal()" class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 transition-colors z-20 p-1">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <div class="px-8 py-10">
+                <div class="text-center mb-8">
+                    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 shadow-lg shadow-indigo-100 mb-5 group">
+                        <i class="fas fa-university text-2xl group-hover:scale-110 transition-transform duration-300"></i>
+                    </div>
+                    <h3 class="text-xl font-bold leading-6 text-slate-800" id="modal-title">绑定教务系统</h3>
+                    <p class="mt-2 text-sm text-slate-500">请输入您的教务系统账号密码进行同步</p>
+                </div>
+
+                <form id="jwxtBindForm" onsubmit="handleJwxtSubmit(event)" class="space-y-5">
+
+                    <div class="group relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                        <input type="text" name="username" id="jwxt_username" required autocomplete="username"
+                               class="block w-full rounded-xl border-0 bg-slate-50 py-3.5 pl-11 pr-4 text-slate-700 font-medium placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-300 shadow-inner"
+                               placeholder="教工号 / 学号">
+                    </div>
+
+                    <div class="group relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <input type="password" name="password" id="jwxt_password" required autocomplete="current-password"
+                               class="block w-full rounded-xl border-0 bg-slate-50 py-3.5 pl-11 pr-12 text-slate-700 font-medium placeholder:text-slate-400 placeholder:font-normal focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-300 shadow-inner"
+                               placeholder="教务系统密码">
+                        <button type="button" onclick="toggleJwxtPwdVisibility()" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-indigo-500 cursor-pointer transition-colors" type="button">
+                            <i class="fas fa-eye" id="jwxt_pwd_icon"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center justify-between rounded-xl border border-indigo-50 bg-indigo-50/30 p-4 transition-colors hover:bg-indigo-50/50">
+                        <div class="flex items-start gap-3">
+                            <div class="flex h-5 items-center">
+                                <input id="jwxt_remember" name="remember" type="checkbox" checked
+                                       class="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                            </div>
+                            <div class="text-sm">
+                                <label for="jwxt_remember" class="font-bold text-slate-700 cursor-pointer select-none">记住登录状态</label>
+                                <p class="text-xs text-slate-500 mt-0.5">保存凭证到数据库，下次免登录</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="jwxtMsgBox" class="hidden rounded-xl p-3 text-sm font-medium flex items-center gap-2 animate-fade-in">
+                        <i class="fas fa-info-circle"></i>
+                        <span id="jwxtMsgText"></span>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3 pt-2">
+                        <button type="button" onclick="handleTestLogin()" id="btnTestLogin"
+                                class="col-span-1 rounded-xl bg-white px-3 py-3 text-sm font-bold text-slate-600 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50 hover:text-indigo-600 transition-all active:scale-95">
+                            验证
+                        </button>
+                        <button type="submit" id="btnSaveLogin"
+                                class="col-span-2 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
+                            <span>确认绑定</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-slate-50/80 px-8 py-4 text-center border-t border-slate-100">
+                <p class="text-xs text-slate-400 flex items-center justify-center gap-1.5">
+                    <i class="fas fa-shield-alt text-emerald-500"></i>
+                    数据经 RSA 加密传输，仅用于本地教学辅助
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 状态管理
+    const JwxtModal = {
+        el: document.getElementById('jwxtLoginModal'),
+        backdrop: document.getElementById('jwxtModalBackdrop'),
+        panel: document.getElementById('jwxtModalPanel'),
+        isUpdateMode: false,
+
+        open(isUpdate = false, currentUsername = '') {
+            this.isUpdateMode = isUpdate;
+            this.el.classList.remove('hidden');
+
+            requestAnimationFrame(() => {
+                this.backdrop.classList.remove('opacity-0');
+                this.panel.classList.remove('scale-95', 'opacity-0');
+                this.panel.classList.add('scale-100', 'opacity-100');
+            });
+
+            const title = document.getElementById('modal-title');
+            const btn = document.getElementById('btnSaveLogin').querySelector('span');
+
+            if (isUpdate) {
+                title.textContent = '更新教务账号';
+                btn.textContent = '更新绑定';
+                if (currentUsername) document.getElementById('jwxt_username').value = currentUsername;
+                document.getElementById('jwxt_password').value = '';
+            } else {
+                title.textContent = '绑定教务系统';
+                btn.textContent = '确认绑定';
+                // 仅在非预填情况下重置
+                if (!currentUsername) document.getElementById('jwxtBindForm').reset();
+                else document.getElementById('jwxt_username').value = currentUsername;
+            }
+            this.hideMsg();
+        },
+
+        close() {
+            this.backdrop.classList.add('opacity-0');
+            this.panel.classList.remove('scale-100', 'opacity-100');
+            this.panel.classList.add('scale-95', 'opacity-0');
+
+            setTimeout(() => {
+                this.el.classList.add('hidden');
+            }, 300);
+        },
+
+        showMsg(type, text) {
+            const box = document.getElementById('jwxtMsgBox');
+            const txt = document.getElementById('jwxtMsgText');
+            const icon = box.querySelector('i');
+
+            box.classList.remove('hidden', 'bg-rose-50', 'text-rose-600', 'bg-emerald-50', 'text-emerald-600');
+
+            if (type === 'error') {
+                box.classList.add('bg-rose-50', 'text-rose-600');
+                icon.className = 'fas fa-exclamation-circle';
+                this.panel.classList.add('animate-shake');
+                setTimeout(() => this.panel.classList.remove('animate-shake'), 500);
+            } else {
+                box.classList.add('bg-emerald-50', 'text-emerald-600');
+                icon.className = 'fas fa-check-circle';
+            }
+            txt.textContent = text;
+        },
+
+        hideMsg() {
+            document.getElementById('jwxtMsgBox').classList.add('hidden');
+        },
+
+        setLoading(isLoading) {
+            const btn = document.getElementById('btnSaveLogin');
+            const testBtn = document.getElementById('btnTestLogin');
+
+            if (isLoading) {
+                btn.disabled = true;
+                testBtn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 处理中...';
+            } else {
+                btn.disabled = false;
+                testBtn.disabled = false;
+                const text = this.isUpdateMode ? '更新绑定' : '确认绑定';
+                btn.innerHTML = `<span>${text}</span><i class="fas fa-arrow-right"></i>`;
+            }
+        }
+    };
+
+    window.openJwxtModal = (isUpdate, username) => JwxtModal.open(isUpdate, username);
+    window.closeJwxtModal = () => JwxtModal.close();
+
+    function toggleJwxtPwdVisibility() {
+        const input = document.getElementById('jwxt_password');
+        const icon = document.getElementById('jwxt_pwd_icon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'fas fa-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'fas fa-eye';
+        }
+    }
+
+    async function handleTestLogin() {
+        const username = document.getElementById('jwxt_username').value.trim();
+        const password = document.getElementById('jwxt_password').value;
+
+        if (!username || !password) {
+            JwxtModal.showMsg('error', '请填写完整账号和密码');
+            return;
+        }
+
+        const btn = document.getElementById('btnTestLogin');
+        const originText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+        JwxtModal.hideMsg();
+
+        try {
+            const res = await fetch('/jwxt/test_login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password})
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                JwxtModal.showMsg('success', `验证通过：${data.data?.name || '未知姓名'}`);
+            } else {
+                JwxtModal.showMsg('error', data.msg || '验证失败');
+            }
+        } catch (e) {
+            JwxtModal.showMsg('error', '网络请求失败');
+        } finally {
+            btn.innerHTML = originText;
+            btn.disabled = false;
+        }
+    }
+
+    async function handleJwxtSubmit(e) {
+        e.preventDefault();
+        const username = document.getElementById('jwxt_username').value.trim();
+        const password = document.getElementById('jwxt_password').value;
+        const remember = document.getElementById('jwxt_remember').checked;
+
+        JwxtModal.setLoading(true);
+        JwxtModal.hideMsg();
+
+        const endpoint = JwxtModal.isUpdateMode ? '/jwxt/update' : '/jwxt/connect';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({username, password, remember})
+            });
+            const data = await res.json();
+
+            if (res.ok && data.code === 200) {
+                JwxtModal.showMsg('success', '绑定成功，正在同步...');
+
+                // 延迟关闭，让用户看到成功提示
+                setTimeout(() => {
+                    JwxtModal.close();
+
+                    // 关键修复：强制通知父页面刷新状态，并传入 force=true
+                    // 但这里我们传递 false 给 autoPopup 以避免死循环弹窗
+                    if (typeof window.refreshJwxtStatus === 'function') {
+                        window.refreshJwxtStatus(true);
+                    }
+                    if (window.showToast) {
+                        window.showToast('教务系统绑定成功', 'success');
+                    }
+                }, 800);
+            } else {
+                JwxtModal.showMsg('error', data.msg || '操作失败');
+            }
+        } catch (e) {
+            JwxtModal.showMsg('error', '网络请求错误');
+        } finally {
+            if (!res || !res.ok) JwxtModal.setLoading(false);
+        }
+    }
+</script>

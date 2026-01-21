@@ -1,8 +1,9 @@
 """
+blueprints/jwxt.py
 教务系统同步蓝图
-支持两种登录信息存储方式：
-1. 持久保存（数据库）：用户选择"记住登录"时使用
-2. 临时会话（Session）：用户选择"不保存"时使用，会话结束即失效
+改进说明：
+1. 严格区分持久化(DB)和临时(Session)存储，确保二者互斥。
+2. 增加登录失效后的自动状态更新，配合前端实现自动弹窗。
 """
 from flask import Blueprint, request, jsonify, render_template, session, g
 
@@ -19,16 +20,15 @@ def get_effective_credentials(user_id):
     """
     获取当前有效的教务系统登录凭证
     优先级：Session临时凭证 > 数据库激活凭证
-
     返回: (credentials_dict, source) 或 (None, None)
-    source: 'session' | 'database' | None
+    source: 'session' | 'database' | 'expired'
     """
-    # 1. 优先检查 Session 中的临时凭证
+    # 1. 优先检查 Session 中的临时凭证 (用于未勾选"记住我"的场景)
     temp_creds = session.get(JWXT_SESSION_KEY)
     if temp_creds and temp_creds.get('username') and temp_creds.get('password'):
         return temp_creds, 'session'
 
-    # 2. 检查数据库中的激活绑定
+    # 2. 检查数据库中的激活绑定 (用于勾选"记住我"的场景)
     binding = db.get_jwxt_binding(user_id, only_active=True)
     if binding:
         return {
@@ -37,7 +37,7 @@ def get_effective_credentials(user_id):
             'last_check': binding.get('last_check_at')
         }, 'database'
 
-    # 3. 检查数据库中是否有失效的绑定（用于提示用户）
+    # 3. 检查数据库中是否有失效的绑定 (用于UI显示"已过期"并触发自动弹窗)
     inactive_binding = db.get_jwxt_binding(user_id, only_active=False)
     if inactive_binding and not inactive_binding.get('is_active'):
         return {
@@ -51,7 +51,7 @@ def get_effective_credentials(user_id):
 def clear_session_credentials():
     """清除 Session 中的临时凭证"""
     if JWXT_SESSION_KEY in session:
-        del session[JWXT_SESSION_KEY]
+        session.pop(JWXT_SESSION_KEY, None)
 
 
 def save_session_credentials(username, password, teacher_info=None):
@@ -63,75 +63,29 @@ def save_session_credentials(username, password, teacher_info=None):
     }
 
 
-def get_auto_logged_client(user_id):
-    """
-    [Core] 获取已自动登录的 JWXT 客户端
-    供其他模块调用，如果登录失败会标记绑定为失效
-    """
-    credentials, source = get_effective_credentials(user_id)
-
-    if not credentials or credentials.get('is_expired'):
-        raise Exception("未绑定教务系统账号或凭证已失效")
-
-    # 初始化客户端并登录
-    client = JwxtClient()
-    success, msg = client.login(credentials['username'], credentials['password'])
-
-    if not success:
-        # 登录失败，根据来源处理
-        if source == 'database':
-            # 数据库凭证失效，更新状态
-            db.update_jwxt_binding_status(user_id, False)
-        elif source == 'session':
-            # Session 凭证失效，清除
-            clear_session_credentials()
-
-        raise Exception(f"自动登录失败: {msg}")
-
-    # 登录成功，更新最后检查时间
-    if source == 'database':
-        db.update_jwxt_last_check(user_id)
-
-    return client
-
-
 @bp.route('/view', methods=['GET'])
 def page_connect():
     """教务系统连接页面"""
     return render_template('jwxt_connect.html', user=g.user)
 
 
-# 保留旧路由作为兼容
-@bp.route('/test', methods=['GET'])
-def page_connect_legacy():
-    return render_template('jwxt_connect.html', user=g.user)
-
-
 @bp.route('/status', methods=['GET'])
 def check_status():
     """
-    检查当前用户的连接状态（增强版）
-    返回详细的状态信息，包括凭证来源和有效性
+    检查当前用户的连接状态 (Phase 1)
+    前端页面加载时调用，用于快速判断显示状态，不进行耗时的登录验证。
     """
     user_id = session.get('user_id')
     if not user_id:
-        return jsonify({
-            "code": 401,
-            "msg": "未登录系统",
-            "status": "not_logged_in",
-            "linked": False
-        })
+        return jsonify({"code": 401, "msg": "未登录系统", "linked": False})
 
     credentials, source = get_effective_credentials(user_id)
 
     if not credentials:
-        return jsonify({
-            "code": 200,
-            "status": "not_linked",
-            "linked": False
-        })
+        return jsonify({"code": 200, "status": "not_linked", "linked": False})
 
-    if credentials.get('is_expired'):
+    # 如果是已过期的数据库绑定
+    if source == 'expired' or credentials.get('is_expired'):
         return jsonify({
             "code": 200,
             "status": "expired",
@@ -140,18 +94,18 @@ def check_status():
             "message": "登录凭证已失效，请重新登录"
         })
 
-    # 有有效凭证
+    # 看起来是连接状态 (Session或DB有值)
     response_data = {
         "code": 200,
         "status": "active",
         "linked": True,
         "username": credentials.get('username'),
-        "source": source,  # 'session' 或 'database'
-        "persistent": source == 'database',  # 是否持久保存
-        "last_check": credentials.get('last_check', '未知')
+        "source": source,
+        "persistent": source == 'database',
+        "last_check": credentials.get('last_check', '刚刚')
     }
 
-    # 如果是 Session 存储，添加教师信息
+    # 如果是 Session 存储，直接返回缓存的教师信息，前端可预渲染
     if source == 'session' and credentials.get('teacher_info'):
         response_data['teacher_info'] = credentials['teacher_info']
 
@@ -161,19 +115,19 @@ def check_status():
 @bp.route('/connect', methods=['POST'])
 def connect_jwxt():
     """
-    连接教务系统
-    根据 remember 参数决定存储方式
+    连接/登录教务系统
+    逻辑：先验证登录，成功后根据 remember 参数严格决定存储位置（互斥）。
     """
     data = request.json
     username = data.get('username')
     password = data.get('password')
-    remember = data.get('remember', False)  # 默认不记住（临时会话）
+    remember = data.get('remember', False)  # true=存数据库, false=存Session
     user_id = session.get('user_id')
 
     if not username or not password:
         return jsonify({"code": 400, "msg": "请输入账号密码"}), 400
 
-    # 1. 初始化客户端并登录验证
+    # 1. 实际登录验证
     client = JwxtClient()
     success, msg = client.login(username, password)
 
@@ -190,19 +144,20 @@ def connect_jwxt():
             "role": info.get('role')
         }
 
-    # 3. 根据用户选择存储凭证
+    # 3. 存储凭证 (互斥逻辑)
     if remember and user_id:
-        # 持久保存到数据库
+        # 模式 A: 持久保存 -> 存DB，同时必须清除Session，防止混淆
         try:
             db.save_jwxt_binding(user_id, username, password)
-            # 清除可能存在的 Session 临时凭证
             clear_session_credentials()
         except Exception as e:
-            print(f"[DB Error] Save binding failed: {e}")
-            return jsonify({"code": 500, "msg": "保存失败，请重试"}), 500
+            return jsonify({"code": 500, "msg": "保存到数据库失败"}), 500
     else:
-        # 临时保存到 Session
+        # 模式 B: 临时会话 -> 存Session，同时必须删除DB中的旧绑定
+        # 满足需求1：不勾选记住按钮，信息保留直到Session过期
         save_session_credentials(username, password, teacher_info)
+        if user_id:
+            db.delete_jwxt_binding(user_id)
 
     return jsonify({
         "code": 200,
@@ -214,62 +169,88 @@ def connect_jwxt():
 
 @bp.route('/update', methods=['POST'])
 def update_jwxt():
-    """
-    更新教务系统绑定信息
-    """
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    remember = data.get('remember', True)  # 更新时默认记住
-    user_id = session.get('user_id')
+    """更新绑定信息 (逻辑同 connect，复用前端接口)"""
+    return connect_jwxt()
 
+
+@bp.route('/info', methods=['GET'])
+def get_user_info():
+    """
+    获取详细信息与实时验证 (Phase 2)
+    前端在 check_status 返回 linked=True 后调用。
+
+    关键逻辑：
+    满足需求2：如果自动连接检查失败（如密码已改），返回 401 和用户名，
+    触发前端自动弹窗。
+    """
+    user_id = session.get('user_id')
     if not user_id:
         return jsonify({"code": 401, "msg": "未登录系统"}), 401
 
-    if not username or not password:
-        return jsonify({"code": 400, "msg": "请输入账号密码"}), 400
+    credentials, source = get_effective_credentials(user_id)
 
-    # 1. 先测试登录
+    if not credentials or credentials.get('is_expired'):
+        return jsonify({
+            "code": 404,
+            "msg": "无有效凭证",
+            "need_reauth": True
+        }), 404
+
+    # 尝试使用存储的凭证登录
     client = JwxtClient()
-    success, msg = client.login(username, password)
+    success, msg = client.login(credentials['username'], credentials['password'])
 
     if not success:
-        return jsonify({"code": 401, "msg": f"登录验证失败: {msg}"}), 401
-
-    # 2. 获取教师信息
-    teacher_info = {}
-    info, err = client.get_teacher_info()
-    if not err and info:
-        teacher_info = {
-            "name": info.get('name'),
-            "college": info.get('college'),
-            "role": info.get('role')
-        }
-
-    # 3. 根据用户选择存储
-    if remember:
-        try:
-            db.save_jwxt_binding(user_id, username, password)
+        # 登录失败处理
+        if source == 'database':
+            # 标记数据库记录为失效，下次 /status 检查会直接返回 expired
+            db.update_jwxt_binding_status(user_id, False)
+        elif source == 'session':
+            # Session 凭证失效，直接清除
             clear_session_credentials()
-        except Exception as e:
-            print(f"[DB Error] Update binding failed: {e}")
-            return jsonify({"code": 500, "msg": "保存失败，请重试"}), 500
-    else:
-        save_session_credentials(username, password, teacher_info)
-        # 如果之前有数据库绑定，删除它
-        db.delete_jwxt_binding(user_id)
+
+        # 返回 401 状态码，且携带 username，方便前端弹出模态框预填
+        return jsonify({
+            "code": 401,
+            "msg": f"教务系统登录失败: {msg}",
+            "need_reauth": True,
+            "username": credentials['username']
+        }), 401
+
+    # 登录成功，更新最后检查时间 (仅DB模式)
+    if source == 'database':
+        db.update_jwxt_last_check(user_id)
+
+    # 获取用户信息
+    info, err = client.get_teacher_info()
 
     return jsonify({
         "code": 200,
-        "msg": "更新成功",
-        "persistent": remember,
-        "data": teacher_info
+        "data": {
+            "username": credentials['username'],
+            "name": info.get('name') if info else "获取失败",
+            "college": info.get('college') if info else "",
+            "role": info.get('role') if info else "教师",
+            "source": source,
+            "persistent": source == 'database',
+            "last_check": credentials.get('last_check')
+        }
     })
+
+
+@bp.route('/disconnect', methods=['POST'])
+def disconnect_jwxt():
+    """断开连接"""
+    user_id = session.get('user_id')
+    clear_session_credentials()
+    if user_id:
+        db.delete_jwxt_binding(user_id)
+    return jsonify({"code": 200, "msg": "已断开连接"})
 
 
 @bp.route('/test_login', methods=['POST'])
 def test_login():
-    """仅测试登录，不保存"""
+    """仅测试账号密码，不保存"""
     data = request.json
     username = data.get('username')
     password = data.get('password')
@@ -283,140 +264,10 @@ def test_login():
     if not success:
         return jsonify({"code": 401, "msg": msg, "success": False}), 401
 
-    # 获取用户信息
-    info, err = client.get_teacher_info()
-    if err:
-        return jsonify({
-            "code": 200,
-            "msg": "登录成功，但获取信息失败",
-            "success": True,
-            "data": {}
-        })
-
+    info, _ = client.get_teacher_info()
     return jsonify({
         "code": 200,
-        "msg": "登录成功",
+        "msg": "验证通过",
         "success": True,
-        "data": {
-            "name": info.get('name'),
-            "college": info.get('college'),
-            "role": info.get('role')
-        }
-    })
-
-
-@bp.route('/disconnect', methods=['POST'])
-def disconnect_jwxt():
-    """解除绑定（同时清除数据库和 Session）"""
-    user_id = session.get('user_id')
-
-    # 清除 Session 临时凭证
-    clear_session_credentials()
-
-    # 清除数据库绑定
-    if user_id:
-        db.delete_jwxt_binding(user_id)
-
-    return jsonify({"code": 200, "msg": "已解除绑定"})
-
-
-@bp.route('/info', methods=['GET'])
-def get_user_info():
-    """
-    获取当前绑定账号的详细信息
-    需要重新登录验证以获取最新信息
-    """
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({"code": 401, "msg": "未登录系统"}), 401
-
-    credentials, source = get_effective_credentials(user_id)
-
-    if not credentials or credentials.get('is_expired'):
-        return jsonify({
-            "code": 404,
-            "msg": "未绑定教务系统或凭证已失效",
-            "need_reauth": True
-        }), 404
-
-    # 尝试登录获取信息
-    client = JwxtClient()
-    success, msg = client.login(credentials['username'], credentials['password'])
-
-    if not success:
-        # 登录失败，标记为失效
-        if source == 'database':
-            db.update_jwxt_binding_status(user_id, False)
-        elif source == 'session':
-            clear_session_credentials()
-
-        return jsonify({
-            "code": 401,
-            "msg": "绑定的账号登录失败，可能密码已变更",
-            "need_reauth": True
-        }), 401
-
-    # 登录成功，更新最后检查时间
-    if source == 'database':
-        db.update_jwxt_last_check(user_id)
-
-    # 获取用户信息
-    info, err = client.get_teacher_info()
-    if err:
-        return jsonify({"code": 500, "msg": f"获取信息失败: {err}"}), 500
-
-    return jsonify({
-        "code": 200,
-        "data": {
-            "username": credentials['username'],
-            "name": info.get('name'),
-            "college": info.get('college'),
-            "role": info.get('role'),
-            "source": source,
-            "persistent": source == 'database',
-            "last_check": credentials.get('last_check')
-        }
-    })
-
-
-@bp.route('/verify', methods=['POST'])
-def verify_credentials():
-    """
-    验证当前凭证是否仍然有效
-    用于前端检查凭证状态
-    """
-    user_id = session.get('user_id')
-    if not user_id:
-        return jsonify({"valid": False, "reason": "not_logged_in"})
-
-    credentials, source = get_effective_credentials(user_id)
-
-    if not credentials or credentials.get('is_expired'):
-        return jsonify({"valid": False, "reason": "no_credentials"})
-
-    # 尝试登录验证
-    client = JwxtClient()
-    success, msg = client.login(credentials['username'], credentials['password'])
-
-    if not success:
-        # 登录失败，标记为失效
-        if source == 'database':
-            db.update_jwxt_binding_status(user_id, False)
-        elif source == 'session':
-            clear_session_credentials()
-
-        return jsonify({
-            "valid": False,
-            "reason": "login_failed",
-            "message": msg
-        })
-
-    # 更新最后检查时间
-    if source == 'database':
-        db.update_jwxt_last_check(user_id)
-
-    return jsonify({
-        "valid": True,
-        "source": source,
-        "persistent": source == 'database'
+        "data": info
     })

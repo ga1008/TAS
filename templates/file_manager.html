@@ -303,7 +303,77 @@
         initActions();
         switchPanel('upload');
         switchMainTab('workstation');
+        // 如果没有默认激活的，手动激活 upload
+        if (!document.querySelector('[id^="panel-"]:not(.hidden)')) {
+            window.switchPanel('upload');
+        }
     });
+
+    /**
+     * 修复 switchPanel 未定义的问题
+     * 显式挂载到 window 对象，确保 onclick 可以访问
+     */
+    window.switchPanel = function(panelName) {
+        // 1. 定义所有面板和对应的按钮 ID
+        const panels = ['upload', 'paste', 'ai'];
+
+        panels.forEach(p => {
+            const panelEl = document.getElementById('panel-' + p);
+            const btnEl = document.getElementById('tab-' + p);
+
+            if (p === panelName) {
+                // 激活状态
+                if (panelEl) panelEl.classList.remove('hidden');
+
+                // 设置按钮激活样式 (根据设计规范恢复颜色)
+                if (btnEl) {
+                    btnEl.classList.remove('text-slate-500', 'hover:bg-slate-50');
+                    if (p === 'upload') {
+                        btnEl.classList.add('bg-sky-50', 'text-sky-700', 'ring-1', 'ring-sky-200');
+                    } else if (p === 'paste') {
+                        btnEl.classList.add('bg-amber-50', 'text-amber-700', 'ring-1', 'ring-amber-200');
+                    } else if (p === 'ai') {
+                        btnEl.classList.add('bg-purple-50', 'text-purple-700', 'ring-1', 'ring-purple-200');
+                    }
+                }
+            } else {
+                // 非激活状态
+                if (panelEl) panelEl.classList.add('hidden');
+
+                // 重置按钮样式
+                if (btnEl) {
+                    // 移除所有特定的激活类
+                    btnEl.classList.remove(
+                        'bg-sky-50', 'text-sky-700', 'ring-sky-200',
+                        'bg-amber-50', 'text-amber-700', 'ring-amber-200',
+                        'bg-purple-50', 'text-purple-700', 'ring-purple-200',
+                        'ring-1'
+                    );
+                    // 添加默认灰色样式
+                    btnEl.classList.add('text-slate-500', 'hover:bg-slate-50');
+                }
+            }
+        });
+    };
+
+    // 如果页面还有 "工作台/签名集" 的主标签切换功能，也建议一并检查/修复
+    window.switchMainTab = function(tabName) {
+        const tabs = ['workstation', 'signatures'];
+        tabs.forEach(t => {
+            const section = document.getElementById('main-' + t);
+            const btn = document.getElementById('tab-btn-' + t);
+
+            if (t === tabName) {
+                if (section) section.classList.remove('hidden');
+                if (btn) btn.classList.add('text-indigo-600', 'border-b-2', 'border-indigo-600');
+                if (btn) btn.classList.remove('text-slate-500', 'border-transparent');
+            } else {
+                if (section) section.classList.add('hidden');
+                if (btn) btn.classList.remove('text-indigo-600', 'border-b-2', 'border-indigo-600');
+                if (btn) btn.classList.add('text-slate-500', 'border-transparent');
+            }
+        });
+    };
 
     function refreshCurrentTab() {
         if (activeTab === 'workstation') loadFiles();
