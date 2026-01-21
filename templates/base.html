@@ -266,75 +266,71 @@
 
         <nav class="sidebar-content">
 
+            {# 概览 #}
+            <div class="nav-category">概览</div>
             <div class="nav-item">
-                <a href="{{ url_for('main.index') }}" class="nav-link" id="menu-home">
-                    <i class="fas fa-home fa-fw"></i> 仪表盘
+                <a href="{{ url_for('main.index') }}" class="nav-link" id="menu-home" data-path="/">
+                    <i class="fas fa-chart-pie fa-fw"></i> 仪表盘
                 </a>
             </div>
 
-            <div class="nav-category">教学管理</div>
-
+            {# 批改管理 #}
+            <div class="nav-category">批改管理</div>
             <div class="nav-item">
-                <a href="#" class="nav-link toggle-submenu">
-                    <i class="fas fa-chalkboard-teacher fa-fw"></i> 课程与批改
-                    <i class="fas fa-chevron-right arrow"></i>
+                <a href="{{ url_for('main.tasks') }}" class="nav-link" id="menu-tasks" data-path="/tasks">
+                    <i class="fas fa-tasks fa-fw"></i> 批改任务
                 </a>
-                <div class="submenu">
-                    <a href="{{ url_for('main.index') }}" class="nav-link" id="menu-grading">作业批改</a>
-                    <a href="/new_class" class="nav-link" id="menu-newclass">新建班级</a>
-                </div>
             </div>
-
             <div class="nav-item">
-                <a href="#" class="nav-link toggle-submenu">
-                    <i class="fas fa-user-graduate fa-fw"></i> 学生管理
-                    <i class="fas fa-chevron-right arrow"></i>
+                <a href="/new_class" class="nav-link" id="menu-newclass" data-path="/new_class">
+                    <i class="fas fa-plus-circle fa-fw"></i> 新建班级
                 </a>
-                <div class="submenu">
-                    <a href="{{ url_for('student.list_page') }}" class="nav-link" id="menu-student-list">学生名单</a>
-                    <a href="{{ url_for('student.import_page') }}" class="nav-link" id="menu-student-import">导入学生</a>
-                </div>
             </div>
 
-            <div class="nav-category">资源与工具</div>
-
+            {# AI 工具 #}
+            <div class="nav-category">AI 工具</div>
             <div class="nav-item">
-                <a href="#" class="nav-link toggle-submenu">
-                    <i class="fas fa-magic fa-fw"></i> AI 批改核心
-                    <i class="fas fa-chevron-right arrow"></i>
-                </a>
-                <div class="submenu">
-                    <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="nav-link" id="menu-ai-gen">生成核心</a>
-                    <a href="{{ url_for('ai_gen.ai_core_list_page') }}" class="nav-link" id="menu-ai-list">核心列表</a>
-                </div>
-            </div>
-
-             <div class="nav-item">
-                <a href="{{ url_for('library.file_manager_page') }}" class="nav-link" id="menu-export">
-                    <i class="fas fa-file-export fa-fw"></i> 文档解析
+                <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="nav-link" id="menu-ai-gen" data-path="/ai_generator">
+                    <i class="fas fa-magic fa-fw"></i> 生成核心
                 </a>
             </div>
-
             <div class="nav-item">
-                <a href="{{ url_for('library.index') }}" class="nav-link" id="menu-library">
-                    <i class="fas fa-folder-open fa-fw"></i> 文档&导出
+                <a href="{{ url_for('ai_gen.ai_core_list_page') }}" class="nav-link" id="menu-ai-list" data-path="/ai_core_list">
+                    <i class="fas fa-list-alt fa-fw"></i> 核心列表
                 </a>
             </div>
 
+            {# 资源管理 #}
+            <div class="nav-category">资源管理</div>
+            <div class="nav-item">
+                <a href="{{ url_for('student.list_page') }}" class="nav-link" id="menu-student-list" data-path="/student/">
+                    <i class="fas fa-user-graduate fa-fw"></i> 学生名单
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('library.index') }}" class="nav-link" id="menu-library" data-path="/library/view">
+                    <i class="fas fa-folder-open fa-fw"></i> 文档库
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="{{ url_for('library.file_manager_page') }}" class="nav-link" id="menu-file-manager" data-path="/file_manager">
+                    <i class="fas fa-file-export fa-fw"></i> 文件管理
+                </a>
+            </div>
+
+            {# 系统 #}
             <div class="nav-category">系统</div>
-
             <div class="nav-item">
-                <a href="{{ url_for('jwxt.page_connect') }}" class="nav-link" id="menu-jwxt">
+                <a href="{{ url_for('jwxt.page_connect') }}" class="nav-link" id="menu-jwxt" data-path="/jwxt/view">
                     <i class="fas fa-university fa-fw"></i> 教务系统同步
                 </a>
             </div>
-
             <div class="nav-item">
                 <a href="javascript:void(0);" onclick="handleAdminAccess()" class="nav-link" id="menu-admin">
                     <i class="fas fa-cog fa-fw"></i> 管理员后台
                 </a>
             </div>
-             <div class="nav-item">
+            <div class="nav-item">
                 <a href="{{ url_for('auth.logout') }}" class="nav-link text-danger">
                     <i class="fas fa-sign-out-alt fa-fw"></i> 退出登录
                 </a>
@@ -354,6 +350,8 @@
         </div>
     </aside>
 
+    {# 顶栏区块 - 各页面可覆盖此 block 实现自定义顶栏 #}
+    {% block topbar %}
     <header class="app-topbar">
         <div class="d-flex align-items-center text-muted">
             <span id="page-title-display" class="fw-bold text-dark">{% block header_title %}TAS{% endblock %}</span>
@@ -372,6 +370,7 @@
             {% include 'components/notification_center.html' %}
         </div>
     </header>
+    {% endblock %}
 
     <main class="app-main">
         <div id="spa-content">

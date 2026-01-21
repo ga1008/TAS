@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+
+{% block title %}批改任务 - AI 教学辅助系统{% endblock %}
+
+{% block topbar %}
+    {% include 'components/topbar/tasks_topbar.html' %}
+{% endblock %}
+
+{% block content %}
+<style>
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .class-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        overflow: hidden;
+    }
+
+    .class-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+        border-color: #cbd5e1;
+    }
+
+    .class-card-top-bar {
+        height: 4px;
+        background: linear-gradient(90deg, #0ea5e9, #6366f1, #a855f7);
+    }
+</style>
+
+<div class="tasks-container">
+    <div class="absolute top-10 -left-10 w-64 h-64 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow"></div>
+    <div class="absolute bottom-10 -right-10 w-64 h-64 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow" style="animation-delay: 1s;"></div>
+
+    <div class="relative z-10">
+        <div class="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800 tracking-tight">批改任务板</h1>
+                <p class="text-slate-500 text-sm mt-1">管理您的所有教学班级及实验进度。</p>
+            </div>
+
+            <div class="flex md:hidden gap-2">
+                <a href="/new_class" class="flex-1 bg-sky-500 text-white text-center py-2 rounded-lg text-sm font-bold shadow-md">
+                    <i class="fas fa-plus mr-1"></i> 新任务
+                </a>
+            </div>
+        </div>
+
+        {% if classes %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for c in classes %}
+            <div onclick="location.href='/grading/{{c['id']}}'" class="class-card group">
+                <div class="class-card-top-bar"></div>
+
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="bg-sky-50 text-sky-700 text-[10px] font-bold px-2 py-1 rounded border border-sky-100 uppercase tracking-wide">
+                            {{ c['course'] }}
+                        </span>
+                        <div class="w-6 h-6 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-indigo-500 group-hover:text-white transition-colors duration-300">
+                            <i class="fas fa-chevron-right text-xs"></i>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-bold text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors">
+                        {{ c['name'] }}
+                    </h3>
+
+                    <div class="flex items-center text-xs text-slate-500 mb-6 bg-slate-50 p-2 rounded-lg border border-slate-50">
+                        <i class="fas fa-robot mr-2 text-indigo-400"></i>
+                        <span class="truncate max-w-[180px]">策略: {{ c['strategy'] }}</span>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-50 flex justify-between items-center mt-auto">
+                        <div class="flex items-center gap-4 text-xs text-slate-500">
+                            <span>
+                                <i class="fas fa-user-graduate mr-1"></i>
+                                {{ c.get('student_count', 0) }} 学生
+                            </span>
+                            <span>
+                                <i class="fas fa-check-circle mr-1"></i>
+                                {{ c.get('graded_count', 0) }} 已批改
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <a href="/new_class" class="group border-2 border-dashed border-slate-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center hover:border-sky-400 hover:bg-sky-50/50 transition-all duration-300 min-h-[220px]">
+                <div class="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mb-4 group-hover:bg-sky-100 group-hover:scale-110 transition-all duration-300">
+                    <i class="fas fa-plus text-slate-400 group-hover:text-sky-600 text-lg"></i>
+                </div>
+                <h3 class="font-bold text-slate-600 group-hover:text-sky-700">创建新任务</h3>
+                <p class="text-xs text-slate-400 mt-1 max-w-[150px]">添加一个新的班级或实验项目</p>
+            </a>
+        </div>
+
+        {% else %}
+        <div class="flex flex-col items-center justify-center py-20 px-4">
+            <div class="relative mb-8">
+                <div class="absolute inset-0 bg-sky-200 rounded-full opacity-20 blur-xl animate-pulse"></div>
+                <div class="relative bg-white p-8 rounded-full shadow-lg shadow-sky-100">
+                    <i class="fas fa-clipboard-list text-6xl text-sky-400 bg-clip-text"></i>
+                </div>
+            </div>
+
+            <h2 class="text-2xl font-bold text-slate-800 mb-3">暂无批改任务</h2>
+            <p class="text-slate-500 max-w-md text-center mb-10 text-sm leading-relaxed">
+                欢迎来到自动化批改系统！<br>看起来您还没有创建任何任务。请按照以下步骤开始：
+            </p>
+
+            <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="flex items-center justify-center gap-2 px-8 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:border-indigo-300 hover:text-indigo-600 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
+                    <span class="bg-slate-100 text-slate-500 w-5 h-5 rounded-full flex items-center justify-center text-xs mr-1">1</span>
+                    核心管理
+                </a>
+                <a href="/new_class" class="flex items-center justify-center gap-2 px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-indigo-300 hover:-translate-y-0.5 transition-all duration-300">
+                    <span class="bg-indigo-500 text-white border border-indigo-400 w-5 h-5 rounded-full flex items-center justify-center text-xs mr-1">2</span>
+                    创建任务
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

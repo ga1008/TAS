@@ -1,0 +1,73 @@
+{# dashboard_topbar.html - 仪表盘顶栏组件 #}
+<header class="app-topbar">
+    <div class="d-flex align-items-center text-muted">
+        <h1 class="fw-bold text-dark fs-4 mb-0">
+            <i class="fas fa-chart-pie text-primary me-2"></i>仪表盘
+        </h1>
+    </div>
+
+    <div class="topbar-actions">
+        <button onclick="refreshDashboardStats()" class="btn-glass" title="刷新数据" id="refresh-stats-btn">
+            <i class="fas fa-sync-alt" id="refresh-icon"></i> 刷新
+        </button>
+
+        {# 通知中心组件 #}
+        {% include 'components/notification_center.html' %}
+    </div>
+</header>
+
+<script>
+async function refreshDashboardStats() {
+    const btn = document.getElementById('refresh-stats-btn');
+    const icon = document.getElementById('refresh-icon');
+
+    // 添加旋转动画
+    icon.classList.add('fa-spin');
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/stats/refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.status === 'success') {
+                // 更新统计数字
+                updateStatValue('stat-class-count', data.data.class_count);
+                updateStatValue('stat-student-count', data.data.student_count);
+                updateStatValue('stat-grader-count', data.data.grader_count);
+                updateStatValue('stat-pending-count', data.data.pending_task_count);
+
+                // 显示成功提示
+                window.showToast('数据已刷新', 'success', 2000);
+            }
+        }
+    } catch (error) {
+        console.error('刷新失败:', error);
+        window.showToast('刷新失败，请稍后重试', 'error', 3000);
+    } finally {
+        // 移除旋转动画
+        icon.classList.remove('fa-spin');
+        btn.disabled = false;
+    }
+}
+
+function updateStatValue(id, newValue) {
+    const element = document.getElementById(id);
+    if (element) {
+        // 数字动画效果
+        const oldValue = parseInt(element.textContent) || 0;
+        if (oldValue !== newValue) {
+            element.textContent = newValue;
+            element.classList.add('text-primary');
+            setTimeout(() => {
+                element.classList.remove('text-primary');
+            }, 500);
+        }
+    }
+}
+</script>

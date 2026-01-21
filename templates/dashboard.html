@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% import 'components/stats/stat_card.html' as stat_card %}
+{% import 'components/stats/quick_action.html' as quick_action %}
+{% import 'components/stats/activity_item.html' as activity_item %}
+
+{% block title %}仪表盘 - AI 教学辅助系统{% endblock %}
+
+{% block topbar %}
+    {% include 'components/topbar/dashboard_topbar.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    {# 统计卡片区域 #}
+    <div class="stats-grid">
+        {{ stat_card.stat_card('fa-chalkboard', '班级总数', class_count, 'indigo') }}
+        {{ stat_card.stat_card('fa-user-graduate', '学生总数', student_count, 'sky') }}
+        {{ stat_card.stat_card('fa-magic', '批改核心', grader_count, 'emerald') }}
+        {{ stat_card.stat_card('fa-clock', '待处理任务', pending_task_count, 'amber') }}
+    </div>
+
+    {# 快捷操作和最近活动区域 #}
+    <div class="dashboard-content-grid">
+        {# 左侧：快捷操作 #}
+        <div class="quick-actions-section">
+            <h2 class="section-title">
+                <i class="fas fa-bolt text-amber-500 me-2"></i>快捷操作
+            </h2>
+            <div class="quick-actions-list">
+                {{ quick_action.quick_action('fa-plus-circle', '新建班级', '创建新的批改班级', '/new_class', 'indigo') }}
+                {{ quick_action.quick_action('fa-magic', '生成核心', 'AI 生成批改脚本', url_for('ai_gen.ai_generator_page'), 'purple') }}
+                {{ quick_action.quick_action('fa-file-import', '导入学生', '批量导入学生名单', url_for('student.import_page'), 'emerald') }}
+            </div>
+        </div>
+
+        {# 右侧：最近活动 #}
+        <div class="recent-activities-section">
+            <h2 class="section-title">
+                <i class="fas fa-history text-indigo-500 me-2"></i>最近活动
+            </h2>
+            <div class="activities-list" id="activities-list">
+                {% set recent_classes = recent_classes | default([]) %}
+                {% set recent_graders = recent_graders | default([]) %}
+                {% if recent_classes or recent_graders %}
+                    {# 最近创建的班级 #}
+                    {% for cls in recent_classes[:3] %}
+                    {{ activity_item.activity_item('class_created', cls.name, cls.created_at_relative, '/tasks', 'fa-chalkboard') }}
+                    {% endfor %}
+
+                    {# 最近生成的核心 #}
+                    {% for grader in recent_graders[:2] %}
+                    {{ activity_item.activity_item('grader_generated', grader.name, grader.created_at_relative, '/grader/' + grader.id, 'fa-magic') }}
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-inbox text-4xl text-slate-300 mb-3"></i>
+                        <p class="text-slate-400">暂无活动记录</p>
+                        <p class="text-slate-300 text-sm">开始创建班级或生成批改核心吧</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .dashboard-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    /* 统计卡片网格 */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 20px;
+        margin-bottom: 32px;
+    }
+
+    /* 主内容网格 */
+    .dashboard-content-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+    }
+
+    @media (max-width: 1024px) {
+        .dashboard-content-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* 区域标题 */
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* 快捷操作列表 */
+    .quick-actions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* 活动列表 */
+    .activities-list {
+        background: rgba(255, 255, 255, 0.5);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 16px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 350px;
+        overflow-y: auto;
+    }
+
+    /* 空状态 */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+        text-align: center;
+    }
+
+    /* 滚动条美化 */
+    .activities-list::-webkit-scrollbar {
+        width: 4px;
+    }
+    .activities-list::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .activities-list::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 2px;
+    }
+    .activities-list::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+
+    /* 数据更新动画 */
+    @keyframes countUp {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+    }
+
+    .stat-value.updated {
+        animation: countUp 0.3s ease-out;
+    }
+</style>
+
+<script>
+// 给统计卡片添加 ID，便于动态更新
+document.addEventListener('DOMContentLoaded', function() {
+    const statCards = document.querySelectorAll('.stat-card');
+    const ids = ['stat-class-count', 'stat-student-count', 'stat-grader-count', 'stat-pending-count'];
+    statCards.forEach((card, index) => {
+        const valueEl = card.querySelector('.stat-value');
+        if (valueEl && ids[index]) {
+            valueEl.id = ids[index];
+        }
+    });
+});
+</script>
+{% endblock %}

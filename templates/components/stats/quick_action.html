@@ -1,0 +1,104 @@
+{# quick_action.html - 快捷操作入口组件 #}
+{# 参数: icon, title, description, url, color #}
+{% macro quick_action(icon, title, description, url, color='indigo') %}
+<a href="{{ url }}" class="quick-action-card quick-action-{{ color }}">
+    <div class="quick-action-icon">
+        <i class="fas {{ icon }}"></i>
+    </div>
+    <div class="quick-action-content">
+        <div class="quick-action-title">{{ title }}</div>
+        <div class="quick-action-description">{{ description }}</div>
+    </div>
+    <div class="quick-action-arrow">
+        <i class="fas fa-arrow-right"></i>
+    </div>
+</a>
+{% endmacro %}
+
+<style>
+    .quick-action-card {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        border-radius: 16px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        text-decoration: none;
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.04);
+        transition: all 0.3s ease;
+    }
+
+    .quick-action-card:hover {
+        transform: translateX(8px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+    }
+
+    .quick-action-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .quick-action-indigo .quick-action-icon {
+        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        color: #4f46e5;
+    }
+
+    .quick-action-emerald .quick-action-icon {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        color: #059669;
+    }
+
+    .quick-action-purple .quick-action-icon {
+        background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+        color: #9333ea;
+    }
+
+    .quick-action-amber .quick-action-icon {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #d97706;
+    }
+
+    .quick-action-content {
+        flex: 1;
+    }
+
+    .quick-action-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 2px;
+    }
+
+    .quick-action-description {
+        font-size: 0.8rem;
+        color: #64748b;
+    }
+
+    .quick-action-arrow {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        font-size: 0.875rem;
+        transition: all 0.3s ease;
+        flex-shrink: 0;
+    }
+
+    .quick-action-card:hover .quick-action-arrow {
+        background: var(--primary-color);
+        color: white;
+        transform: translateX(4px);
+    }
+</style>

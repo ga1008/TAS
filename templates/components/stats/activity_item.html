@@ -1,0 +1,113 @@
+{# activity_item.html - 活动条目组件 #}
+{# 参数: type, title, timestamp, url, icon #}
+{% macro activity_item(type, title, timestamp, url='#', icon=None) %}
+{% if icon is none %}
+    {% if type == 'class_created' %}
+        {% set icon = 'fa-chalkboard' %}
+        {% set color = 'indigo' %}
+    {% elif type == 'grader_generated' %}
+        {% set icon = 'fa-magic' %}
+        {% set color = 'purple' %}
+    {% elif type == 'grading_completed' %}
+        {% set icon = 'fa-check' %}
+        {% set color = 'emerald' %}
+    {% else %}
+        {% set icon = 'fa-circle' %}
+        {% set color = 'slate' %}
+    {% endif %}
+{% endif %}
+<a href="{{ url }}" class="activity-item">
+    <div class="activity-icon activity-icon-{{ color }}">
+        <i class="fas {{ icon }}"></i>
+    </div>
+    <div class="activity-content">
+        <div class="activity-title">{{ title }}</div>
+        <div class="activity-timestamp">{{ timestamp }}</div>
+    </div>
+    <div class="activity-arrow">
+        <i class="fas fa-chevron-right"></i>
+    </div>
+</a>
+{% endmacro %}
+
+<style>
+    .activity-item {
+        background: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 12px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+
+    .activity-item:hover {
+        background: rgba(255, 255, 255, 0.9);
+        transform: translateX(4px);
+    }
+
+    .activity-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        flex-shrink: 0;
+    }
+
+    .activity-icon-indigo {
+        background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+        color: #4f46e5;
+    }
+
+    .activity-icon-purple {
+        background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+        color: #9333ea;
+    }
+
+    .activity-icon-emerald {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        color: #059669;
+    }
+
+    .activity-icon-slate {
+        background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+        color: #475569;
+    }
+
+    .activity-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .activity-title {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #1e293b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .activity-timestamp {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        margin-top: 2px;
+    }
+
+    .activity-arrow {
+        color: #cbd5e1;
+        font-size: 0.75rem;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .activity-item:hover .activity-arrow {
+        color: #4f46e5;
+        transform: translateX(2px);
+    }
+</style>
