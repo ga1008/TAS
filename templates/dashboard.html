@@ -12,114 +12,430 @@
 
 {% block content %}
 <div class="dashboard-container">
+    {# 欢迎区域 #}
+    <div class="welcome-banner">
+        <div class="welcome-content">
+            <div class="welcome-text">
+                <h1 class="welcome-title">
+                    <span class="greeting-text">你好</span>
+                    <span class="username-text">{{ user.get('username', '老师') }}</span>
+                    <span class="wave-emoji">👋</span>
+                </h1>
+                <p class="welcome-subtitle">今天也是充满效率的一天，开始你的批改工作吧</p>
+            </div>
+            <div class="welcome-decoration">
+                <div class="floating-shapes">
+                    <div class="shape shape-1"></div>
+                    <div class="shape shape-2"></div>
+                    <div class="shape shape-3"></div>
+                </div>
+            </div>
+        </div>
+        <div class="welcome-stats">
+            <div class="mini-stat">
+                <div class="mini-stat-icon" style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); color: #4f46e5;">
+                    <i class="fas fa-calendar-day"></i>
+                </div>
+                <div class="mini-stat-content">
+                    <span class="mini-stat-label">今日日期</span>
+                    <span class="mini-stat-value" id="current-date">--</span>
+                </div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-icon" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #d97706;">
+                    <i class="fas fa-sun"></i>
+                </div>
+                <div class="mini-stat-content">
+                    <span class="mini-stat-label">本周进度</span>
+                    <span class="mini-stat-value" id="week-progress">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {# 统计卡片区域 #}
-    <div class="stats-grid">
-        {{ stat_card.stat_card('fa-chalkboard', '班级总数', class_count, 'indigo') }}
-        {{ stat_card.stat_card('fa-user-graduate', '学生总数', student_count, 'sky') }}
-        {{ stat_card.stat_card('fa-magic', '批改核心', grader_count, 'emerald') }}
-        {{ stat_card.stat_card('fa-clock', '待处理任务', pending_task_count, 'amber') }}
+    <div class="stats-section">
+        <div class="section-header">
+            <h2 class="section-title">
+                <i class="fas fa-chart-bar text-indigo-500 me-2"></i>数据概览
+            </h2>
+        </div>
+        <div class="stats-grid">
+            {{ stat_card.stat_card('fa-chalkboard', '班级总数', class_count, 'indigo') }}
+            {{ stat_card.stat_card('fa-user-graduate', '学生总数', student_count, 'sky') }}
+            {{ stat_card.stat_card('fa-magic', '批改核心', grader_count, 'emerald') }}
+            {{ stat_card.stat_card('fa-clock', '待处理任务', pending_task_count, 'amber') }}
+        </div>
     </div>
 
     {# 快捷操作和最近活动区域 #}
     <div class="dashboard-content-grid">
         {# 左侧：快捷操作 #}
-        <div class="quick-actions-section">
-            <h2 class="section-title">
-                <i class="fas fa-bolt text-amber-500 me-2"></i>快捷操作
-            </h2>
+        <div class="quick-actions-section glass-card">
+            <div class="section-header-with-action">
+                <h2 class="section-title">
+                    <i class="fas fa-bolt text-amber-500 me-2"></i>快捷操作
+                </h2>
+                <span class="section-badge">常用</span>
+            </div>
             <div class="quick-actions-list">
                 {{ quick_action.quick_action('fa-plus-circle', '新建班级', '创建新的批改班级', '/new_class', 'indigo') }}
                 {{ quick_action.quick_action('fa-magic', '生成核心', 'AI 生成批改脚本', url_for('ai_gen.ai_generator_page'), 'purple') }}
                 {{ quick_action.quick_action('fa-file-import', '导入学生', '批量导入学生名单', url_for('student.import_page'), 'emerald') }}
+                {{ quick_action.quick_action('fa-folder-open', '文档库', '管理教学文档', url_for('library.index'), 'sky') }}
             </div>
         </div>
 
         {# 右侧：最近活动 #}
-        <div class="recent-activities-section">
-            <h2 class="section-title">
-                <i class="fas fa-history text-indigo-500 me-2"></i>最近活动
-            </h2>
+        <div class="recent-activities-section glass-card">
+            <div class="section-header-with-action">
+                <h2 class="section-title">
+                    <i class="fas fa-history text-indigo-500 me-2"></i>最近活动
+                </h2>
+                <a href="/tasks" class="view-all-link">查看全部 <i class="fas fa-arrow-right ms-1"></i></a>
+            </div>
             <div class="activities-list" id="activities-list">
                 {% set recent_classes = recent_classes | default([]) %}
                 {% set recent_graders = recent_graders | default([]) %}
                 {% if recent_classes or recent_graders %}
-                    {# 最近创建的班级 #}
-                    {% for cls in recent_classes[:3] %}
-                    {{ activity_item.activity_item('class_created', cls.name, cls.created_at_relative, '/tasks', 'fa-chalkboard') }}
-                    {% endfor %}
+                    <div class="activity-timeline">
+                        {# 最近创建的班级 #}
+                        {% for cls in recent_classes[:3] %}
+                        {{ activity_item.activity_item('class_created', cls.name, cls.created_at_relative, '/tasks', 'fa-chalkboard') }}
+                        {% endfor %}
 
-                    {# 最近生成的核心 #}
-                    {% for grader in recent_graders[:2] %}
-                    {{ activity_item.activity_item('grader_generated', grader.name, grader.created_at_relative, '/grader/' + grader.id, 'fa-magic') }}
-                    {% endfor %}
+                        {# 最近生成的核心 #}
+                        {% for grader in recent_graders[:2] %}
+                        {{ activity_item.activity_item('grader_generated', grader.name, grader.created_at_relative, '/grader/' + grader.id, 'fa-magic') }}
+                        {% endfor %}
+                    </div>
                 {% else %}
                     <div class="empty-state">
-                        <i class="fas fa-inbox text-4xl text-slate-300 mb-3"></i>
-                        <p class="text-slate-400">暂无活动记录</p>
-                        <p class="text-slate-300 text-sm">开始创建班级或生成批改核心吧</p>
+                        <div class="empty-state-icon">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <p class="empty-state-title">暂无活动记录</p>
+                        <p class="empty-state-desc">开始创建班级或生成批改核心吧</p>
+                        <a href="/new_class" class="empty-state-action">
+                            <i class="fas fa-plus me-2"></i>创建第一个班级
+                        </a>
                     </div>
                 {% endif %}
             </div>
         </div>
     </div>
+
+    {# 快速入口横幅 #}
+    <div class="quick-banner">
+        <div class="quick-banner-content">
+            <div class="quick-banner-icon">
+                <i class="fas fa-rocket"></i>
+            </div>
+            <div class="quick-banner-text">
+                <h3 class="quick-banner-title">新手引导</h3>
+                <p class="quick-banner-desc">首次使用？查看快速入门指南，了解如何创建班级和生成批改脚本</p>
+            </div>
+            <a href="#" class="quick-banner-btn" onclick="showGuideModal(); return false;">
+                <i class="fas fa-book-open me-2"></i>查看指南
+            </a>
+        </div>
+    </div>
 </div>
 
 <style>
+    /* ========== 容器 ========== */
     .dashboard-container {
         max-width: 1400px;
         margin: 0 auto;
     }
 
-    /* 统计卡片网格 */
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 20px;
+    /* ========== 欢迎横幅 ========== */
+    .welcome-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 24px;
+        padding: 32px 40px;
+        margin-bottom: 32px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 20px 40px rgba(102, 126, 234, 0.25);
+    }
+
+    .welcome-banner::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        border-radius: 50%;
+    }
+
+    .welcome-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .welcome-text {
+        color: white;
+    }
+
+    .welcome-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .greeting-text {
+        font-weight: 500;
+        opacity: 0.9;
+    }
+
+    .username-text {
+        font-weight: 700;
+    }
+
+    .wave-emoji {
+        display: inline-block;
+        animation: wave 2s ease-in-out infinite;
+        transform-origin: 70% 70%;
+    }
+
+    @keyframes wave {
+        0%, 100% { transform: rotate(0deg); }
+        25% { transform: rotate(20deg); }
+        75% { transform: rotate(-20deg); }
+    }
+
+    .welcome-subtitle {
+        font-size: 1rem;
+        opacity: 0.85;
+        margin: 0;
+    }
+
+    /* 浮动装饰形状 */
+    .floating-shapes {
+        position: relative;
+        width: 120px;
+        height: 80px;
+    }
+
+    .shape {
+        position: absolute;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.15);
+        animation: float 6s ease-in-out infinite;
+    }
+
+    .shape-1 {
+        width: 60px;
+        height: 60px;
+        top: 10px;
+        right: 20px;
+        animation-delay: 0s;
+    }
+
+    .shape-2 {
+        width: 40px;
+        height: 40px;
+        top: 30px;
+        right: 70px;
+        animation-delay: 2s;
+    }
+
+    .shape-3 {
+        width: 24px;
+        height: 24px;
+        top: 50px;
+        right: 40px;
+        animation-delay: 4s;
+    }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50% { transform: translateY(-15px) rotate(10deg); }
+    }
+
+    /* 欢迎区域小统计 */
+    .welcome-stats {
+        display: flex;
+        gap: 24px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .mini-stat {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        padding: 12px 20px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .mini-stat-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+    }
+
+    .mini-stat-content {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .mini-stat-label {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .mini-stat-value {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    /* ========== 统计区域 ========== */
+    .stats-section {
         margin-bottom: 32px;
     }
 
-    /* 主内容网格 */
+    .section-header {
+        margin-bottom: 20px;
+    }
+
+    .section-header-with-action {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #334155;
+        display: flex;
+        align-items: center;
+    }
+
+    .section-badge {
+        font-size: 0.75rem;
+        padding: 4px 12px;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #d97706;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+
+    .view-all-link {
+        font-size: 0.875rem;
+        color: #6366f1;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+    .view-all-link:hover {
+        color: #4f46e5;
+        transform: translateX(3px);
+    }
+
+    /* 统计卡片网格 */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 20px;
+    }
+
+    /* ========== 玻璃卡片容器 ========== */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+
+    .glass-card:hover {
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    /* ========== 主内容网格 ========== */
     .dashboard-content-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 24px;
+        margin-bottom: 32px;
     }
 
     @media (max-width: 1024px) {
         .dashboard-content-grid {
             grid-template-columns: 1fr;
         }
+
+        .welcome-content {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 24px;
+        }
+
+        .welcome-stats {
+            flex-wrap: wrap;
+        }
     }
 
-    /* 区域标题 */
-    .section-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #334155;
-        margin-bottom: 16px;
-        display: flex;
-        align-items: center;
+    @media (max-width: 640px) {
+        .welcome-banner {
+            padding: 24px;
+        }
+
+        .welcome-title {
+            font-size: 1.5rem;
+        }
+
+        .welcome-stats {
+            width: 100%;
+        }
+
+        .mini-stat {
+            flex: 1;
+        }
     }
 
-    /* 快捷操作列表 */
+    /* ========== 快捷操作列表 ========== */
     .quick-actions-list {
         display: flex;
         flex-direction: column;
         gap: 12px;
     }
 
-    /* 活动列表 */
+    /* ========== 活动列表 ========== */
     .activities-list {
-        background: rgba(255, 255, 255, 0.5);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        border-radius: 16px;
-        padding: 12px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .activity-timeline {
         display: flex;
         flex-direction: column;
         gap: 8px;
-        max-height: 350px;
-        overflow-y: auto;
     }
 
     /* 空状态 */
@@ -128,8 +444,53 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 40px 20px;
+        padding: 48px 24px;
         text-align: center;
+    }
+
+    .empty-state-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: #94a3b8;
+        margin-bottom: 16px;
+    }
+
+    .empty-state-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 8px;
+    }
+
+    .empty-state-desc {
+        font-size: 0.875rem;
+        color: #94a3b8;
+        margin-bottom: 20px;
+    }
+
+    .empty-state-action {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: white;
+        text-decoration: none;
+        border-radius: 12px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+    }
+
+    .empty-state-action:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
     }
 
     /* 滚动条美化 */
@@ -147,7 +508,85 @@
         background: #94a3b8;
     }
 
-    /* 数据更新动画 */
+    /* ========== 快速入口横幅 ========== */
+    .quick-banner {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(14, 165, 233, 0.2);
+    }
+
+    .quick-banner-content {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 20px 28px;
+    }
+
+    .quick-banner-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: white;
+        box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
+        flex-shrink: 0;
+    }
+
+    .quick-banner-text {
+        flex: 1;
+    }
+
+    .quick-banner-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #0f172a;
+        margin-bottom: 4px;
+    }
+
+    .quick-banner-desc {
+        font-size: 0.875rem;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .quick-banner-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 20px;
+        background: white;
+        color: #0ea5e9;
+        text-decoration: none;
+        border-radius: 12px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        flex-shrink: 0;
+    }
+
+    .quick-banner-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(14, 165, 233, 0.2);
+    }
+
+    @media (max-width: 640px) {
+        .quick-banner-content {
+            flex-direction: column;
+            text-align: center;
+        }
+
+        .quick-banner-btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+
+    /* ========== 数据更新动画 ========== */
     @keyframes countUp {
         0% { transform: scale(1); }
         50% { transform: scale(1.1); }
@@ -170,6 +609,33 @@ document.addEventListener('DOMContentLoaded', function() {
             valueEl.id = ids[index];
         }
     });
+
+    // 更新日期和周进度
+    updateDateInfo();
 });
+
+function updateDateInfo() {
+    const now = new Date();
+    const dateEl = document.getElementById('current-date');
+    const weekEl = document.getElementById('week-progress');
+
+    if (dateEl) {
+        const month = now.getMonth() + 1;
+        const day = now.getDate();
+        const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        const weekDay = weekDays[now.getDay()];
+        dateEl.textContent = `${month}月${day}日 ${weekDay}`;
+    }
+
+    if (weekEl) {
+        const dayOfWeek = now.getDay() || 7; // 周日为7
+        const progress = Math.round((dayOfWeek / 7) * 100);
+        weekEl.textContent = `第${dayOfWeek}天 ${progress}%`;
+    }
+}
+
+function showGuideModal() {
+    window.showToast('快速入门指南开发中，敬请期待', 'info');
+}
 </script>
 {% endblock %}

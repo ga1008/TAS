@@ -279,91 +279,267 @@
 </div>
 
 <!-- 绑定/更新弹窗 -->
-<div id="bindModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-all duration-300">
-    <div class="glass-panel rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-95 opacity-0 modal-content">
-        <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-            <h5 id="modalTitle" class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                    <i class="fas fa-university text-sm"></i>
-                </span>
-                绑定教务系统
-            </h5>
-            <button type="button" onclick="closeModal('bindModal')" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex items-center justify-center">
+<div id="bindModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <!-- 背景遮罩 -->
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm modal-backdrop" onclick="closeModal('bindModal')"></div>
+
+    <!-- 弹窗内容 -->
+    <div class="relative w-full max-w-md bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/50 transform transition-all duration-300 scale-95 opacity-0 modal-content overflow-hidden">
+        <!-- 顶部装饰条 -->
+        <div class="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+
+        <div class="p-8">
+            <!-- 弹窗头部 -->
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-200 mb-4">
+                    <i class="fas fa-university text-2xl" id="modalIcon"></i>
+                </div>
+                <h3 id="modalTitle" class="text-xl font-bold text-slate-800">绑定教务系统</h3>
+                <p class="text-sm text-slate-500 mt-1" id="modalSubtitle">使用您的教务系统账号进行绑定</p>
+            </div>
+
+            <!-- 关闭按钮 -->
+            <button type="button" onclick="closeModal('bindModal')" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-all flex items-center justify-center">
                 <i class="fas fa-times"></i>
             </button>
-        </div>
 
-        <form id="bindForm" onsubmit="submitBind(event)" class="px-6 py-5 space-y-4">
-            <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">教工号 / 学号</label>
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <input type="text" id="inputUsername" name="username"
-                           class="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all"
-                           placeholder="请输入您的账号" required>
-                </div>
-            </div>
-
-            <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">密码</label>
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                        <i class="fas fa-lock"></i>
-                    </div>
-                    <input type="password" id="inputPassword" name="password"
-                           class="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all"
-                           placeholder="请输入教务系统密码" required>
-                </div>
-            </div>
-
-            <!-- 记住登录切换 -->
-            <div class="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600">
-                        <i class="fas fa-save"></i>
-                    </div>
-                    <div>
-                        <p class="text-sm font-bold text-slate-700">记住登录信息</p>
-                        <p id="rememberHint" class="text-xs text-slate-400">保存到数据库，下次无需重新登录</p>
+            <form id="bindForm" onsubmit="submitBind(event)" class="space-y-5">
+                <!-- 账号输入 -->
+                <div class="input-group">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">教工号 / 学号</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <input type="text" id="inputUsername" name="username" autocomplete="username"
+                               class="input-field"
+                               placeholder="请输入您的账号" required>
                     </div>
                 </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="inputRemember" class="sr-only peer" checked>
-                    <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
-            </div>
 
-            <!-- 错误提示 -->
-            <div id="bindError" class="hidden items-center gap-2 bg-rose-50 text-rose-600 text-sm font-medium p-3 rounded-xl border border-rose-100">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span id="bindErrorMsg"></span>
-            </div>
+                <!-- 密码输入 -->
+                <div class="input-group">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">密码</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <input type="password" id="inputPassword" name="password" autocomplete="current-password"
+                               class="input-field pr-12"
+                               placeholder="请输入教务系统密码" required>
+                        <button type="button" onclick="togglePasswordVisibility()" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors">
+                            <i class="fas fa-eye" id="passwordToggleIcon"></i>
+                        </button>
+                    </div>
+                </div>
 
-            <!-- 成功提示 -->
-            <div id="bindSuccess" class="hidden items-center gap-2 bg-emerald-50 text-emerald-600 text-sm font-medium p-3 rounded-xl border border-emerald-100">
-                <i class="fas fa-check-circle"></i>
-                <span id="bindSuccessMsg">登录验证成功！</span>
-            </div>
+                <!-- 记住登录开关 -->
+                <div class="flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl px-5 py-4 border border-indigo-100">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow-md">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-bold text-slate-700">保存登录信息</p>
+                            <p id="rememberHint" class="text-xs text-slate-500">保存到数据库，下次无需重新登录</p>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="inputRemember" class="sr-only peer" checked>
+                        <div class="toggle-switch">
+                            <div class="toggle-slider"></div>
+                        </div>
+                    </label>
+                </div>
 
-            <div class="flex items-center justify-end gap-3 pt-4">
-                <button type="button" onclick="testLogin()" id="btnTest" class="px-4 py-2 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors">
-                    <i class="fas fa-vial mr-1"></i> 测试登录
-                </button>
-                <button type="submit" id="btnSubmit" class="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transition-all transform hover:-translate-y-0.5">
-                    <i class="fas fa-link mr-1"></i> <span id="btnSubmitText">绑定并保存</span>
-                </button>
-            </div>
-        </form>
+                <!-- 错误提示 -->
+                <div id="bindError" class="hidden items-center gap-3 bg-rose-50 text-rose-600 text-sm font-medium p-4 rounded-2xl border border-rose-100 error-message">
+                    <div class="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <span id="bindErrorMsg"></span>
+                </div>
 
-        <div class="px-6 pb-5">
-            <p class="text-xs text-slate-400 text-center">
-                <i class="fas fa-shield-alt mr-1"></i> 数据传输全程加密，仅用于教学数据同步
-            </p>
+                <!-- 成功提示 -->
+                <div id="bindSuccess" class="hidden items-center gap-3 bg-emerald-50 text-emerald-600 text-sm font-medium p-4 rounded-2xl border border-emerald-100 success-message">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <span id="bindSuccessMsg">登录验证成功！</span>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="flex items-center gap-3 pt-2">
+                    <button type="button" onclick="testLogin()" id="btnTest" class="flex-1 flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-2xl border border-indigo-200 transition-all">
+                        <i class="fas fa-vial"></i> 测试登录
+                    </button>
+                    <button type="submit" id="btnSubmit" class="flex-1 flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:shadow-lg hover:shadow-indigo-300 rounded-2xl transition-all transform hover:-translate-y-0.5 submit-btn">
+                        <i class="fas fa-link"></i> <span id="btnSubmitText">绑定并保存</span>
+                    </button>
+                </div>
+            </form>
+
+            <!-- 底部安全提示 -->
+            <div class="mt-6 pt-5 border-t border-slate-100">
+                <div class="flex items-center justify-center gap-2 text-xs text-slate-400">
+                    <i class="fas fa-shield-alt text-emerald-500"></i>
+                    <span>数据传输全程加密，仅用于教学数据同步</span>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+    /* ========== 弹窗动画 ========== */
+    .modal-backdrop {
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    .modal-content.show {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    /* ========== 输入框样式 ========== */
+    .input-group {
+        position: relative;
+    }
+
+    .input-field {
+        width: 100%;
+        padding: 14px 16px 14px 44px;
+        background: #f8fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 14px;
+        font-size: 0.95rem;
+        color: #1e293b;
+        transition: all 0.3s ease;
+    }
+
+    .input-field::placeholder {
+        color: #94a3b8;
+    }
+
+    .input-field:hover {
+        border-color: #cbd5e1;
+        background: #fff;
+    }
+
+    .input-field:focus {
+        outline: none;
+        border-color: #6366f1;
+        background: #fff;
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    }
+
+    .input-field:focus {
+        border-color: #6366f1;
+        background: #fff;
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    }
+
+    /* ========== 开关样式 ========== */
+    .toggle-switch {
+        width: 52px;
+        height: 28px;
+        background: #cbd5e1;
+        border-radius: 14px;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .toggle-switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 24px;
+        height: 24px;
+        background: white;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    input:checked + .toggle-switch {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    }
+
+    input:checked + .toggle-switch::after {
+        transform: translateX(24px);
+    }
+
+    .toggle-switch:hover {
+        background: #94a3b8;
+    }
+
+    input:checked + .toggle-switch:hover {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    }
+
+    /* ========== 提示信息样式 ========== */
+    .error-message,
+    .success-message {
+        display: flex;
+        align-items: center;
+        animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* ========== 按钮加载状态 ========== */
+    .submit-btn.loading {
+        background: #94a3b8;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+
+    .submit-btn.loading i {
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+</style>
+
+<script>
+    // 密码显示/隐藏切换
+    function togglePasswordVisibility() {
+        const input = document.getElementById('inputPassword');
+        const icon = document.getElementById('passwordToggleIcon');
+
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+
+    // 暴露到全局
+    window.togglePasswordVisibility = togglePasswordVisibility;
+</script>
 
 <script>
 (function() {
@@ -522,14 +698,23 @@
     // 打开绑定弹窗
     function openBindModal() {
         window._jwxtState.isUpdateMode = false;
-        document.getElementById('modalTitle').innerHTML = `
-            <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                <i class="fas fa-university text-sm"></i>
-            </span>
-            绑定教务系统
-        `;
+
+        // 更新弹窗标题和内容
+        document.getElementById('modalTitle').textContent = '绑定教务系统';
+        document.getElementById('modalSubtitle').textContent = '使用您的教务系统账号进行绑定';
         document.getElementById('btnSubmitText').textContent = '绑定并保存';
+
+        const modalIcon = document.getElementById('modalIcon');
+        modalIcon.className = 'fas fa-university text-2xl';
+
+        // 重置表单
         document.getElementById('bindForm').reset();
+
+        // 重置密码可见性
+        const passwordInput = document.getElementById('inputPassword');
+        const passwordIcon = document.getElementById('passwordToggleIcon');
+        passwordInput.type = 'password';
+        passwordIcon.className = 'fas fa-eye';
 
         // 默认选中"记住登录"
         document.getElementById('inputRemember').checked = true;
@@ -543,19 +728,26 @@
     // 打开更新弹窗
     function openUpdateModal() {
         window._jwxtState.isUpdateMode = true;
-        document.getElementById('modalTitle').innerHTML = `
-            <span class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center text-white shadow-lg shadow-sky-200">
-                <i class="fas fa-sync-alt text-sm"></i>
-            </span>
-            更新账号信息
-        `;
+
+        // 更新弹窗标题和内容
+        document.getElementById('modalTitle').textContent = '更新账号信息';
+        document.getElementById('modalSubtitle').textContent = '更新您的教务系统登录信息';
         document.getElementById('btnSubmitText').textContent = '更新并保存';
+
+        const modalIcon = document.getElementById('modalIcon');
+        modalIcon.className = 'fas fa-sync-alt text-2xl';
 
         // 预填充用户名
         if (window._jwxtState.currentBinding && window._jwxtState.currentBinding.username) {
             document.getElementById('inputUsername').value = window._jwxtState.currentBinding.username;
         }
         document.getElementById('inputPassword').value = '';
+
+        // 重置密码可见性
+        const passwordInput = document.getElementById('inputPassword');
+        const passwordIcon = document.getElementById('passwordToggleIcon');
+        passwordInput.type = 'password';
+        passwordIcon.className = 'fas fa-eye';
 
         // 预设 remember 状态（保持与当前存储模式一致）
         document.getElementById('inputRemember').checked = window._jwxtState.isPersistent;
@@ -571,10 +763,11 @@
         const modal = document.getElementById(modalId);
         const content = modal.querySelector('.modal-content');
         modal.classList.remove('hidden');
-        setTimeout(() => {
-            content.classList.remove('scale-95', 'opacity-0');
-            content.classList.add('scale-100', 'opacity-100');
-        }, 10);
+
+        // 触发动画
+        requestAnimationFrame(() => {
+            content.classList.add('show');
+        });
 
         // 聚焦输入框
         setTimeout(() => {
@@ -586,8 +779,8 @@
     function closeModal(modalId) {
         const modal = document.getElementById(modalId);
         const content = modal.querySelector('.modal-content');
-        content.classList.remove('scale-100', 'opacity-100');
-        content.classList.add('scale-95', 'opacity-0');
+
+        content.classList.remove('show');
         setTimeout(() => {
             modal.classList.add('hidden');
         }, 300);
