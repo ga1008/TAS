@@ -27,26 +27,7 @@
 {% endblock %}
 
 {% block content %}
-<script>
-    tailwind.config = {
-        theme: {
-            extend: {
-                colors: {
-                    brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
-                },
-                animation: {
-                    'fade-in': 'fadeIn 0.5s ease-out forwards',
-                    'slide-up': 'slideUp 0.4s ease-out forwards',
-                    'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                },
-                keyframes: {
-                    fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-                    slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
-                }
-            }
-        }
-    }
-</script>
+{# Tailwind config inherited from base.html #}
 
 <div class="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50 via-slate-50 to-white overflow-hidden pointer-events-none">
     <div class="absolute top-10 -left-10 w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse-slow"></div>

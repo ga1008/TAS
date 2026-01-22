@@ -105,11 +105,11 @@
                     <div class="flex flex-wrap gap-3">
                         <button onclick="handleUpdateClick()"
                                 class="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-sm transition-all text-sm">
-                            <i class="fas fa-sync-alt mr-2"></i>刷新凭证
+                            <i class="fas fa-key mr-2"></i>更新凭证
                         </button>
-                        <button onclick="refreshJwxtStatus(true)"
-                                class="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 hover:shadow-sm transition-all" title="重新检查">
-                            <i class="fas fa-redo"></i>
+                        <button onclick="handleTestConnection()"
+                                class="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600 hover:shadow-sm transition-all" title="使用保存的凭证检测连接">
+                            <i class="fas fa-plug"></i>
                         </button>
                         <button onclick="handleDisconnect()"
                                 class="px-4 py-2.5 bg-white border border-rose-100 rounded-xl text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all" title="断开连接">
@@ -195,9 +195,15 @@
                     // 无记录或已过期
                     this.renderDisconnected();
 
-                    // 满足需求2：如果状态是明确的过期（DB标记为无效），且允许弹窗，则弹出模态框
-                    if (data.status === 'expired' && autoPopup) {
-                        if(window.showToast) window.showToast('登录凭证已过期，请重新登录', 'warning');
+                    // 自动弹窗逻辑：未绑定或已过期时，首次进入页面自动弹出登录窗口
+                    if (autoPopup) {
+                        if (data.status === 'expired') {
+                            if(window.showToast) window.showToast('登录凭证已过期，请重新登录', 'warning');
+                        } else if (data.status === 'not_linked') {
+                            // 首次访问，无任何绑定记录
+                            if(window.showToast) window.showToast('请绑定教务系统账号', 'info');
+                        }
+                        // 延迟弹出登录窗口
                         setTimeout(() => window.openJwxtModal(false, data.username || ''), 500);
                     }
                 }
@@ -302,6 +308,13 @@
     // 全局方法
     window.refreshJwxtStatus = (force = false) => {
         PageState.checkStatus(false); // 手动刷新通常不需要自动弹窗，除非状态明确变更
+    };
+
+    // 检测按钮：使用保存的凭证测试连接，失败则弹出登录窗口
+    window.handleTestConnection = async () => {
+        if(window.showToast) window.showToast('正在检测连接...', 'info');
+        // 传入 autoPopup=true，如果验证失败会自动弹窗
+        await PageState.checkStatus(true);
     };
 
     window.handleUpdateClick = () => {

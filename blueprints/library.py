@@ -303,9 +303,7 @@ def update_file_content():
     record = db.get_file_by_id(file_id)
     if not record: return jsonify({"msg": "文件不存在"}), 404
 
-    # 权限检查
-    if int(record['uploaded_by']) != int(g.user['id']) and not g.user.get('is_admin'):
-        return jsonify({"msg": "无权编辑他人文档"}), 403
+    # 文档库共享设计：所有登录用户都可以编辑文档内容
 
     db.update_file_parsed_content(file_id, content)
     return jsonify({"status": "success", "msg": "保存成功"})
@@ -381,9 +379,7 @@ def update_file_metadata():
     if not record:
         return jsonify({"msg": "文件不存在"}), 404
 
-    # 权限检查
-    if int(record['uploaded_by']) != int(g.user['id']) and not g.user.get('is_admin'):
-        return jsonify({"msg": "无权编辑他人文档"}), 403
+    # 文档库共享设计：所有登录用户都可以编辑文档元数据
 
     # 从元数据中提取关键字段用于数据库索引
     course_name = meta_info.get('course_name') if isinstance(meta_info, dict) else None
@@ -419,9 +415,7 @@ def update_file_full():
     if not record:
         return jsonify({"msg": "文件不存在"}), 404
 
-    # 权限检查
-    if int(record['uploaded_by']) != int(g.user['id']) and not g.user.get('is_admin'):
-        return jsonify({"msg": "无权编辑他人文档"}), 403
+    # 文档库共享设计：所有登录用户都可以编辑文档内容和元数据
 
     # 更新内容
     if content is not None:
@@ -481,9 +475,7 @@ def reparse_file():
     if not file_record:
         return jsonify({"msg": "文件不存在"}), 404
 
-    # 权限检查
-    if int(file_record['uploaded_by']) != int(g.user['id']) and not g.user.get('is_admin'):
-        return jsonify({"msg": "无权操作此文件"}), 403
+    # 文档库共享设计：所有登录用户都可以触发文件解析
 
     try:
         # 调用智能解析

@@ -4,7 +4,7 @@
  */
 
 // 1. 导入通用工具
-import { showMessage, checkBootstrap } from './modules/utils.js';
+import { showMessage } from './modules/utils.js';
 
 // 2. 导入业务模块
 import { initBankForm } from './modules/forms/bank-form.js';
@@ -34,16 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
             window.dispatchEvent(new CustomEvent('tas:refresh_welcome'));
         }
     };
-
-    // --- 基础库初始化 ---
-
-    // 初始化 Bootstrap Tooltips (全局通用)
-    if (checkBootstrap()) {
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-    }
 
     // --- 业务模块路由 (根据页面 DOM ID 按需加载) ---
 

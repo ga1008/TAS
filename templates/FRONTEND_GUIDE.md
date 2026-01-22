@@ -12,34 +12,71 @@
 
 ## 2. Tailwind CSS 配置 (Configuration)
 
-在所有新页面的 `<script>` 配置中，必须包含以下自定义扩展，以保证动效和色彩的一致性。
+本系统使用 **Tailwind CSS CDN 模式**，统一配置定义在 `templates/base.html` 中。所有继承 base.html 的页面自动获得此配置。
+
+**独立页面**（如 `login.html`, `admin/login.html`, `student_detail.html`, `grader_detail.html`, `export.html`）需要在各自的 `<script>` 中包含相同的配置。
+
+### 完整配置
 
 ```javascript
 tailwind.config = {
     theme: {
         extend: {
             colors: {
-                brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' }
+                brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+                sky: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7' },
+                slate: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a' },
+                indigo: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+                emerald: { 50: '#ecfdf5', 100: '#d1fae5', 500: '#10b981', 600: '#059669' },
+                rose: { 50: '#fff1f2', 100: '#ffe4e6', 400: '#fb7185', 500: '#f43f5e', 600: '#e11d48' },
+                amber: { 50: '#fffbeb', 100: '#fef3c7', 400: '#fbbf24', 500: '#f59e0b', 900: '#78350f' },
+                purple: { 50: '#faf5ff', 100: '#f3e8ff', 400: '#c084fc', 500: '#a855f7', 600: '#9333ea' }
+            },
+            boxShadow: {
+                'soft': '0 10px 40px -10px rgba(0, 0, 0, 0.08)',
+                'glow': '0 0 20px rgba(99, 102, 241, 0.15)'
             },
             animation: {
                 'fade-in': 'fadeIn 0.5s ease-out forwards',
+                'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+                'slide-in': 'slideIn 0.3s ease-out',
                 'slide-up': 'slideUp 0.4s ease-out forwards',
                 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                'shake': 'shake 0.5s ease-in-out',
+                'shake': 'shake 0.5s ease-in-out'
             },
             keyframes: {
                 fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                fadeInUp: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                slideIn: { '0%': { transform: 'translateX(-10px)', opacity: '0' }, '100%': { transform: 'translateX(0)', opacity: '1' } },
                 slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
                 shake: {
                     '0%, 100%': { transform: 'translateX(0)' },
                     '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-4px)' },
-                    '20%, 40%, 60%, 80%': { transform: 'translateX(4px)' },
+                    '20%, 40%, 60%, 80%': { transform: 'translateX(4px)' }
                 }
             }
         }
     }
 }
+```
 
+### 补充样式 (Supplementary CSS)
+
+复杂效果（如毛玻璃、自定义滚动条、特殊动画）使用 `<style>` 块定义，作为 Tailwind 的补充：
+
+```css
+/* 毛玻璃面板 */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 ```
 
 ---

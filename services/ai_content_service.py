@@ -101,6 +101,7 @@ class MessageContext:
     student_count: int
     pending_task_count: int
     grader_count: int
+    file_count: int
 
     # 最近操作 (最后 3-5 条)
     recent_actions: List[str]
@@ -123,6 +124,7 @@ class MessageContext:
             'student_count': self.student_count,
             'pending_task_count': self.pending_task_count,
             'grader_count': self.grader_count,
+            'file_count': self.file_count,
             'recent_actions_str': recent_actions_str,
             'page_context': self.page_context,
             'page_context_display': get_page_context_display(self.page_context)
@@ -149,6 +151,7 @@ class MessageContext:
             student_count=stats.get('student_count', 0),
             pending_task_count=stats.get('pending_task_count', 0),
             grader_count=stats.get('grader_count', 0),
+            file_count=stats.get('file_count', 0),
             recent_actions=recent_actions[:5],  # 最多 5 条
             page_context=page_context
         )
@@ -226,7 +229,7 @@ def get_cached_message(user_id: int, page_context: str) -> Optional[WelcomeMessa
 
         if not row:
             return None
-
+        row = dict(row)
         msg = WelcomeMessage.from_row(row)
 
         # 检查是否过期
@@ -237,6 +240,8 @@ def get_cached_message(user_id: int, page_context: str) -> Optional[WelcomeMessa
         return msg
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         logger.error(f"获取缓存消息失败: {e}")
         return None
 

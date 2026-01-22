@@ -8,12 +8,13 @@
     {# 背景装饰 #}
     <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-100 to-blue-50 rounded-full -mr-16 -mt-16 opacity-50 pointer-events-none"></div>
 
-    {# 加载状态 #}
-    <div id="welcome-loading" class="relative z-10 flex items-center gap-3">
-        <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center animate-pulse">
-            <i class="fas fa-sparkles text-sm"></i>
+    {# 加载状态 - 简洁的动态图标 #}
+    <div id="welcome-loading" class="relative z-10 flex items-center justify-center py-2">
+        <div class="flex items-center gap-1">
+            <span class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay: 0ms;"></span>
+            <span class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay: 150ms;"></span>
+            <span class="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style="animation-delay: 300ms;"></span>
         </div>
-        <p class="text-slate-500 font-medium">AI 正在为您准备欢迎语...</p>
     </div>
 
     {# 欢迎语内容 #}

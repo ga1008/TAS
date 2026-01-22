@@ -205,6 +205,8 @@ def get_welcome_message():
             })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         logger.error(f"获取欢迎语失败: {e}")
         # 返回回退消息
         fallback = get_fallback_message_sync()

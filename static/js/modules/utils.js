@@ -65,14 +65,3 @@ export function showMessage(message, type = 'success', duration = 3000) {
         div.addEventListener('transitionend', () => div.remove());
     }, duration);
 }
-
-/**
- * 检查 Bootstrap 是否加载
- */
-export function checkBootstrap() {
-    if (typeof bootstrap === 'undefined') {
-        console.warn('Bootstrap script is not loaded.');
-        return false;
-    }
-    return true;
-}

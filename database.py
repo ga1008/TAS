@@ -384,49 +384,35 @@ class Database:
         """
         获取文档库的目录树结构：学年 -> 学期 -> 课程 -> 适用人群
         优化：即使 academic_year 为空，也根据 course_name 分组
+        注意：文档库为共享设计，所有用户可见所有分类
         """
         conn = self.get_connection()
-        # 聚合查询，找出所有存在的组合
-        if is_admin:
-            sql = '''
-                  SELECT DISTINCT
-                      COALESCE(academic_year, '未分类') as academic_year,
-                      semester,
-                      course_name,
-                      cohort_tag
-                  FROM file_assets
-                  WHERE course_name IS NOT NULL AND course_name != ''
-                  ORDER BY academic_year DESC, semester ASC, course_name
-                  '''
-            return [dict(row) for row in conn.execute(sql).fetchall()]
-        else:
-            sql = '''
-                  SELECT DISTINCT
-                      COALESCE(academic_year, '未分类') as academic_year,
-                      semester,
-                      course_name,
-                      cohort_tag
-                  FROM file_assets
-                  WHERE uploaded_by = ?
-                    AND course_name IS NOT NULL AND course_name != ''
-                  ORDER BY academic_year DESC, semester ASC, course_name
-                  '''
-            return [dict(row) for row in conn.execute(sql, (user_id,)).fetchall()]
+        # 文档库共享设计：所有人可见所有文档分类
+        sql = '''
+              SELECT DISTINCT
+                  COALESCE(academic_year, '未分类') as academic_year,
+                  semester,
+                  course_name,
+                  cohort_tag
+              FROM file_assets
+              WHERE course_name IS NOT NULL AND course_name != ''
+              ORDER BY academic_year DESC, semester ASC, course_name
+              '''
+        return [dict(row) for row in conn.execute(sql).fetchall()]
 
     def get_files_by_filter(self, user_id, doc_category=None, year=None, course=None, cohort=None, search=None, is_admin=False, include_unparsed=False):
         """
         [增强版] 高级筛选接口
         :param include_unparsed: 是否包含未解析的文件
+        注意：文档库为共享设计，所有用户可见所有文档（编辑/删除权限在前端按 is_owner 控制）
         """
         conn = self.get_connection()
-        # 修改：默认显示所有文件，不强制要求已解析
+        # 文档库共享设计：所有人可见所有文档
         sql = "SELECT f.*, u.username as uploader_name FROM file_assets f LEFT JOIN users u ON f.uploaded_by = u.id WHERE 1=1"
         params = []
 
-        # 权限控制：管理员可以看全部，普通用户只能看自己的
-        if not is_admin:
-            sql += " AND f.uploaded_by = ?"
-            params.append(user_id)
+        # 注意：已移除权限控制，文档库对所有用户可见
+        # 编辑/删除权限通过前端 is_owner 字段控制
 
         if doc_category:
             sql += " AND f.doc_category = ?"

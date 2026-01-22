@@ -953,21 +953,15 @@
                     emptyHtml += `</ul></div>`;
                 }
 
-                // 添加解析按钮（仅文件所有者可见）
-                if (fileDetail.is_owner || {{ 'true' if user.is_admin else 'false' }}) {
-                    emptyHtml += `
-                        <div class="mt-6 flex items-center gap-3">
-                            <button onclick="triggerParseFromPreview()" class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium transition shadow-sm flex items-center">
-                                <i class="fas fa-magic mr-2"></i> AI 智能解析
-                            </button>
-                            <span class="text-xs text-slate-400">或切换到「编辑」视图手动添加内容</span>
-                        </div>
-                    `;
-                } else {
-                    emptyHtml += `
-                        <p class="text-xs text-slate-400 mt-4">您可以联系文档所有者进行解析</p>
-                    `;
-                }
+                // 添加解析按钮 - 文档库共享设计，所有用户都可以触发解析
+                emptyHtml += `
+                    <div class="mt-6 flex items-center gap-3">
+                        <button onclick="triggerParseFromPreview()" class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium transition shadow-sm flex items-center">
+                            <i class="fas fa-magic mr-2"></i> AI 智能解析
+                        </button>
+                        <span class="text-xs text-slate-400">或切换到「编辑」视图手动添加内容</span>
+                    </div>
+                `;
 
                 emptyHtml += `</div>`;
                 document.getElementById('viewPreview').innerHTML = emptyHtml;
@@ -979,22 +973,16 @@
             // 初始化元数据表单
             renderMetadataForm();
 
-            // 按钮权限控制
+            // 按钮权限控制 - 文档库共享设计，所有用户都可以查看编辑按钮
             const actionGroup = document.getElementById('previewActionGroup');
             const viewTabs = document.getElementById('viewTabs');
-            if (fileDetail.is_owner || {{ 'true' if user.is_admin else 'false' }}) {
-                actionGroup.classList.remove('hidden');
-                actionGroup.classList.add('flex');
-                viewTabs.classList.remove('hidden');
-            } else {
-                actionGroup.classList.add('hidden');
-                // 非所有者隐藏编辑和元数据标签
-                viewTabs.querySelectorAll('.view-tab').forEach(tab => {
-                    if (tab.dataset.view !== 'preview') {
-                        tab.classList.add('hidden');
-                    }
-                });
-            }
+            // 显示所有视图标签（预览、编辑、元数据）
+            actionGroup.classList.remove('hidden');
+            actionGroup.classList.add('flex');
+            viewTabs.classList.remove('hidden');
+            viewTabs.querySelectorAll('.view-tab').forEach(tab => {
+                tab.classList.remove('hidden');
+            });
 
             // 重置为预览视图
             switchView('preview');

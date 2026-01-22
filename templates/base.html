@@ -51,13 +51,10 @@
 
     <script src="/static/js/marked.min.js"></script>
     <script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 
-    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <!-- FontAwesome icons -->
     <link href="{{ url_for('static', filename='css/all.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/ai_chat.css') }}" rel="stylesheet">
 
     <style>
         :root {
@@ -338,12 +335,12 @@
         </nav>
 
         <div class="sidebar-footer">
-            <div class="d-flex align-items-center gap-2 text-muted small">
-                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+            <div class="flex items-center gap-2 text-slate-500 text-sm">
+                <div class="rounded-full bg-indigo-600 text-white flex items-center justify-center" style="width: 32px; height: 32px;">
                     <i class="fas fa-user"></i>
                 </div>
                 <div>
-                    <div class="fw-bold text-dark">{{ user.get('username', 'Teacher') }}</div>
+                    <div class="font-bold text-slate-800">{{ user.get('username', 'Teacher') }}</div>
                     <div style="font-size: 0.75rem;">在线</div>
                 </div>
             </div>
@@ -353,8 +350,8 @@
     {# 顶栏区块 - 各页面可覆盖此 block 实现自定义顶栏 #}
     {% block topbar %}
     <header class="app-topbar">
-        <div class="d-flex align-items-center text-muted">
-            <span id="page-title-display" class="fw-bold text-dark">{% block header_title %}TAS{% endblock %}</span>
+        <div class="flex items-center text-slate-500">
+            <span id="page-title-display" class="font-bold text-slate-800">{% block header_title %}TAS{% endblock %}</span>
         </div>
 
         <div class="topbar-actions">
@@ -389,9 +386,14 @@
                 {% with messages = get_flashed_messages() %}
                     {% if messages %}
                         {% for message in messages %}
-                            <div class="alert alert-info alert-dismissible fade show shadow-sm border-0" role="alert" style="background: white; border-left: 4px solid var(--primary-color);">
-                                <i class="fas fa-info-circle me-2 text-primary"></i> {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            <div class="flex items-center justify-between bg-white rounded-lg shadow-sm p-4 mb-4 border-l-4 border-indigo-600 animate-fade-in" role="alert">
+                                <div class="flex items-center">
+                                    <i class="fas fa-info-circle mr-2 text-indigo-600"></i>
+                                    <span class="text-slate-700">{{ message }}</span>
+                                </div>
+                                <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 transition-colors p-1">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                         {% endfor %}
                     {% endif %}
@@ -422,22 +424,9 @@
                 $submenu.slideToggle(200);
             });
 
-            // 监听 SPA 导航完成事件，重新绑定页面内的事件
+            // 监听 SPA 导航完成事件
             window.addEventListener('spa:navigated', function(e) {
-                // 触发 Bootstrap 组件重新初始化（如有需要）
-                if (typeof bootstrap !== 'undefined') {
-                    // 重新初始化 tooltips
-                    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-                    tooltipTriggerList.map(function (tooltipTriggerEl) {
-                        return new bootstrap.Tooltip(tooltipTriggerEl);
-                    });
-
-                    // 重新初始化 popovers
-                    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-                    popoverTriggerList.map(function (popoverTriggerEl) {
-                        return new bootstrap.Popover(popoverTriggerEl);
-                    });
-                }
+                // SPA 导航完成后的回调（如需要可在此添加逻辑）
             });
         });
     </script>

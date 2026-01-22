@@ -75,7 +75,9 @@ def check_status():
     检查当前用户的连接状态 (Phase 1)
     前端页面加载时调用，用于快速判断显示状态，不进行耗时的登录验证。
     """
-    user_id = session.get('user_id')
+    # 修复：从 session['user'] 中获取用户ID，与系统其他部分保持一致
+    user_info = session.get('user')
+    user_id = user_info.get('id') if user_info else None
     if not user_id:
         return jsonify({"code": 401, "msg": "未登录系统", "linked": False})
 
@@ -122,7 +124,9 @@ def connect_jwxt():
     username = data.get('username')
     password = data.get('password')
     remember = data.get('remember', False)  # true=存数据库, false=存Session
-    user_id = session.get('user_id')
+    # 修复：从 session['user'] 中获取用户ID
+    user_info = session.get('user')
+    user_id = user_info.get('id') if user_info else None
 
     if not username or not password:
         return jsonify({"code": 400, "msg": "请输入账号密码"}), 400
@@ -183,7 +187,9 @@ def get_user_info():
     满足需求2：如果自动连接检查失败（如密码已改），返回 401 和用户名，
     触发前端自动弹窗。
     """
-    user_id = session.get('user_id')
+    # 修复：从 session['user'] 中获取用户ID
+    user_info = session.get('user')
+    user_id = user_info.get('id') if user_info else None
     if not user_id:
         return jsonify({"code": 401, "msg": "未登录系统"}), 401
 
@@ -241,7 +247,9 @@ def get_user_info():
 @bp.route('/disconnect', methods=['POST'])
 def disconnect_jwxt():
     """断开连接"""
-    user_id = session.get('user_id')
+    # 修复：从 session['user'] 中获取用户ID
+    user_info = session.get('user')
+    user_id = user_info.get('id') if user_info else None
     clear_session_credentials()
     if user_id:
         db.delete_jwxt_binding(user_id)
