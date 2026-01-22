@@ -96,16 +96,6 @@
             </div>
 
             <div class="space-y-3">
-                <a href="/new_class" class="group flex items-center p-4 bg-white/60 hover:bg-white backdrop-blur-md border border-white/50 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-x-1">
-                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
-                        <i class="fas fa-plus"></i>
-                    </div>
-                    <div class="ml-4">
-                        <h4 class="font-bold text-slate-800">新建班级</h4>
-                        <p class="text-xs text-slate-500 mt-1">创建新的批改班级空间</p>
-                    </div>
-                    <i class="fas fa-chevron-right ml-auto text-slate-300 group-hover:text-indigo-500 transition-colors"></i>
-                </a>
 
                 <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="group flex items-center p-4 bg-white/60 hover:bg-white backdrop-blur-md border border-white/50 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-x-1">
                     <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-600 text-white flex items-center justify-center shadow-lg shadow-purple-200 group-hover:scale-110 transition-transform">
@@ -117,6 +107,16 @@
                     </div>
                     <i class="fas fa-chevron-right ml-auto text-slate-300 group-hover:text-purple-500 transition-colors"></i>
                 </a>
+                <a href="/new_class" class="group flex items-center p-4 bg-white/60 hover:bg-white backdrop-blur-md border border-white/50 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-x-1">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform">
+                        <i class="fas fa-plus"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h4 class="font-bold text-slate-800">新建批改</h4>
+                        <p class="text-xs text-slate-500 mt-1">嗖的一下作业改完了</p>
+                    </div>
+                    <i class="fas fa-chevron-right ml-auto text-slate-300 group-hover:text-indigo-500 transition-colors"></i>
+                </a>
 
                 <a href="{{ url_for('student.import_page') }}" class="group flex items-center p-4 bg-white/60 hover:bg-white backdrop-blur-md border border-white/50 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-x-1">
                     <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-110 transition-transform">
@@ -127,6 +127,17 @@
                         <p class="text-xs text-slate-500 mt-1">批量导入 Excel 名单</p>
                     </div>
                     <i class="fas fa-chevron-right ml-auto text-slate-300 group-hover:text-emerald-500 transition-colors"></i>
+                </a>
+
+                <a href="{{ url_for('library.file_manager_page') }}" class="group flex items-center p-4 bg-white/60 hover:bg-white backdrop-blur-md border border-white/50 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-x-1">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-yellow-600 text-white flex items-center justify-center shadow-lg shadow-amber-200 group-hover:scale-110 transition-transform">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="ml-4">
+                        <h4 class="font-bold text-slate-800">解析文档</h4>
+                        <p class="text-xs text-slate-500 mt-1">教学文档才是所有的根基</p>
+                    </div>
+                    <i class="fas fa-chevron-right ml-auto text-slate-300 group-hover:text-amber-500 transition-colors"></i>
                 </a>
             </div>
 
@@ -312,5 +323,5 @@ function showGuideModal() {
 </script>
 
 {# AI 欢迎语脚本 #}
-<script src="{{ url_for('static', filename='js/ai-welcome.js') }}"></script>
+{#<script src="{{ url_for('static', filename='js/ai-welcome.js') }}"></script>#}
 {% endblock %}
