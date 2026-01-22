@@ -1,0 +1,17 @@
+{# student_list_topbar.html - 班级学生列表页顶栏组件 #}
+<header class="app-topbar">
+    <div class="flex items-center text-slate-500">
+        <h1 class="font-bold text-slate-800 text-lg">
+            <i class="fas fa-user-graduate text-indigo-600 mr-2"></i>班级花名册
+        </h1>
+    </div>
+
+    <div class="topbar-actions">
+        <a href="/student/import" class="btn-glass" title="创建新班级">
+            <i class="fas fa-plus"></i> 创建新班级
+        </a>
+
+        {# 通知中心组件 #}
+        {% include 'components/notification_center.html' %}
+    </div>
+</header>

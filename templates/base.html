@@ -252,9 +252,45 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* 4. 页面加载指示器 (NProgress 风格) */
+        .page-loading-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #4f46e5, #818cf8, #4f46e5);
+            background-size: 200% 100%;
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .page-loading-bar.active {
+            opacity: 1;
+            animation: loading-progress 1.5s ease-in-out infinite, loading-shimmer 1.5s linear infinite;
+        }
+
+        @keyframes loading-progress {
+            0% { width: 0; }
+            20% { width: 30%; }
+            50% { width: 60%; }
+            80% { width: 85%; }
+            100% { width: 95%; }
+        }
+
+        @keyframes loading-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
     </style>
 </head>
 <body>
+
+    <!-- 页面加载指示器 -->
+    <div class="page-loading-bar" id="page-loading-bar"></div>
 
     <aside class="app-sidebar">
         <div class="sidebar-header">
@@ -266,7 +302,7 @@
             {# 概览 #}
             <div class="nav-category">概览</div>
             <div class="nav-item">
-                <a href="{{ url_for('main.index') }}" class="nav-link" id="menu-home" data-path="/">
+                <a href="{{ url_for('main.index') }}" class="nav-link {% if request.path == '/' %}active{% endif %}" id="menu-home" data-path="/">
                     <i class="fas fa-chart-pie fa-fw"></i> 智教领航
                 </a>
             </div>
@@ -274,12 +310,12 @@
             {# 批改管理 #}
             <div class="nav-category">批改管理</div>
             <div class="nav-item">
-                <a href="/new_class" class="nav-link" id="menu-newclass" data-path="/new_class">
+                <a href="/new_class" class="nav-link {% if request.path == '/new_class' %}active{% endif %}" id="menu-newclass" data-path="/new_class">
                     <i class="fas fa-plus-circle fa-fw"></i> 新建任务
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('main.tasks') }}" class="nav-link" id="menu-tasks" data-path="/tasks">
+                <a href="{{ url_for('main.tasks') }}" class="nav-link {% if request.path.startswith('/tasks') %}active{% endif %}" id="menu-tasks" data-path="/tasks">
                     <i class="fas fa-tasks fa-fw"></i> 任务管理
                 </a>
             </div>
@@ -287,12 +323,12 @@
             {# AI 工具 #}
             <div class="nav-category">AI 工具</div>
             <div class="nav-item">
-                <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="nav-link" id="menu-ai-gen" data-path="/ai_generator">
+                <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="nav-link {% if request.path.startswith('/ai_generator') %}active{% endif %}" id="menu-ai-gen" data-path="/ai_generator">
                     <i class="fas fa-magic fa-fw"></i> 生成核心
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('ai_gen.ai_core_list_page') }}" class="nav-link" id="menu-ai-list" data-path="/ai_core_list">
+                <a href="{{ url_for('ai_gen.ai_core_list_page') }}" class="nav-link {% if request.path.startswith('/ai_core_list') or request.path.startswith('/grader') %}active{% endif %}" id="menu-ai-list" data-path="/ai_core_list">
                     <i class="fas fa-list-alt fa-fw"></i> 核心列表
                 </a>
             </div>
@@ -300,17 +336,17 @@
             {# 资源管理 #}
             <div class="nav-category">资源管理</div>
             <div class="nav-item">
-                <a href="{{ url_for('student.list_page') }}" class="nav-link" id="menu-student-list" data-path="/student/">
+                <a href="{{ url_for('student.list_page') }}" class="nav-link {% if request.path.startswith('/student') %}active{% endif %}" id="menu-student-list" data-path="/student/">
                     <i class="fas fa-user-graduate fa-fw"></i> 班级学生
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('library.index') }}" class="nav-link" id="menu-library" data-path="/library/view">
+                <a href="{{ url_for('library.index') }}" class="nav-link {% if request.path.startswith('/library') %}active{% endif %}" id="menu-library" data-path="/library/view">
                     <i class="fas fa-folder-open fa-fw"></i> 教学文档
                 </a>
             </div>
             <div class="nav-item">
-                <a href="{{ url_for('library.file_manager_page') }}" class="nav-link" id="menu-file-manager" data-path="/file_manager">
+                <a href="{{ url_for('library.file_manager_page') }}" class="nav-link {% if request.path.startswith('/file_manager') %}active{% endif %}" id="menu-file-manager" data-path="/file_manager">
                     <i class="fas fa-file-export fa-fw"></i> 文档解析
                 </a>
             </div>
@@ -318,7 +354,7 @@
             {# 系统 #}
             <div class="nav-category">系统</div>
             <div class="nav-item">
-                <a href="{{ url_for('jwxt.page_connect') }}" class="nav-link" id="menu-jwxt" data-path="/jwxt/view">
+                <a href="{{ url_for('jwxt.page_connect') }}" class="nav-link {% if request.path.startswith('/jwxt') %}active{% endif %}" id="menu-jwxt" data-path="/jwxt/view">
                     <i class="fas fa-university fa-fw"></i> 教务系统
                 </a>
             </div>
@@ -723,6 +759,48 @@
                 setTimeout(() => toast.remove(), 300);
             }, duration);
         };
+    </script>
+
+    <!-- 页面加载指示器脚本 -->
+    <script>
+        (function() {
+            const loadingBar = document.getElementById('page-loading-bar');
+            if (!loadingBar) return;
+
+            // 点击导航链接时显示加载指示器
+            document.addEventListener('click', function(e) {
+                const link = e.target.closest('a[href]');
+                if (link) {
+                    const href = link.getAttribute('href');
+                    // 排除: JavaScript链接、锚点、外部链接、新窗口链接
+                    if (href &&
+                        !href.startsWith('javascript:') &&
+                        !href.startsWith('#') &&
+                        !link.hasAttribute('target') &&
+                        href.startsWith('/')) {
+                        loadingBar.classList.add('active');
+                    }
+                }
+            });
+
+            // 页面即将卸载时显示加载指示器
+            window.addEventListener('beforeunload', function() {
+                loadingBar.classList.add('active');
+            });
+
+            // 页面加载完成时隐藏加载指示器
+            window.addEventListener('load', function() {
+                loadingBar.classList.remove('active');
+                loadingBar.style.width = '100%';
+                loadingBar.style.opacity = '1';
+                setTimeout(function() {
+                    loadingBar.style.opacity = '0';
+                    setTimeout(function() {
+                        loadingBar.style.width = '0';
+                    }, 200);
+                }, 100);
+            });
+        })();
     </script>
 
     <button id="ai-chat-fab" title="AI 助手">

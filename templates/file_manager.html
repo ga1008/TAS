@@ -4,6 +4,10 @@
 
 {% block header_title %}文档解析工作台{% endblock %}
 
+{% block topbar %}
+    {% include 'components/topbar/file_manager_topbar.html' %}
+{% endblock %}
+
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 

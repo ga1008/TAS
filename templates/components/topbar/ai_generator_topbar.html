@@ -1,0 +1,20 @@
+{# ai_generator_topbar.html - AI 生成核心页顶栏组件 #}
+<header class="app-topbar">
+    <div class="flex items-center text-slate-500">
+        <h1 class="font-bold text-slate-800 text-lg">
+            <i class="fas fa-magic text-indigo-600 mr-2"></i>生成核心
+        </h1>
+    </div>
+
+    <div class="topbar-actions">
+        <a href="{{ url_for('library.file_manager_page') }}" class="btn-glass" title="文档解析管理">
+            <i class="fas fa-file-export"></i> 文档解析管理
+        </a>
+        <a href="{{ url_for('ai_gen.ai_core_list_page') }}" class="btn-glass" title="核心列表">
+            <i class="fas fa-list-alt"></i> 核心列表
+        </a>
+
+        {# 通知中心组件 #}
+        {% include 'components/notification_center.html' %}
+    </div>
+</header>

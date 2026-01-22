@@ -3,6 +3,10 @@
 {% block title %}教务系统同步 - TAS{% endblock %}
 {% block header_title %}教务系统{% endblock %}
 
+{% block topbar %}
+    {% include 'components/topbar/jwxt_topbar.html' %}
+{% endblock %}
+
 {% block content %}
 <div class="fixed top-20 right-0 -z-10 opacity-40 pointer-events-none overflow-hidden">
     <div class="absolute top-0 right-10 w-96 h-96 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl animate-pulse-slow"></div>

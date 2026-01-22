@@ -136,30 +136,10 @@
 
     /**
      * 判断链接是否应该被 SPA 拦截
+     * 注意：已禁用 SPA 拦截，恢复全页刷新导航 (2026-01-22 navbar-refactor)
      */
     function shouldIntercept(link) {
-        const href = link.getAttribute('href');
-
-        // 基本检查
-        if (!href) return false;
-        if (link.target === '_blank') return false;
-        if (link.hasAttribute('download')) return false;
-        if (link.hasAttribute('data-spa-ignore')) return false;
-
-        // 检查是否是外部链接
-        if (href.startsWith('http') && !href.startsWith(window.location.origin)) {
-            return false;
-        }
-
-        // 检查排除模式
-        for (const pattern of CONFIG.excludePatterns) {
-            if (href.includes(pattern)) return false;
-        }
-
-        // 检查是否是 toggle-submenu（子菜单展开按钮）
-        if (link.classList.contains('toggle-submenu')) return false;
-
-        return true;
+        return false; // 禁用所有 SPA 拦截，恢复全页刷新导航
     }
 
     /**

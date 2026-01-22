@@ -1,0 +1,20 @@
+{# ai_core_list_topbar.html - 批改核心列表页顶栏组件 #}
+<header class="app-topbar">
+    <div class="flex items-center text-slate-500">
+        <h1 class="font-bold text-slate-800 text-lg">
+            <i class="fas fa-layer-group text-indigo-600 mr-2"></i>批改核心列表
+        </h1>
+    </div>
+
+    <div class="topbar-actions">
+        <a href="{{ url_for('ai_gen.ai_generator_page') }}" class="btn-glass" title="生成新核心">
+            <i class="fas fa-plus"></i> 生成新核心
+        </a>
+        <button onclick="openTrash()" class="btn-glass" title="回收站">
+            <i class="fas fa-trash-alt"></i> 回收站
+        </button>
+
+        {# 通知中心组件 #}
+        {% include 'components/notification_center.html' %}
+    </div>
+</header>

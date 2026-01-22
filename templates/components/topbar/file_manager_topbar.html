@@ -1,0 +1,17 @@
+{# file_manager_topbar.html - 文档解析管理页顶栏组件 #}
+<header class="app-topbar">
+    <div class="flex items-center text-slate-500">
+        <h1 class="font-bold text-slate-800 text-lg">
+            <i class="fas fa-file-export text-indigo-600 mr-2"></i>文档解析管理
+        </h1>
+    </div>
+
+    <div class="topbar-actions">
+        <a href="{{ url_for('library.index') }}" class="btn-glass" title="返回文档库">
+            <i class="fas fa-arrow-left"></i> 返回文档库
+        </a>
+
+        {# 通知中心组件 #}
+        {% include 'components/notification_center.html' %}
+    </div>
+</header>

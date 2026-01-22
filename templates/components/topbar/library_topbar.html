@@ -1,0 +1,17 @@
+{# library_topbar.html - 教学文档库页顶栏组件 #}
+<header class="app-topbar">
+    <div class="flex items-center text-slate-500">
+        <h1 class="font-bold text-slate-800 text-lg">
+            <i class="fas fa-folder-open text-indigo-600 mr-2"></i>教学文档
+        </h1>
+    </div>
+
+    <div class="topbar-actions">
+        <button onclick="document.getElementById('uploadInput').click()" class="btn-glass" title="上传文档">
+            <i class="fas fa-upload"></i> 上传文档
+        </button>
+
+        {# 通知中心组件 #}
+        {% include 'components/notification_center.html' %}
+    </div>
+</header>
