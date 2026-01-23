@@ -506,3 +506,243 @@ def get_fallback_message_sync(time_period: str = None) -> str:
         回退欢迎语
     """
     return get_fallback_message(time_period)
+
+
+# ==================== AI 对话助手 (Feature 002) ====================
+
+async def call_ai_for_conversation(
+    user_info: Dict[str, Any],
+    messages: List,
+    page_context: str = None
+) -> str:
+    """
+    调用 AI 进行多轮对话
+
+    Args:
+        user_info: 用户信息
+        messages: 历史消息列表 (Message 对象列表)
+        page_context: 当前页面上下文
+
+    Returns:
+        AI 回复内容
+    """
+    from services.ai_prompts import get_conversation_system_prompt
+
+    # 获取 AI 配置
+    config = db.get_best_ai_config("standard")
+    if not config:
+        raise Exception("没有可用的 AI 配置")
+
+    # 构建系统提示词
+    system_prompt = get_conversation_system_prompt(
+        username=user_info.get('username', '老师'),
+        page_context=page_context
+    )
+
+    # 构建消息历史
+    message_history = []
+    for msg in messages:
+        role = msg.role if hasattr(msg, 'role') else msg.get('role', 'user')
+        content = msg.content if hasattr(msg, 'content') else msg.get('content', '')
+        if role in ['user', 'assistant']:
+            message_history.append({
+                'role': role,
+                'content': content
+            })
+
+    endpoint = Config.AI_ASSISTANT_CHAT_ENDPOINT
+
+    # 取最后一条用户消息作为 new_message
+    new_message = ""
+    if message_history and message_history[-1]['role'] == 'user':
+        new_message = message_history[-1]['content']
+        message_history = message_history[:-1]  # 移除最后一条
+
+    payload = {
+        "system_prompt": system_prompt,
+        "messages": message_history,
+        "new_message": new_message,
+        "model_capability": "standard"
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.post(endpoint, json=payload)
+
+        if response.status_code == 429:
+            raise RateLimitError("AI 服务速率限制")
+
+        if response.status_code != 200:
+            raise Exception(f"AI 服务返回错误: {response.status_code}")
+
+        data = response.json()
+        content = data.get("response_text", "").strip()
+
+        # 清理可能的代码块标记
+        if content.startswith("```"):
+            content = re.sub(r'^```[a-z]*\n?', '', content)
+        if content.endswith("```"):
+            content = re.sub(r'\n?```$', '', content)
+
+        return content if content else "抱歉，我暂时无法回复。请稍后再试。"
+
+
+async def generate_page_greeting(
+    user_info: Dict[str, Any],
+    page_context: str
+) -> str:
+    """
+    生成页面切换时的问候语
+
+    Args:
+        user_info: 用户信息
+        page_context: 页面上下文
+
+    Returns:
+        问候语内容
+    """
+    from services.ai_prompts import get_page_greeting_prompt
+
+    # 获取 AI 配置
+    config = db.get_best_ai_config("standard")
+    if not config:
+        # 使用回退消息
+        return _get_page_greeting_fallback(page_context)
+
+    prompt = get_page_greeting_prompt(
+        username=user_info.get('username', '老师'),
+        page_context=page_context
+    )
+
+    endpoint = Config.AI_ASSISTANT_CHAT_ENDPOINT
+
+    payload = {
+        "system_prompt": "你是一个智能教学助手。请用简洁友好的语气生成问候语。",
+        "messages": [],
+        "new_message": prompt,
+        "model_capability": "standard"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(endpoint, json=payload)
+
+            if response.status_code != 200:
+                return _get_page_greeting_fallback(page_context)
+
+            data = response.json()
+            content = data.get("response_text", "").strip()
+
+            # 验证内容
+            is_valid, _ = validate_message_content(content)
+            if not is_valid:
+                return _get_page_greeting_fallback(page_context)
+
+            return content
+
+    except Exception as e:
+        logger.error(f"生成页面问候失败: {e}")
+        return _get_page_greeting_fallback(page_context)
+
+
+def _get_page_greeting_fallback(page_context: str) -> str:
+    """页面问候的回退消息"""
+    greetings = {
+        'dashboard': '欢迎回来！这是您的仪表板，可以查看整体数据概览。',
+        'tasks': '这是任务中心，您可以在这里管理批改任务。',
+        'ai_generator': '欢迎来到 AI 生成页面！上传试卷和评分标准即可生成批改核心。',
+        'export': '这是导出中心，您可以导出成绩和报告。',
+        'student_list': '这是学生名单管理页面，可以导入和管理学生信息。',
+        'library': '这是文档库，您可以在这里管理试卷和资料。'
+    }
+    return greetings.get(page_context, '有什么我可以帮您的吗？')
+
+
+async def generate_operation_feedback(
+    user_info: Dict[str, Any],
+    operation_type: str,
+    operation_result: str,
+    details: Dict[str, Any] = None
+) -> str:
+    """
+    生成操作完成后的反馈消息
+
+    Args:
+        user_info: 用户信息
+        operation_type: 操作类型
+        operation_result: 操作结果 (success/error)
+        details: 操作详情
+
+    Returns:
+        反馈消息内容
+    """
+    from services.ai_prompts import get_operation_feedback_prompt
+
+    # 获取 AI 配置
+    config = db.get_best_ai_config("standard")
+    if not config:
+        return _get_operation_feedback_fallback(operation_type, operation_result, details)
+
+    prompt = get_operation_feedback_prompt(
+        username=user_info.get('username', '老师'),
+        operation_type=operation_type,
+        operation_result=operation_result,
+        details=details or {}
+    )
+
+    endpoint = Config.AI_ASSISTANT_CHAT_ENDPOINT
+
+    payload = {
+        "system_prompt": "你是一个智能教学助手。请用简洁友好的语气反馈操作结果，并给出下一步建议。",
+        "messages": [],
+        "new_message": prompt,
+        "model_capability": "standard"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(endpoint, json=payload)
+
+            if response.status_code != 200:
+                return _get_operation_feedback_fallback(operation_type, operation_result, details)
+
+            data = response.json()
+            content = data.get("response_text", "").strip()
+
+            # 验证内容
+            is_valid, _ = validate_message_content(content)
+            if not is_valid:
+                return _get_operation_feedback_fallback(operation_type, operation_result, details)
+
+            return content
+
+    except Exception as e:
+        logger.error(f"生成操作反馈失败: {e}")
+        return _get_operation_feedback_fallback(operation_type, operation_result, details)
+
+
+def _get_operation_feedback_fallback(
+    operation_type: str,
+    operation_result: str,
+    details: Dict[str, Any] = None
+) -> str:
+    """操作反馈的回退消息"""
+    details = details or {}
+
+    if operation_result == 'success':
+        feedbacks = {
+            'generate_grader': f"批改核心已成功生成！现在可以创建班级并上传学生作业进行批改了。",
+            'parse_document': "文档解析完成！您可以在文档库中查看解析结果。",
+            'export_grades': "成绩导出成功！文件已准备好下载。",
+            'import_students': f"学生名单导入成功！共导入 {details.get('count', '若干')} 名学生。",
+            'create_class': f"班级创建成功！现在可以导入学生名单了。"
+        }
+    else:
+        feedbacks = {
+            'generate_grader': "批改核心生成失败，请检查上传的文件格式是否正确。",
+            'parse_document': "文档解析失败，请确保文件格式支持且内容清晰。",
+            'export_grades': "成绩导出失败，请稍后重试。",
+            'import_students': "学生名单导入失败，请检查文件格式。",
+            'create_class': "班级创建失败，请检查输入信息。"
+        }
+
+    return feedbacks.get(operation_type, '操作已完成。' if operation_result == 'success' else '操作失败，请重试。')

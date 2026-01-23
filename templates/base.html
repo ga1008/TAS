@@ -803,38 +803,15 @@
         })();
     </script>
 
-    <button id="ai-chat-fab" title="AI 助手">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3v.01M12 21v.01M3 12h.01M21 12h.01M5.64 5.64l.01.01M18.36 18.36l.01.01M5.64 18.36l.01.01M18.36 5.64l.01.01M12 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM16 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/>
-        </svg>
-    </button>
 
-    <div id="ai-chat-modal">
-        <div class="ai-chat-container">
-            <div class="ai-chat-history-panel" id="ai-chat-history-panel">
-                <div class="history-header"><h4>对话历史</h4></div>
-                <div class="history-list" id="ai-chat-history-list"></div>
-            </div>
-            <div class="ai-chat-main-panel">
-                <div class="ai-chat-header">
-                    <h3 id="ai-chat-current-title">AI 助手</h3>
-                    <div class="header-buttons">
-                        <button id="ai-chat-btn-new" class="chat-btn"><i class="fas fa-plus"></i></button>
-                        <button id="ai-chat-btn-close" class="chat-btn"><i class="fas fa-times"></i></button>
-                    </div>
-                </div>
-                <div class="ai-chat-messages" id="ai-chat-messages-box"></div>
-                <div class="ai-chat-input-area">
-                    <div class="input-row">
-                        <textarea id="ai-chat-textarea" placeholder="输入消息..."></textarea>
-                        <button id="ai-chat-btn-send" class="chat-btn send"><i class="fas fa-paper-plane"></i></button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
 {# AI 欢迎语脚本 (紧凑模式支持) #}
 <script src="{{ url_for('static', filename='js/ai-welcome.js') }}"></script>
+
+    {# 全局 AI 助手浮窗 (Feature 002) - 仅登录用户可见 #}
+    {% if session.get('user_id') and request.path not in ['/admin', '/login', '/auth/login'] %}
+        {% include 'components/ai_assistant_widget.html' %}
+        <script src="{{ url_for('static', filename='js/ai-assistant.js') }}"></script>
+    {% endif %}
 </body>
 </html>

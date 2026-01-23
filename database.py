@@ -320,6 +320,49 @@ class Database:
                        )
                        ''')
 
+        # 14. AI 对话会话表 [NEW]
+        # 用于存储用户与 AI 助手的对话会话
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS ai_conversations
+                       (
+                           id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                           user_id         INTEGER NOT NULL,
+                           title           TEXT DEFAULT '新对话',
+                           status          TEXT DEFAULT 'active',  -- active, archived
+                           created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           last_active_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                       )
+                       ''')
+
+        # 15. AI 对话消息表 [NEW]
+        # 用于存储对话中的每条消息
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS ai_messages
+                       (
+                           id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                           conversation_id INTEGER NOT NULL,
+                           role            TEXT NOT NULL,           -- user, assistant, system
+                           content         TEXT NOT NULL,
+                           trigger_type    TEXT DEFAULT 'user_message',  -- user_message, page_change, operation_complete, system
+                           metadata_json   TEXT,                    -- 扩展元数据 (page_context, operation_type 等)
+                           created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           FOREIGN KEY (conversation_id) REFERENCES ai_conversations (id) ON DELETE CASCADE
+                       )
+                       ''')
+
+        # 16. AI 速率限制表 [NEW]
+        # 用于控制主动触发的频率限制
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS ai_rate_limits
+                       (
+                           user_id                 INTEGER PRIMARY KEY,
+                           last_proactive_trigger  TIMESTAMP NOT NULL,
+                           updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+                       )
+                       ''')
+
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_capability ON ai_models (capability)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_file_hash ON file_assets (file_hash)')
@@ -327,6 +370,8 @@ class Database:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_notification_related ON notifications (related_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ai_welcome_user_page ON ai_welcome_messages(user_id, page_context)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ai_welcome_expires ON ai_welcome_messages(expires_at)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_conversation_user ON ai_conversations(user_id, status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_message_conversation ON ai_messages(conversation_id, created_at)')
 
         conn.commit()
         self._init_super_admin(cursor, conn)

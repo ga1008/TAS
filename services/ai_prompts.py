@@ -225,6 +225,187 @@ def get_page_context_display(page_context: str) -> str:
         "tasks": "批改任务列表",
         "student_list": "学生名单管理",
         "ai_generator": "AI 生成器",
-        "export": "成绩导出"
+        "export": "成绩导出",
+        "library": "文档库"
     }
     return display_map.get(page_context, "工作台")
+
+
+# ==================== AI 对话助手提示词 (Feature 002) ====================
+
+def get_conversation_system_prompt(username: str, page_context: str = None) -> str:
+    """
+    获取对话系统提示词
+
+    Args:
+        username: 用户名
+        page_context: 当前页面上下文
+
+    Returns:
+        系统提示词
+    """
+    page_display = get_page_context_display(page_context) if page_context else "系统"
+    time_period = get_time_period_chinese()
+
+    # 时间问候映射
+    time_greeting = {
+        "early_morning": "清晨好",
+        "morning": "早上好",
+        "afternoon": "下午好",
+        "evening": "晚上好",
+        "night": "夜深了"
+    }.get(time_period, "你好")
+
+    return f"""你是一个智能教学助手，正在与 {username} 老师对话。当前用户在「{page_display}」页面。
+
+### 核心原则
+1. **友好专业**：语气温暖但不啰嗦，像一个得力的助教。
+2. **理解上下文**：用户当前在「{page_display}」页面，回答要与该页面功能相关。
+3. **行动导向**：尽可能给出具体的操作建议，而非泛泛而谈。
+4. **简洁有力**：回复控制在 100 字以内，除非用户明确要求详细解释。
+
+### 系统功能概述
+- **工作台首页**: 查看数据概览、待办任务
+- **批改任务列表**: 管理 AI 批改任务的进度
+- **AI 生成器**: 上传试卷和评分标准，生成批改核心
+- **学生名单管理**: 导入、管理学生信息
+- **成绩导出**: 导出批改结果为 Excel
+- **文档库**: 管理试卷、资料文档
+
+### 当前时间: {time_greeting}
+
+请用简洁、专业、友好的语气回复用户的问题。"""
+
+
+def get_page_greeting_prompt(username: str, page_context: str) -> str:
+    """
+    获取页面问候提示词
+
+    Args:
+        username: 用户名
+        page_context: 页面上下文
+
+    Returns:
+        提示词
+    """
+    page_display = get_page_context_display(page_context)
+    time_period = get_time_period_chinese()
+    weekday = get_weekday_chinese()
+
+    time_greeting = {
+        "early_morning": "清晨好",
+        "morning": "早上好",
+        "afternoon": "下午好",
+        "evening": "晚上好",
+        "night": "夜深了"
+    }.get(time_period, "你好")
+
+    page_hints = {
+        "dashboard": "这是数据概览页面，可以查看任务进度和统计。",
+        "tasks": "这是任务中心，可以管理批改任务。",
+        "ai_generator": "这里可以上传试卷和标准答案，生成 AI 批改核心。",
+        "student_list": "这里管理学生名单，支持 Excel 导入。",
+        "export": "这里可以导出成绩报表。",
+        "library": "这是文档库，管理试卷和教学资料。"
+    }
+
+    hint = page_hints.get(page_context, "")
+
+    return f"""为 {username} 老师生成一句简短的页面问候语。
+
+当前情况：
+- 时间: {weekday} {time_greeting}
+- 页面: {page_display}
+- 页面功能: {hint}
+
+要求：
+1. 20-40 字，一句话
+2. 包含时间问候
+3. 提及页面功能或给出小建议
+4. 语气友好专业
+5. 不要引号，直接输出文本
+
+示例：
+- {time_greeting}！欢迎来到{page_display}，有什么需要帮忙的吗？
+- {weekday}{time_greeting}，{page_display}已准备就绪，开始处理批改任务吧。
+
+请生成:"""
+
+
+def get_operation_feedback_prompt(
+    username: str,
+    operation_type: str,
+    operation_result: str,
+    details: dict
+) -> str:
+    """
+    获取操作反馈提示词
+
+    Args:
+        username: 用户名
+        operation_type: 操作类型
+        operation_result: 操作结果
+        details: 操作详情
+
+    Returns:
+        提示词
+    """
+    operation_names = {
+        "generate_grader": "生成批改核心",
+        "parse_document": "解析文档",
+        "export_grades": "导出成绩",
+        "import_students": "导入学生名单",
+        "create_class": "创建班级"
+    }
+
+    operation_name = operation_names.get(operation_type, operation_type)
+    result_text = "成功" if operation_result == "success" else "失败"
+
+    # 构建详情描述
+    details_str = ""
+    if details:
+        detail_items = []
+        if "grader_name" in details:
+            detail_items.append(f"名称: {details['grader_name']}")
+        if "question_count" in details:
+            detail_items.append(f"题目数: {details['question_count']}")
+        if "count" in details:
+            detail_items.append(f"数量: {details['count']}")
+        if "error" in details:
+            detail_items.append(f"错误: {details['error']}")
+        if detail_items:
+            details_str = "；".join(detail_items)
+
+    next_step_hints = {
+        "generate_grader": "下一步可以创建班级并上传学生作业。" if operation_result == "success" else "请检查上传的文件是否正确。",
+        "parse_document": "文档已准备就绪。" if operation_result == "success" else "请确保文件格式正确。",
+        "export_grades": "文件已准备好下载。" if operation_result == "success" else "请稍后重试。",
+        "import_students": "现在可以进行批改了。" if operation_result == "success" else "请检查文件格式。",
+        "create_class": "接下来可以导入学生名单。" if operation_result == "success" else "请检查输入信息。"
+    }
+
+    next_hint = next_step_hints.get(operation_type, "")
+
+    return f"""为 {username} 老师生成一句操作反馈消息。
+
+操作信息：
+- 操作: {operation_name}
+- 结果: {result_text}
+- 详情: {details_str if details_str else "无"}
+- 建议下一步: {next_hint}
+
+要求：
+1. 30-60 字
+2. 先说结果，再给建议
+3. 成功时语气积极鼓励，失败时语气温和并给出解决方向
+4. 不要引号，直接输出文本
+
+示例（成功）：
+- 太棒了！批改核心已生成完成，现在可以创建班级开始批改了。
+- 学生名单导入成功，共 45 人。准备开始布置作业吧！
+
+示例（失败）：
+- 批改核心生成遇到问题，请检查上传的试卷格式是否支持。
+- 导入失败了，可能是文件格式不对，试试标准 Excel 模板？
+
+请生成:"""

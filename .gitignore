@@ -10,3 +10,18 @@ __pycache__
 grading_core/trash/*
 .claude
 .specify
+
+# Python
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+
+# Editors
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

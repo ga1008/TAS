@@ -4,6 +4,7 @@ import json  # <---【1】记得添加 json 导入
 from flask import Flask
 
 from blueprints.admin import bp as admin_bp
+from blueprints.ai_assistant import bp as ai_assistant_bp
 from blueprints.ai_generator import bp as ai_gen_bp
 from blueprints.ai_welcome import bp as ai_welcome_bp
 from blueprints.auth import bp as auth_bp
@@ -68,6 +69,7 @@ def create_app():
 
     # 3. 注册蓝图
     app.register_blueprint(admin_bp)
+    app.register_blueprint(ai_assistant_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(grading_bp)

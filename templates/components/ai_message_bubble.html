@@ -1,0 +1,52 @@
+<!-- templates/components/ai_message_bubble.html -->
+<!-- AI 助手消息气泡组件 (JS 模板) -->
+<!-- Feature: 002-global-ai-assistant -->
+
+<!--
+    此文件定义消息气泡的 HTML 模板
+    由 ai-assistant.js 动态渲染
+-->
+
+<script type="text/template" id="ai-message-template">
+<!-- 用户消息气泡 -->
+<div class="ai-message user-message ai-message-enter flex justify-end" data-message-id="{{id}}">
+    <div class="max-w-[80%] bg-gradient-to-r from-indigo-500 to-blue-500 text-white px-4 py-2.5 rounded-2xl rounded-br-md shadow-md">
+        <p class="text-sm leading-relaxed whitespace-pre-wrap">{{content}}</p>
+        <span class="text-xs opacity-70 mt-1 block text-right">{{time}}</span>
+    </div>
+</div>
+
+<!-- AI 助手消息气泡 -->
+<div class="ai-message assistant-message ai-message-enter flex justify-start" data-message-id="{{id}}">
+    <div class="flex gap-2 max-w-[85%]">
+        <div class="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-indigo-100 to-blue-100 flex items-center justify-center">
+            <i class="fas fa-robot text-indigo-500 text-xs"></i>
+        </div>
+        <div class="bg-white/90 backdrop-blur-sm px-4 py-2.5 rounded-2xl rounded-bl-md shadow-sm border border-slate-100">
+            <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap message-content">{{content}}</p>
+            <span class="text-xs text-slate-400 mt-1 block">{{time}}</span>
+        </div>
+    </div>
+</div>
+
+<!-- 系统消息 (如页面切换提示) -->
+<div class="ai-message system-message ai-message-enter flex justify-center" data-message-id="{{id}}">
+    <div class="text-xs text-slate-400 bg-slate-100/50 px-3 py-1 rounded-full">
+        {{content}}
+    </div>
+</div>
+
+<!-- 加载中状态 -->
+<div class="ai-message loading-message flex justify-start">
+    <div class="flex gap-2">
+        <div class="flex-shrink-0 w-7 h-7 rounded-full bg-gradient-to-r from-indigo-100 to-blue-100 flex items-center justify-center">
+            <i class="fas fa-robot text-indigo-500 text-xs"></i>
+        </div>
+        <div class="ai-loading bg-white/90 backdrop-blur-sm rounded-2xl rounded-bl-md shadow-sm border border-slate-100">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+        </div>
+    </div>
+</div>
+</script>

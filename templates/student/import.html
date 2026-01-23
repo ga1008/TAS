@@ -58,7 +58,7 @@
                         <i class="fas fa-file-upload text-xl"></i>
                     </div>
                     <h3 class="font-bold text-lg text-slate-800">文件上传</h3>
-                    <p class="text-xs text-slate-400 mt-1">支持 Excel, PDF, Word 格式</p>
+                    <p class="text-xs text-slate-400 mt-1">支持 Excel, PDF, Word 格式。必须包含学号、姓名、性别这三列</p>
                 </div>
 
                 <label class="relative w-full max-w-md aspect-[3/2] border-2 border-dashed border-indigo-200 hover:border-indigo-400 rounded-2xl bg-white/40 hover:bg-white/80 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center gap-4 group/drop shadow-sm hover:shadow-lg hover:-translate-y-1 z-10">
@@ -93,7 +93,7 @@
                 <div class="relative flex-1 group">
                     <textarea id="pasteInput"
                               class="w-full h-full min-h-[280px] p-5 rounded-2xl border-0 bg-white/60 focus:bg-white shadow-inner focus:shadow-lg ring-1 ring-slate-100 focus:ring-2 focus:ring-indigo-100 outline-none resize-none font-mono text-sm leading-relaxed transition-all duration-300 placeholder:text-slate-300"
-                              placeholder="在此粘贴名单，例如：&#10;1001 张三 计算机系&#10;1002 李四 软件工程&#10;1003 王五 数据科学..."></textarea>
+                              placeholder="在此粘贴名单，例如：&#10;学号 姓名 性别&#10;1001 张三 男&#10;1002 李四 女&#10;1003 王五 男..."></textarea>
                     <div class="absolute bottom-4 right-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-300 transition-colors">
                         <i class="fas fa-keyboard text-xl"></i>
                     </div>
