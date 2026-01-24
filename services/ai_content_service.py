@@ -444,6 +444,8 @@ async def generate_welcome_message(
         return saved_msg, 'fallback'
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         logger.error(f"AI 生成欢迎语失败: {e}")
         # 使用回退消息
         fallback_msg = get_fallback_message(context.time_period)

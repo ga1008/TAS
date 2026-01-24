@@ -13,8 +13,14 @@ class Database:
 
     def get_connection(self):
         if not hasattr(self._local, 'connection'):
-            self._local.connection = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._local.connection = sqlite3.connect(
+                self.db_path,
+                check_same_thread=False,
+                timeout=30.0  # 等待锁释放最多30秒
+            )
             self._local.connection.row_factory = sqlite3.Row
+            # 启用 WAL 模式提高并发性能
+            self._local.connection.execute('PRAGMA journal_mode=WAL')
         return self._local.connection
 
     def close(self):
@@ -48,7 +54,8 @@ class Database:
                            course         TEXT,
                            workspace_path TEXT,
                            strategy       TEXT DEFAULT 'server_config_2025',
-                           created_by     INTEGER DEFAULT 1
+                           created_by     INTEGER DEFAULT 1,
+                           created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                        )
                        ''')
 
@@ -378,6 +385,7 @@ class Database:
         self._init_super_admin(cursor, conn)
 
         self._migrate_table(cursor, conn, "classes", "created_by", "INTEGER DEFAULT 1")
+        self._migrate_table(cursor, conn, "classes", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         self._migrate_table(cursor, conn, "ai_tasks", "created_by", "INTEGER DEFAULT 1")
         self._migrate_table(cursor, conn, "ai_tasks", "exam_path", "TEXT")  # 之前已有的迁移
         self._migrate_table(cursor, conn, "ai_tasks", "standard_path", "TEXT")

@@ -400,14 +400,13 @@
             </a>
 
             {# AI 欢迎语组件 (紧凑版) - 登录后且在非管理页面显示 #}
-            {% if session.get('user_id') and request.path not in ['/admin', '/login', '/auth/login'] %}
+            {% if session.get('user') and request.path not in ['/admin', '/login', '/auth/login'] %}
                 {% set compact_page_context = 'dashboard' if request.path == '/' else
                     'tasks' if request.path.startswith('/tasks') else
                     'student_list' if request.path.startswith('/student') else
                     'ai_generator' if request.path.startswith('/ai_generator') else
                     'export' if request.path.startswith('/export') else 'dashboard' %}
                 <div class="divider-vertical mx-2"></div>
-                {% include 'components/compact_welcome_message.html' %}
             {% endif %}
 
             {# 通知中心组件 #}
@@ -807,7 +806,7 @@
 <script src="{{ url_for('static', filename='js/ai-welcome.js') }}"></script>
 
 {# 全局 AI 助手浮窗 (Feature 002) - 仅登录用户可见 #}
-{% if session.get('user_id') and request.path not in ['/admin', '/login', '/auth/login'] %}
+{% if session.get('user') and request.path not in ['/admin', '/login', '/auth/login'] %}
     {# 引入悬浮窗组件 - 保留这个！ #}
     {% include 'components/ai_assistant_widget.html' %}
 {% endif %}

@@ -312,7 +312,7 @@ def cleanup_old_welcome_messages(days: int = 30) -> int:
         # 清理 ai_rate_limits 表中的旧记录
         cursor.execute('''
             DELETE FROM ai_rate_limits
-            WHERE last_request_time < ?
+            WHERE last_proactive_trigger < ?
         ''', (cutoff_date,))
         rate_count = cursor.rowcount
 
