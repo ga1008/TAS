@@ -316,6 +316,7 @@ class Database:
                            created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                            expires_at       TIMESTAMP NOT NULL,        -- 缓存过期时间
                            context_snapshot TEXT,                       -- 生成时的上下文快照 (JSON格式，用于调试)
+                           last_request_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
                        )
                        ''')
@@ -393,6 +394,7 @@ class Database:
         self._migrate_table(cursor, conn, "file_assets", "semester", "TEXT")
         self._migrate_table(cursor, conn, "file_assets", "course_name", "TEXT")
         self._migrate_table(cursor, conn, "file_assets", "cohort_tag", "TEXT")  # 关键：用于区分 2401 和 2406
+        self._migrate_table(cursor, conn, "ai_welcome_messages", "last_request_time", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
         # 学生名单表迁移
         self._migrate_table(cursor, conn, "student_lists", "department", "TEXT")

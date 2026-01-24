@@ -1,6 +1,6 @@
 import functools
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, g
 
 from extensions import db
 
@@ -88,7 +88,7 @@ def dashboard():
         p['models'] = db.get_models_by_provider(p['id'])
 
     # 渲染 templates/admin/dashboard.html
-    return render_template('admin/dashboard.html', providers=providers)
+    return render_template('admin/dashboard.html', providers=providers, user=g.user)
 
 
 # --- AI Provider Actions ---

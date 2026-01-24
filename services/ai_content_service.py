@@ -362,7 +362,8 @@ async def generate_welcome_message(
     user_info: Dict[str, Any],
     stats: Dict[str, Any],
     recent_actions: List[str],
-    force_refresh: bool = False
+    force_refresh: bool = False,
+    extra_context: Dict[str, Any] = None
 ) -> Tuple[Optional[WelcomeMessage], str]:
     """
     生成或获取欢迎语
@@ -398,6 +399,17 @@ async def generate_welcome_message(
 
     # 格式化提示词
     prompt_vars = context.to_prompt_dict()
+
+    # 合并 extra_context (用于 trigger_reason, action_details 等)
+    if extra_context:
+        prompt_vars.update(extra_context)
+
+    # 确保所有必需的模板变量都有默认值
+    prompt_vars.setdefault('trigger_reason', 'timer')
+    prompt_vars.setdefault('action_details', '')
+    prompt_vars.setdefault('last_action_desc', '无')
+    prompt_vars.setdefault('last_action', prompt_vars.get('recent_actions_str', '无'))
+
     full_prompt = prompt_template.format(**prompt_vars)
 
     # 调用 AI 生成

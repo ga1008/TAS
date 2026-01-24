@@ -1,173 +1,64 @@
-<!-- templates/components/ai_assistant_widget.html -->
-<!-- 全局 AI 助手浮窗组件 -->
-<!-- Feature: 002-global-ai-assistant -->
+<div id="ai-widget-root" class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2 font-sans pointer-events-none">
 
-<div id="ai-assistant-widget" class="fixed bottom-6 right-6 z-50">
-    <!-- 浮窗按钮 -->
-    <button id="ai-toggle-btn"
-            class="w-14 h-14 rounded-full bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-300/50 hover:shadow-indigo-400/60 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center group"
-            title="AI 助手">
-        <i class="fas fa-robot text-xl group-hover:scale-110 transition-transform"></i>
-        <!-- 未读消息指示器 -->
-        <span id="ai-unread-badge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">1</span>
-    </button>
+    <div id="ai-bubble-container" class="pointer-events-auto hidden mb-2 mr-2 max-w-xs origin-bottom-right transition-all duration-300 ease-out transform scale-95 opacity-0">
+        <div class="bg-white/90 backdrop-blur-md border border-indigo-100 shadow-xl rounded-2xl p-4 rounded-tr-none relative text-slate-700 text-sm leading-relaxed">
+            <button id="ai-bubble-close" class="absolute -top-2 -left-2 bg-slate-200 hover:bg-slate-300 rounded-full w-5 h-5 flex items-center justify-center text-xs text-slate-500 transition z-10">
+                <i class="fas fa-times"></i>
+            </button>
 
-    <!-- 对话框面板 -->
-    <div id="ai-chat-panel" class="hidden absolute bottom-16 right-0 w-96 glass-panel rounded-2xl shadow-2xl overflow-hidden transform transition-all duration-300 origin-bottom-right scale-95 opacity-0">
-        <!-- 头部 -->
-        <div class="px-4 py-3 border-b border-white/20 bg-gradient-to-r from-indigo-50/80 to-blue-50/80 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 flex items-center justify-center">
-                    <i class="fas fa-robot text-white text-sm"></i>
-                </div>
-                <div>
-                    <h3 class="font-semibold text-slate-800 text-sm">AI 助手</h3>
-                    <span id="ai-status-text" class="text-xs text-slate-500">在线</span>
-                </div>
+            <div id="ai-bubble-content" class="min-h-[20px]"></div>
+
+            <div id="ai-bubble-action" class="mt-2 hidden">
+                <a href="#" class="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1">
+                    <span>立即前往</span> <i class="fas fa-arrow-right"></i>
+                </a>
             </div>
-            <div class="flex items-center gap-1">
-                <!-- 新建对话按钮 -->
-                <button id="ai-new-chat-btn" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="新建对话">
-                    <i class="fas fa-plus text-sm"></i>
-                </button>
-                <!-- 关闭按钮 -->
-                <button id="ai-close-btn" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="关闭">
-                    <i class="fas fa-times"></i>
-                </button>
+        </div>
+        <div class="w-3 h-3 bg-white border-r border-b border-indigo-100 transform rotate-45 absolute -bottom-1.5 right-0 translate-x-0"></div>
+    </div>
+
+    <div id="ai-chat-window" class="pointer-events-auto hidden w-80 h-96 bg-white/95 backdrop-blur-xl border border-indigo-100 shadow-2xl rounded-2xl flex flex-col overflow-hidden transition-all duration-300 origin-bottom-right mb-2">
+        <div class="h-12 bg-gradient-to-r from-indigo-500 to-purple-600 px-4 flex items-center justify-between shrink-0">
+            <span class="text-white font-bold text-sm"><i class="fas fa-robot mr-2"></i>AI 助教</span>
+            <button onclick="AIWelcome.toggleChat()" class="text-white/80 hover:text-white">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+        </div>
+
+        <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 scroll-smooth">
+            <div class="flex justify-start">
+                <div class="bg-white border border-slate-100 text-slate-700 py-2 px-3 rounded-2xl rounded-tl-none shadow-sm text-sm max-w-[85%]">
+                    嗨！我是你的 AI 助教。有什么可以帮你的吗？
+                </div>
             </div>
         </div>
 
-        <!-- 消息列表区域 -->
-        <div id="ai-messages" class="h-80 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-white/50 to-slate-50/50">
-            <!-- 加载更多按钮 (历史消息) -->
-            <div id="ai-load-more" class="hidden text-center">
-                <button class="text-xs text-indigo-500 hover:text-indigo-700 py-1 px-3 rounded-full bg-indigo-50 hover:bg-indigo-100 transition-colors">
-                    <i class="fas fa-chevron-up mr-1"></i>加载更多
-                </button>
-            </div>
-            <!-- 消息气泡动态插入 -->
-            <!-- 欢迎消息占位 -->
-            <div id="ai-welcome-placeholder" class="text-center py-8 text-slate-400">
-                <i class="fas fa-comments text-4xl mb-3 opacity-50"></i>
-                <p class="text-sm">有什么我可以帮您的吗？</p>
-            </div>
-        </div>
-
-        <!-- 输入区域 -->
-        <div class="p-3 border-t border-white/20 bg-white/60">
-            <div class="flex gap-2">
-                <div class="flex-1 relative">
-                    <input type="text" id="ai-input"
-                           class="w-full px-4 py-2.5 pr-10 rounded-xl border-0 bg-white/80 focus:bg-white focus:ring-2 focus:ring-indigo-200 transition-all outline-none text-sm placeholder-slate-400"
-                           placeholder="输入消息..."
-                           maxlength="2000"
-                           autocomplete="off">
-                    <!-- 字符计数 (超过1800字时显示) -->
-                    <span id="ai-char-count" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></span>
+        <div class="p-3 bg-white border-t border-slate-100 shrink-0 relative">
+            <div id="ai-thinking-overlay" class="absolute inset-0 bg-white/80 z-10 flex items-center justify-center hidden">
+                <div class="flex gap-1">
+                    <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                    <div class="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
                 </div>
-                <button id="ai-send-btn"
-                        class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:shadow-lg hover:shadow-indigo-300/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
-                        disabled>
-                    <i class="fas fa-paper-plane"></i>
-                </button>
             </div>
-            <!-- 快捷提示 -->
-            <div class="mt-2 flex gap-2 flex-wrap" id="ai-quick-prompts">
-                <button class="quick-prompt text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
-                        data-prompt="这个页面有什么功能？">
-                    <i class="fas fa-question-circle mr-1"></i>页面功能
+
+            <form id="ai-chat-form" class="flex gap-2">
+                <input type="text" id="ai-chat-input" class="flex-1 bg-slate-100 border-0 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="输入问题..." autocomplete="off">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl w-10 h-10 flex items-center justify-center transition shadow-lg shadow-indigo-200 shrink-0">
+                    <i class="fas fa-paper-plane text-xs"></i>
                 </button>
-                <button class="quick-prompt text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
-                        data-prompt="如何创建批改任务？">
-                    <i class="fas fa-tasks mr-1"></i>创建任务
-                </button>
-            </div>
+            </form>
         </div>
     </div>
+
+    <button id="ai-trigger-btn" class="pointer-events-auto group relative w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-300 text-white flex items-center justify-center transition-transform duration-300 hover:scale-110 active:scale-95 z-50">
+        <i class="fas fa-robot text-xl group-hover:rotate-12 transition-transform"></i>
+
+        <div id="ai-btn-thinking" class="absolute inset-0 rounded-full bg-indigo-600 flex items-center justify-center hidden">
+             <i class="fas fa-circle-notch fa-spin text-xl"></i>
+        </div>
+
+        <span id="ai-badge" class="absolute top-0 right-0 w-3.5 h-3.5 bg-rose-500 border-2 border-white rounded-full hidden"></span>
+    </button>
+
 </div>
-
-<style>
-/* AI 助手专用样式 */
-#ai-chat-panel.show {
-    display: block !important;
-    transform: scale(1);
-    opacity: 1;
-}
-
-/* 消息气泡动画 */
-.ai-message-enter {
-    animation: messageSlideIn 0.3s ease-out;
-}
-
-@keyframes messageSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* 打字机光标 */
-.typing-cursor {
-    display: inline-block;
-    width: 2px;
-    height: 1em;
-    background-color: currentColor;
-    margin-left: 2px;
-    animation: blink 0.7s infinite;
-}
-
-@keyframes blink {
-    0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0; }
-}
-
-/* 加载动画 */
-.ai-loading {
-    display: flex;
-    gap: 4px;
-    padding: 8px 12px;
-}
-
-.ai-loading .dot {
-    width: 8px;
-    height: 8px;
-    background-color: #6366f1;
-    border-radius: 50%;
-    animation: loadingBounce 1.4s ease-in-out infinite both;
-}
-
-.ai-loading .dot:nth-child(1) { animation-delay: -0.32s; }
-.ai-loading .dot:nth-child(2) { animation-delay: -0.16s; }
-.ai-loading .dot:nth-child(3) { animation-delay: 0; }
-
-@keyframes loadingBounce {
-    0%, 80%, 100% {
-        transform: scale(0);
-    }
-    40% {
-        transform: scale(1);
-    }
-}
-
-/* 滚动条美化 */
-#ai-messages::-webkit-scrollbar {
-    width: 6px;
-}
-
-#ai-messages::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-#ai-messages::-webkit-scrollbar-thumb {
-    background-color: rgba(148, 163, 184, 0.3);
-    border-radius: 3px;
-}
-
-#ai-messages::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(148, 163, 184, 0.5);
-}
-</style>

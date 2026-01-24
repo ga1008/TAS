@@ -803,15 +803,14 @@
         })();
     </script>
 
-
-
-{# AI 欢迎语脚本 (紧凑模式支持) #}
+{# AI 欢迎语脚本 (紧凑模式支持) - 保留这个！ #}
 <script src="{{ url_for('static', filename='js/ai-welcome.js') }}"></script>
 
-    {# 全局 AI 助手浮窗 (Feature 002) - 仅登录用户可见 #}
-    {% if session.get('user_id') and request.path not in ['/admin', '/login', '/auth/login'] %}
-        {% include 'components/ai_assistant_widget.html' %}
-        <script src="{{ url_for('static', filename='js/ai-assistant.js') }}"></script>
-    {% endif %}
+{# 全局 AI 助手浮窗 (Feature 002) - 仅登录用户可见 #}
+{% if session.get('user_id') and request.path not in ['/admin', '/login', '/auth/login'] %}
+    {# 引入悬浮窗组件 - 保留这个！ #}
+    {% include 'components/ai_assistant_widget.html' %}
+{% endif %}
+
 </body>
 </html>

@@ -1,375 +1,457 @@
 /**
  * static/js/ai-welcome.js
- * AI 欢迎语系统脚本 - 增强版
- * 负责加载、显示、管理 AI 生成的欢迎消息，并支持流式打字机效果
+ * AI 欢迎语系统 - 增强版 (右下角悬浮交互)
+ * 负责管理主动触发、操作响应、手动对话及 UI 动效
  */
 
 (function() {
     'use strict';
 
-    // localStorage 键前缀
-    const STORAGE_PREFIX = 'ai_welcome_seen_';
-
-    // 配置
+    // === 配置常量 ===
     const CONFIG = {
-        typewriterSpeed: 30,          // 打字机速度 (ms/字符) - 稍微调快一点更流畅
-        maxTypewriterTime: 5000,      // 打字机最大执行时间 (ms)
-        containerMinHeight: 60,       // 容器最小高度 (px)
-        requestTimeout: 8000          // API 请求超时 (ms)
+        minInterval: 60 * 1000,      // 最短触发间隔: 1分钟
+        maxInterval: 10 * 60 * 1000, // 最长触发间隔: 10分钟
+        typewriterSpeed: 35,         // 打字速度 (ms)
+        apiEndpoint: '/api/welcome/messages',
+        chatEndpoint: '/api/welcome/chat',
+        maxChatHistory: 50,          // sessionStorage 最多保存 50 条
+        chatStorageKey: 'ai_chat_history'
+    };
+
+    // === 状态变量 ===
+    let timerId = null;
+    let isChatOpen = false;
+    let isThinking = false;
+    let typingTimer = null; // 用于打字机取消
+
+    // === DOM 元素缓存 ===
+    const els = {
+        root: null,
+        bubbleContainer: null,
+        bubbleContent: null,
+        bubbleClose: null,
+        chatWindow: null,
+        triggerBtn: null,
+        chatInput: null,
+        chatForm: null,
+        chatMessages: null,
+        thinkingOverlay: null,
+        btnThinking: null,
+        btnIcon: null
     };
 
     /**
-     * 从当前 URL 路径检测页面上下文
-     * @returns {string} 页面上下文
+     * 初始化 DOM 元素引用
+     */
+    function initElements() {
+        els.root = document.getElementById('ai-widget-root');
+        if (!els.root) return false;
+
+        els.bubbleContainer = document.getElementById('ai-bubble-container');
+        els.bubbleContent = document.getElementById('ai-bubble-content');
+        els.bubbleClose = document.getElementById('ai-bubble-close');
+
+        els.chatWindow = document.getElementById('ai-chat-window');
+        els.triggerBtn = document.getElementById('ai-trigger-btn');
+        els.btnIcon = els.triggerBtn ? els.triggerBtn.querySelector('.fa-robot') : null;
+        els.btnThinking = document.getElementById('ai-btn-thinking');
+
+        els.chatInput = document.getElementById('ai-chat-input');
+        els.chatForm = document.getElementById('ai-chat-form');
+        els.chatMessages = document.getElementById('ai-chat-messages');
+        els.thinkingOverlay = document.getElementById('ai-thinking-overlay');
+
+        return true;
+    }
+
+    // === sessionStorage 聊天历史管理 ===
+
+    /**
+     * 获取聊天历史
+     */
+    function getChatHistory() {
+        try {
+            const data = sessionStorage.getItem(CONFIG.chatStorageKey);
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            console.warn('[AI Welcome] Failed to load chat history:', e);
+            return [];
+        }
+    }
+
+    /**
+     * 保存聊天消息到历史
+     */
+    function saveChatMessage(role, text) {
+        try {
+            let history = getChatHistory();
+            history.push({ role, text, time: Date.now() });
+
+            // 保持最多 maxChatHistory 条
+            if (history.length > CONFIG.maxChatHistory) {
+                history = history.slice(-CONFIG.maxChatHistory);
+            }
+
+            sessionStorage.setItem(CONFIG.chatStorageKey, JSON.stringify(history));
+        } catch (e) {
+            console.warn('[AI Welcome] Failed to save chat message:', e);
+        }
+    }
+
+    /**
+     * 恢复聊天历史到 UI
+     */
+    function restoreChatHistory() {
+        if (!els.chatMessages) return;
+
+        const history = getChatHistory();
+        if (history.length === 0) return;
+
+        // 清空默认欢迎消息外的内容（保留第一个）
+        while (els.chatMessages.children.length > 1) {
+            els.chatMessages.removeChild(els.chatMessages.lastChild);
+        }
+
+        // 渲染历史消息
+        history.forEach(msg => {
+            appendMessageToDOM(msg.role, msg.text);
+        });
+
+        scrollToBottom();
+    }
+
+    /**
+     * 清空聊天历史
+     */
+    function clearChatHistory() {
+        try {
+            sessionStorage.removeItem(CONFIG.chatStorageKey);
+        } catch (e) {
+            console.warn('[AI Welcome] Failed to clear chat history:', e);
+        }
+    }
+
+    // === 核心功能：触发机制 ===
+
+    /**
+     * 启动随机定时器 (1-10分钟)
+     */
+    function startRandomTimer() {
+        if (timerId) clearTimeout(timerId);
+
+        const delay = Math.floor(Math.random() * (CONFIG.maxInterval - CONFIG.minInterval + 1)) + CONFIG.minInterval;
+        // console.log(`[AI Welcome] Next auto-trigger scheduled in ${(delay/1000).toFixed(0)}s`);
+
+        timerId = setTimeout(() => {
+            // 只有当聊天窗口关闭且未在思考时，才尝试触发
+            if (!isChatOpen && !isThinking) {
+                triggerAI('timer');
+            }
+            startRandomTimer(); // 递归调用，保持循环
+        }, delay);
+    }
+
+    /**
+     * 检测当前页面上下文
      */
     function detectPageContext() {
         const path = window.location.pathname;
-
-        // 路径到上下文的映射
-        const pathMap = {
-            '/': 'dashboard',
-            '/tasks': 'tasks',
-            '/new_class': 'ai_generator',
-            '/ai_generator': 'ai_generator',
-            '/ai_core_list': 'ai_generator',
-            '/export': 'export'
-        };
-
-        // 检查前缀匹配
-        for (const [pattern, context] of Object.entries(pathMap)) {
-            if (path === pattern || path.startsWith(pattern + '/')) {
-                return context;
-            }
-        }
-
-        // 学生相关页面
-        if (path.startsWith('/student') || path.startsWith('/students')) {
-            return 'student_list';
-        }
-
-        // 默认返回 dashboard
+        if (path === '/' || path === '/dashboard') return 'dashboard';
+        if (path.startsWith('/tasks')) return 'tasks';
+        if (path.startsWith('/student')) return 'student_list';
+        if (path.startsWith('/ai_generator')) return 'ai_generator';
+        if (path.startsWith('/export')) return 'export';
+        if (path.startsWith('/library')) return 'library';
         return 'dashboard';
     }
 
     /**
-     * 调整容器高度 (防抖动优化)
-     * @param {HTMLElement} container - 容器元素
-     * @param {HTMLElement} contentEl - 内容元素 (可选)
+     * 触发 AI 获取消息
+     * @param {string} type - 'timer' | 'action'
+     * @param {string} details - 操作详情
      */
-    function adjustContainerHeight(container, contentEl) {
-        if (!container) return;
+    async function triggerAI(type, details = null) {
+        if (isThinking) return;
+        setThinkingState(true);
 
-        // 如果未提供 contentEl，尝试查找
-        if (!contentEl) {
-            contentEl = container.querySelector('#welcome-content, #compact-welcome-text');
-        }
-        if (!contentEl) return;
+        try {
+            const context = detectPageContext();
 
-        // 使用 requestAnimationFrame 确保在渲染后计算
-        requestAnimationFrame(() => {
-            // 获取实际内容高度
-            const contentHeight = contentEl.scrollHeight;
-            // 计算目标高度（保持最小高度，防止收缩太小）
-            // +20 是为了留出 padding 空间，避免文字贴边
-            const newHeight = Math.max(CONFIG.containerMinHeight, contentHeight + 20);
+            const response = await fetch(CONFIG.apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    page_context: context,
+                    trigger_type: type,
+                    action_details: details
+                })
+            });
 
-            // 只有当高度确实需要变大，或者当前是初始状态时才调整
-            // 避免打字机过程中的微小高度收缩导致抖动
-            const currentHeight = container.clientHeight;
-            if (newHeight > currentHeight || currentHeight <= CONFIG.containerMinHeight) {
-                container.style.minHeight = newHeight + 'px';
+            // 处理网络错误
+            if (!response.ok) throw new Error('Network response was not ok');
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                showBubble(data.data.message_content);
+            } else if (data.status === 'fallback') {
+                showBubble(data.data.message_content); // 回退消息也显示
+            } else if (data.status === 'silence') {
+                console.log('[AI Welcome] Silent mode (Rate Limited)');
             }
+        } catch (e) {
+            console.error('[AI Welcome] Trigger failed:', e);
+        } finally {
+            setThinkingState(false);
+        }
+    }
+
+    // === UI 交互逻辑 ===
+
+    /**
+     * 设置思考状态 (控制图标动画)
+     */
+    function setThinkingState(thinking) {
+        isThinking = thinking;
+
+        // 1. 悬浮按钮状态
+        if (els.btnThinking && els.btnIcon) {
+            if (thinking) {
+                els.btnThinking.classList.remove('hidden');
+                els.btnIcon.classList.add('opacity-0'); // 隐藏机器人图标
+            } else {
+                els.btnThinking.classList.add('hidden');
+                els.btnIcon.classList.remove('opacity-0');
+            }
+        }
+
+        // 2. 聊天窗口内状态
+        if (els.thinkingOverlay) {
+            thinking ? els.thinkingOverlay.classList.remove('hidden')
+                     : els.thinkingOverlay.classList.add('hidden');
+        }
+    }
+
+    /**
+     * 显示气泡消息
+     */
+    function showBubble(text) {
+        if (!els.bubbleContainer || isChatOpen) return;
+
+        // 重置状态
+        els.bubbleContainer.classList.remove('hidden');
+        // 强制重绘以触发 transition
+        void els.bubbleContainer.offsetWidth;
+
+        els.bubbleContainer.classList.remove('scale-95', 'opacity-0', 'translate-y-2');
+        els.bubbleContainer.classList.add('scale-100', 'opacity-100', 'translate-y-0');
+
+        // 执行打字机
+        typewriter(els.bubbleContent, text, () => {
+            // 打字结束后，15秒自动消失 (除非用户 hover)
+            const autoHideTimer = setTimeout(hideBubble, 15000);
+
+            els.bubbleContainer.onmouseenter = () => clearTimeout(autoHideTimer);
+            els.bubbleContainer.onmouseleave = () => setTimeout(hideBubble, 5000);
         });
+    }
+
+    /**
+     * 隐藏气泡消息
+     */
+    function hideBubble() {
+        if (!els.bubbleContainer) return;
+
+        els.bubbleContainer.classList.remove('scale-100', 'opacity-100', 'translate-y-0');
+        els.bubbleContainer.classList.add('scale-95', 'opacity-0', 'translate-y-2');
+
+        setTimeout(() => {
+            els.bubbleContainer.classList.add('hidden');
+            if (els.bubbleContent) els.bubbleContent.textContent = ''; // 清空内容
+        }, 300); // 等待 CSS transition 结束
+    }
+
+    /**
+     * 切换聊天窗口显示/隐藏
+     */
+    function toggleChat() {
+        isChatOpen = !isChatOpen;
+
+        if (isChatOpen) {
+            hideBubble(); // 打开聊天必然关闭气泡
+            els.chatWindow.classList.remove('hidden');
+            // 动画
+            requestAnimationFrame(() => {
+                els.chatWindow.classList.remove('scale-95', 'opacity-0', 'translate-y-4');
+                els.chatWindow.classList.add('scale-100', 'opacity-100', 'translate-y-0');
+            });
+            setTimeout(() => els.chatInput && els.chatInput.focus(), 100);
+
+            // 滚动到底部
+            scrollToBottom();
+        } else {
+            els.chatWindow.classList.remove('scale-100', 'opacity-100', 'translate-y-0');
+            els.chatWindow.classList.add('scale-95', 'opacity-0', 'translate-y-4');
+            setTimeout(() => els.chatWindow.classList.add('hidden'), 300);
+        }
+    }
+
+    /**
+     * 消息列表滚动到底部
+     */
+    function scrollToBottom() {
+        if (els.chatMessages) {
+            els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+        }
     }
 
     /**
      * 打字机效果
-     * @param {HTMLElement} element - 目标文本元素
-     * @param {string} text - 要显示的文本
-     * @param {HTMLElement} container - 外层容器（用于动态调整高度）
-     * @param {Function} callback - 完成回调
      */
-    function typewriter(element, text, container, callback) {
+    function typewriter(el, text, callback) {
+        if (!el) return;
+        if (typingTimer) clearTimeout(typingTimer);
+
+        el.textContent = '';
         let i = 0;
-        const textLength = text.length;
-        const startTime = Date.now();
-
-        // 准备状态
-        element.textContent = '';
-        element.classList.add('typewriter-cursor');
-
-        // 确保容器初始高度正确
-        adjustContainerHeight(container, element);
 
         function type() {
-            // 检查是否超时或元素已移除
-            if (!document.body.contains(element)) return;
-
-            if (Date.now() - startTime > CONFIG.maxTypewriterTime) {
-                element.textContent = text;
-                finishTypewriter();
-                return;
-            }
-
-            if (i < textLength) {
-                element.textContent += text.charAt(i);
+            if (i < text.length) {
+                el.textContent += text.charAt(i);
                 i++;
-
-                // 每打几个字调整一次高度，确保多行文本时容器平滑展开
-                if (i % 10 === 0 && container) {
-                    adjustContainerHeight(container, element);
-                }
-
-                setTimeout(type, CONFIG.typewriterSpeed);
+                typingTimer = setTimeout(type, CONFIG.typewriterSpeed);
+                // 如果是在聊天框打字，保持滚动
+                if (isChatOpen) scrollToBottom();
             } else {
-                finishTypewriter();
+                if (callback) callback();
             }
         }
-
-        function finishTypewriter() {
-            element.textContent = text; // 确保文字完整
-            element.classList.remove('typewriter-cursor');
-            if (container) adjustContainerHeight(container, element);
-            if (typeof callback === 'function') {
-                callback();
-            }
-        }
-
         type();
     }
 
     /**
-     * 检查消息是否已被查看
+     * 发送手动消息
      */
-    function hasSeenMessage(storageKey) {
+    async function sendManualMessage(e) {
+        if (e) e.preventDefault();
+
+        const msg = els.chatInput.value.trim();
+        if (!msg) return;
+
+        // 1. UI: 显示用户消息
+        appendMessage('user', msg);
+        els.chatInput.value = '';
+
+        // 2. 状态: 思考中
+        setThinkingState(true);
+
+        // 3. API 调用
         try {
-            return localStorage.getItem(STORAGE_PREFIX + storageKey) === 'true';
-        } catch (e) {
-            console.warn('localStorage 不可用:', e);
-            return false;
-        }
-    }
-
-    /**
-     * 标记消息为已查看
-     */
-    function markMessageAsSeen(storageKey) {
-        try {
-            localStorage.setItem(STORAGE_PREFIX + storageKey, 'true');
-        } catch (e) {
-            console.warn('无法写入 localStorage:', e);
-        }
-    }
-
-    /**
-     * 显示欢迎语内容（标准模式 - 首页）
-     */
-    function displayWelcomeMessage(container, data, animate) {
-        const loadingEl = container.querySelector('#welcome-loading');
-        const contentEl = container.querySelector('#welcome-content');
-        const errorEl = container.querySelector('#welcome-error');
-        const textEl = container.querySelector('#welcome-text');
-
-        // 状态切换
-        if (loadingEl) loadingEl.classList.add('hidden');
-        if (errorEl) errorEl.classList.add('hidden');
-
-        if (contentEl) {
-            contentEl.classList.remove('hidden');
-            contentEl.classList.add('animate-in');
-        }
-
-        if (!textEl) return;
-
-        const message = data.message_content || data.message || '';
-        const storageKey = data.storage_key;
-
-        // 强制刷新时（animate=true），或者首次查看时，使用打字机
-        // 注意：如果 data.status 是 'cached' 且 hasSeenMessage 为 true，则不动画
-        const shouldAnimate = animate &&
-                              message.length > 0 &&
-                              (!storageKey || !hasSeenMessage(storageKey));
-
-        if (shouldAnimate) {
-            typewriter(textEl, message, container, () => {
-                if (storageKey) markMessageAsSeen(storageKey);
+            const context = detectPageContext();
+            const response = await fetch(CONFIG.chatEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: msg,
+                    page_context: context
+                })
             });
-        } else {
-            textEl.textContent = message;
-            // 确保没有残留的光标
-            textEl.classList.remove('typewriter-cursor');
-            adjustContainerHeight(container, textEl);
-        }
-    }
 
-    /**
-     * 显示欢迎语内容（紧凑模式 - 顶部栏）
-     */
-    function displayCompactWelcomeMessage(container, data) {
-        const loadingEl = container.querySelector('#compact-welcome-loading');
-        const textEl = container.querySelector('#compact-welcome-text');
-        const refreshBtn = container.querySelector('#compact-welcome-refresh');
+            const data = await response.json();
 
-        if (loadingEl) loadingEl.classList.add('hidden');
+            setThinkingState(false);
 
-        if (textEl) {
-            const message = data.message_content || data.message || '';
-            textEl.textContent = message;
-            textEl.classList.remove('hidden');
-        }
-
-        if (refreshBtn) {
-            refreshBtn.classList.remove('hidden');
-        }
-    }
-
-    /**
-     * 显示回退消息
-     */
-    function showFallbackMessage(container, message) {
-        const fallbackText = message || '今天也是充满效率的一天，准备好处理新的批改任务了吗？';
-        const data = {
-            message_content: fallbackText,
-            storage_key: null
-        };
-
-        if (container.id === 'compact-welcome-container') {
-            displayCompactWelcomeMessage(container, data);
-        } else {
-            // 回退消息通常不需要打字机动画，直接显示
-            displayWelcomeMessage(container, data, false);
-        }
-    }
-
-    /**
-     * 核心加载函数
-     * @param {string} pageContext - 上下文
-     * @param {string} mode - 'standard' | 'compact'
-     * @param {boolean} forceRefresh - 是否强制刷新(忽略缓存)
-     */
-    function loadWelcomeMessage(pageContext, mode, forceRefresh = false) {
-        return new Promise((resolve, reject) => {
-            const containerId = mode === 'compact' ? 'compact-welcome-container' : 'ai-welcome-container';
-            const container = document.getElementById(containerId);
-
-            if (!container) {
-                // 容器不存在是正常的（例如在不显示欢迎语的页面），静默失败
-                return resolve();
-            }
-
-            if (!pageContext) {
-                pageContext = container.dataset.pageContext || detectPageContext();
-            }
-
-            // 只有在强制刷新时才显示加载态，避免普通加载时的闪烁
-            if (forceRefresh) {
-                if (mode === 'compact') {
-                     const loadingEl = container.querySelector('#compact-welcome-loading');
-                     const textEl = container.querySelector('#compact-welcome-text');
-                     if(loadingEl) loadingEl.classList.remove('hidden');
-                     if(textEl) textEl.classList.add('hidden');
-                } else {
-                     const loadingEl = container.querySelector('#welcome-loading');
-                     const contentEl = container.querySelector('#welcome-content');
-                     if(loadingEl) loadingEl.classList.remove('hidden');
-                     if(contentEl) contentEl.classList.add('hidden');
-                }
-            }
-
-            // 构建 API URL
-            // 如果是 forceRefresh，我们使用 POST 刷新端点，或者带参数的 GET
-            // 这里根据后端设计，使用带参数的 GET 或 POST
-            let url;
-            let method = 'GET';
-
-            if (forceRefresh) {
-                url = `/api/welcome/messages/refresh?page_context=${encodeURIComponent(pageContext)}`;
-                method = 'POST';
+            if (data.status === 'success') {
+                appendMessage('ai', data.data.reply);
             } else {
-                url = `/api/welcome/messages?page_context=${encodeURIComponent(pageContext)}`;
+                appendMessage('ai', '哎呀，我大脑短路了，稍后再试吧。');
             }
-
-            const timeoutId = setTimeout(() => {
-                showFallbackMessage(container);
-                // 不 reject，避免控制台报错，只是降级显示
-            }, CONFIG.requestTimeout);
-
-            fetch(url, {
-                method: method,
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(response => response.json())
-            .then(data => {
-                clearTimeout(timeoutId);
-
-                if (['success', 'cached', 'generated', 'fallback'].includes(data.status)) {
-                    if (mode === 'compact') {
-                        displayCompactWelcomeMessage(container, data.data);
-                    } else {
-                        // 强制刷新时，永远启用动画
-                        displayWelcomeMessage(container, data.data, forceRefresh || true);
-                    }
-                    resolve(data);
-                } else {
-                    showFallbackMessage(container);
-                    // 业务层面的错误也算处理完成
-                    resolve(data);
-                }
-            })
-            .catch(error => {
-                clearTimeout(timeoutId);
-                console.error('[AI Welcome] Load failed:', error);
-                showFallbackMessage(container);
-                resolve(); // 降级处理
-            });
-        });
+        } catch (err) {
+            setThinkingState(false);
+            console.error(err);
+            appendMessage('ai', '网络连接似乎断开了... (T_T)');
+        }
     }
 
-    // --- 初始化逻辑 ---
+    /**
+     * 添加消息到 DOM (内部函数，不保存到 sessionStorage)
+     */
+    function appendMessageToDOM(role, text) {
+        if (!els.chatMessages) return;
 
-    document.addEventListener('DOMContentLoaded', function() {
-        // 1. 初始化标准容器
-        const standardContainer = document.getElementById('ai-welcome-container');
-        if (standardContainer) {
-            loadWelcomeMessage(null, 'standard');
-        }
+        const isUser = role === 'user';
+        const div = document.createElement('div');
+        div.className = `flex ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`;
 
-        // 2. 初始化紧凑容器
-        const compactContainer = document.getElementById('compact-welcome-container');
-        if (compactContainer) {
-            loadWelcomeMessage(null, 'compact');
+        // 样式类
+        const bubbleClass = isUser
+            ? 'bg-indigo-600 text-white rounded-tr-none'
+            : 'bg-white border border-slate-100 text-slate-700 rounded-tl-none';
+
+        div.innerHTML = `
+            <div class="${bubbleClass} py-2 px-3 rounded-2xl shadow-sm text-sm max-w-[85%] break-words">
+                ${text} </div>
+        `;
+
+        els.chatMessages.appendChild(div);
+        scrollToBottom();
+    }
+
+    /**
+     * 添加消息到聊天界面并保存到 sessionStorage
+     */
+    function appendMessage(role, text) {
+        appendMessageToDOM(role, text);
+        saveChatMessage(role, text);
+    }
+
+    // === 事件监听 ===
+
+    function setupEventListeners() {
+        // 1. 全局 Action 事件监听 (供其他模块调用)
+        window.addEventListener('tas:action', (e) => {
+            // console.log('[AI Welcome] Action received:', e.detail);
+            // 动作触发不检查 isChatOpen，但如果正在聊天则不弹气泡
+            if (!isChatOpen) {
+                triggerAI('action', e.detail);
+            }
+        });
+
+        // 2. 兼容旧版刷新事件
+        window.addEventListener('tas:refresh_welcome', () => {
+            triggerAI('action', '数据更新');
+        });
+
+        // 3. UI 事件
+        if (els.triggerBtn) els.triggerBtn.addEventListener('click', toggleChat);
+        if (els.bubbleClose) els.bubbleClose.addEventListener('click', (e) => {
+            e.stopPropagation();
+            hideBubble();
+        });
+        if (els.chatForm) els.chatForm.addEventListener('submit', sendManualMessage);
+    }
+
+    // === 初始化入口 ===
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (initElements()) {
+            setupEventListeners();
+            startRandomTimer();
+
+            // 恢复聊天历史
+            restoreChatHistory();
+
+            // 初始检查：如果刚好有未读消息或通过 URL 参数触发，可以在此处理
+            // 这里我们选择 2秒后尝试触发一次进入页面的欢迎（如果冷却允许）
+            setTimeout(() => triggerAI('action', 'page_enter'), 2000);
         }
     });
 
-    // --- 全局事件监听 ---
-
-    // 监听 'tas:refresh_welcome' 事件
-    // 其他模块（如文件上传成功、任务创建成功）可触发此事件来刷新欢迎语
-    window.addEventListener('tas:refresh_welcome', function(event) {
-        console.log('[AI Welcome] Received refresh event');
-
-        // 刷新标准容器
-        const standardContainer = document.getElementById('ai-welcome-container');
-        if (standardContainer) {
-            loadWelcomeMessage(null, 'standard', true); // true = force refresh
-        }
-
-        // 刷新紧凑容器
-        const compactContainer = document.getElementById('compact-welcome-container');
-        if (compactContainer) {
-            loadWelcomeMessage(null, 'compact', true);
-        }
-    });
-
-    // --- 导出全局对象 ---
-
+    // 暴露全局对象
     window.AIWelcome = {
-        load: (ctx) => loadWelcomeMessage(ctx, 'standard'),
-        refresh: (ctx) => loadWelcomeMessage(ctx, 'standard', true),
-        loadCompact: (ctx) => loadWelcomeMessage(ctx, 'compact'),
-        refreshCompact: (ctx) => loadWelcomeMessage(ctx, 'compact', true),
-        triggerRefresh: () => window.dispatchEvent(new CustomEvent('tas:refresh_welcome')),
-        detectContext: detectPageContext
+        hideBubble,
+        toggleChat,
+        trigger: (details) => triggerAI('action', details)
     };
 
 })();

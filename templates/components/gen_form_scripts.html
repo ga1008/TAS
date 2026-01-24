@@ -228,6 +228,10 @@
             .then(res => res.json())
             .then(data => {
                  if(data.task_id) {
+                     // 触发 AI 欢迎语反馈
+                     if (window.AIWelcome && window.AIWelcome.trigger) {
+                         window.AIWelcome.trigger('批改核心创建成功，AI 正在生成评分脚本');
+                     }
                      // 使用 SPA 导航跳转到核心列表页面
                      const targetUrl = '/ai_core_list?highlight_task=' + data.task_id;
                      if (window.SPARouter) {
@@ -253,6 +257,10 @@
             .then(res => res.json())
             .then(data => {
                 if(data.status === 'success') {
+                    // 触发 AI 欢迎语反馈
+                    if (window.AIWelcome && window.AIWelcome.trigger) {
+                        window.AIWelcome.trigger('Direct AI 核心创建成功');
+                    }
                     // 使用 SPA 导航跳转到核心列表页面
                     if (window.SPARouter) {
                         window.SPARouter.navigateTo('/ai_core_list');

@@ -12,7 +12,7 @@ class Config:
     AI_ASSISTANT_CHAT_ENDPOINT = f"{AI_ASSISTANT_BASE_URL.rstrip('/')}/api/ai/chat"
 
     # 数据库配置
-    DB_PATH = os.path.join(base_dir, 'data', 'grading_system_v2.db')  # 建议改个名字，跟题库区分开
+    DB_PATH = os.path.join(base_dir, 'data', 'grading_system_v3.db')  # 建议改个名字，跟题库区分开
 
     GRADERS_DIR = os.path.join(base_dir, 'grading_core', 'graders')
     TRASH_DIR = os.path.join(base_dir, 'grading_core', 'trash')

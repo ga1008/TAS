@@ -420,6 +420,12 @@
                 btn.innerHTML = `<i class="fas fa-check"></i> <span>创建成功</span>`;
                 showToast('班级创建成功！正在跳转...', 'success');
 
+                // 触发 AI 欢迎语反馈
+                if (window.AIWelcome && window.AIWelcome.trigger) {
+                    const studentCount = window._importParsedStudents ? window._importParsedStudents.length : 0;
+                    window.AIWelcome.trigger(`班级「${className}」创建成功，共导入 ${studentCount} 名学生`);
+                }
+
                 // 跳转到学生名单列表页
                 setTimeout(() => {
                     window.location.href = '/student/';

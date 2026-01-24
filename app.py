@@ -67,7 +67,16 @@ def create_app():
     except Exception as e:
         print(f"Startup Warning: {e}")
 
-    # 3. 注册蓝图
+    # 3. 清理旧的 AI 欢迎语记录 (30 天以上)
+    try:
+        from blueprints.ai_welcome import cleanup_old_welcome_messages
+        cleaned = cleanup_old_welcome_messages(days=30)
+        if cleaned > 0:
+            print(f"[Startup] Cleaned {cleaned} old AI welcome records.")
+    except Exception as e:
+        print(f"Startup Warning (AI cleanup): {e}")
+
+    # 4. 注册蓝图
     app.register_blueprint(admin_bp)
     app.register_blueprint(ai_assistant_bp)
     app.register_blueprint(auth_bp)
