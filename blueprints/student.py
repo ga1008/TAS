@@ -97,10 +97,12 @@ def api_upload_parse():
     content = request.form.get('content')  # 用于粘贴板
 
     file_id = None
+    file_name = None
 
     try:
         # 场景A: 文件上传
         if f:
+            file_name = f.filename
             path, _ = FileService.handle_file_upload_or_reuse(f, None, g.user['id'])
             with open(path, 'rb') as f_stream:
                 f_hash = calculate_file_hash(f_stream)
@@ -109,6 +111,7 @@ def api_upload_parse():
 
         # 场景B: 文本粘贴
         elif content:
+            file_name = "Pasted_Student_List.txt"
             title = "Pasted_Student_List"
             file_id, _ = create_text_asset(content, title, g.user['id'])
 
@@ -116,7 +119,7 @@ def api_upload_parse():
             return jsonify({"msg": "未接收到有效数据"}), 400
 
         # 调用 AI 解析服务
-        success, data, error_msg = AiService.parse_student_list_dedicated(file_id)
+        success, data, error_msg = AiService.parse_student_list_dedicated(file_id, file_name)
 
         if not success:
             return jsonify({"status": "error", "msg": error_msg})

@@ -113,7 +113,7 @@ class MessageContext:
         """转换为字典用于 AI 提示词格式化"""
         recent_actions_str = "、".join(self.recent_actions) if self.recent_actions else "暂无"
 
-        page_context_enum = PageContext(self.page_context) if isinstance(self.page_context, str) else self.page_context
+        # page_context_enum = PageContext(self.page_context) if isinstance(self.page_context, str) else self.page_context
 
         return {
             'username': self.username,
@@ -480,7 +480,7 @@ async def _call_ai_for_welcome(prompt: str) -> str:
         "model_capability": "standard"
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(endpoint, json=payload)
 
         # 处理速率限制 (HTTP 429)

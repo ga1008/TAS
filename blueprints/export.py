@@ -13,12 +13,18 @@ from utils.common import get_corrected_path
 bp = Blueprint('export', __name__)
 
 
+def load_export_templates():
+    """加载内置导出模板到数据库"""
+    templates_dir = current_app.config['TEMPLATE_DIR']
+    TemplateManager.load_templates(templates_dir)
+
+
 @bp.route('/export_page/<int:file_id>')
 def export_page(file_id):
     """渲染导出配置页面"""
     if not g.user:
         return jsonify({"msg": "Unauthorized"}), 401  # 或者 redirect login
-
+    load_export_templates()
     record = db.get_file_by_id(file_id)
     if not record:
         return "文件不存在", 404

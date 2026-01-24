@@ -164,6 +164,7 @@ def parse_file_asset():
     f = request.files.get('file')
     if not f: return jsonify({"msg": "请先选择文件"}), 400
 
+    file_name = f.filename.lower()
     try:
         # 1. 保存/查重
         path, _ = FileService.handle_file_upload_or_reuse(f, None, g.user['id'])
@@ -179,7 +180,7 @@ def parse_file_asset():
 
         if doc_type == 'student_list':
             # 使用专门的学生名单解析函数
-            success, data, error_msg = AiService.parse_student_list_dedicated(record['id'])
+            success, data, error_msg = AiService.parse_student_list_dedicated(record['id'], file_name)
             if not success:
                 return jsonify({"msg": error_msg or "解析失败"}), 400
 

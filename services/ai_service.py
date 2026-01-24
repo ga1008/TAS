@@ -407,7 +407,7 @@ class AiService:
         }, None
 
     @staticmethod
-    def parse_student_list_dedicated(file_id):
+    def parse_student_list_dedicated(file_id, file_name):
         """
         专门的学生名单解析函数：
         1. 对于 Excel/CSV 文件，使用 pandas 纯逻辑读取全部原始数据
@@ -472,7 +472,7 @@ class AiService:
                     return False, None, "未能从文件中提取到学生数据，请检查文件格式是否包含学号和姓名列"
 
                 # 使用 AI 提取班级元数据
-                meta = AiService._extract_metadata_with_ai(df, file_id)
+                meta = AiService._extract_metadata_with_ai(df, file_id, file_name)
 
                 # 保存解析结果
                 markdown_table = AiService._students_to_markdown_table(students, meta)
@@ -755,7 +755,7 @@ class AiService:
         return students, has_gender
 
     @staticmethod
-    def _extract_metadata_with_ai(df, file_id):
+    def _extract_metadata_with_ai(df, file_id, file_name):
         """
         使用 AI 从 DataFrame 中提取班级元数据
         包括：班级名称、学院、系部、入学年份、培养类型等
@@ -774,6 +774,7 @@ class AiService:
             columns_str = " | ".join(df.columns.tolist())
 
             prompt = f"""请分析以下学生名单表格，提取班级元数据。
+表格文件名: {file_name}
 
 表格列名: {columns_str}
 
@@ -791,6 +792,7 @@ class AiService:
 {{"class_name": "...", "college": "...", "department": "...", "enrollment_year": "...", "education_type": "..."}}"""
 
             standard_config = db.get_best_ai_config("thinking") or db.get_best_ai_config("standard")
+            print("--------standard_config: ", standard_config)
             if standard_config:
                 resp = asyncio.run(call_ai_platform_chat(
                     system_prompt="你是学生信息分析专家。请从表格数据中提取班级元信息，只返回纯JSON格式，不要有其他文字。",

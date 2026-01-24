@@ -67,6 +67,15 @@ def create_app():
     except Exception as e:
         print(f"Startup Warning: {e}")
 
+    # 加载导出模板到数据库，如果数据库已有同名的模板则跳过
+    # try:
+    #     from blueprints.export import load_export_templates
+    #     loaded_count = load_export_templates()
+    #     if loaded_count > 0:
+    #         print(f"[Startup] Loaded {loaded_count} export templates into the database.")
+    # except Exception as e:
+    #     print(f"Startup Warning (Export Templates): {e}")
+
     # 3. 清理旧的 AI 欢迎语记录 (30 天以上)
     try:
         from blueprints.ai_welcome import cleanup_old_welcome_messages
