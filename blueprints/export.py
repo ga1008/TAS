@@ -97,7 +97,8 @@ def export_word_v2():
                     form_data[f"{prefix}_path"] = real_path
 
     # 生成文件
-    filename = f"export_{uuid.uuid4().hex}.docx"
+    ext = getattr(exporter, 'FILE_EXTENSION', 'docx')
+    filename = f"export_{uuid.uuid4().hex}.{ext}"
     save_path = os.path.join(Config.UPLOAD_FOLDER, filename)
 
     try:
@@ -111,12 +112,19 @@ def export_word_v2():
         try:
             # 尝试编码，如果不报错说明是纯 ASCII，不需要 quote
             dl_name.encode('latin-1')
-            final_name = f"{dl_name}.docx"
+            final_name = f"{dl_name}.{ext}"
         except UnicodeEncodeError:
             # 包含中文，使用 URL 编码防止 header 错误
-            final_name = f"{quote(dl_name)}.docx"
+            final_name = f"{quote(dl_name)}.{ext}"
+        # 针对 Excel 修正 MIME type
 
-        return send_file(save_path, as_attachment=True, download_name=final_name)
+        mimetype = None
+        if ext == 'xlsx':
+            mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        else:
+            mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+        return send_file(save_path, as_attachment=True, download_name=final_name, mimetype=mimetype)
 
     except Exception as e:
         import traceback

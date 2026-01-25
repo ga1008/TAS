@@ -6,6 +6,9 @@ class BaseExportTemplate(abc.ABC):
     NAME = "Base Template"
     DESCRIPTION = "基础模板"
 
+    # [新增] 定义导出文件的扩展名，默认为 docx，Excel 模板需重写为 xlsx
+    FILE_EXTENSION = "docx"
+
     # 定义前端需要渲染的表单字段 (UI Schema)
     # 类型支持: text, date, number, select, signature_selector, hidden
     UI_SCHEMA = []
@@ -16,7 +19,8 @@ class BaseExportTemplate(abc.ABC):
             "id": self.ID,
             "name": self.NAME,
             "description": self.DESCRIPTION,
-            "schema": self.UI_SCHEMA
+            "schema": self.UI_SCHEMA,
+            "extension": self.FILE_EXTENSION  # 告知前端或后端此模板的文件类型
         }
 
     @abc.abstractmethod
