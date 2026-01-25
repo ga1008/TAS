@@ -10,6 +10,7 @@ from extensions import db
 from grading_core.factory import GraderFactory
 from services.file_service import FileService
 from services.grading_service import GradingService
+from services.score_document_service import ScoreDocumentService
 
 bp = Blueprint('grading', __name__)
 
@@ -105,6 +106,18 @@ def run_batch_grading(class_id):
     db.clear_grades(class_id)
     for s in students:
         GradingService.grade_single_student(class_id, s['student_id'])
+
+    # === 生成成绩文档到文档库 ===
+    try:
+        from services.score_document_service import ScoreDocumentService
+        result = ScoreDocumentService.generate_from_class(class_id, g.user['id'])
+        if result:
+            print(f"[ScoreDoc] Generated: {result['filename']}")
+    except Exception as e:
+        import logging
+        logging.error(f"[ScoreDoc] Generation failed: {e}")
+    # === END ===
+
     return jsonify({"msg": "批量批改完成"})
 
 
@@ -255,6 +268,28 @@ def export_excel(class_id):
     path = os.path.join(Config.UPLOAD_FOLDER, f"{cls['name']}_成绩单.xlsx")
     df.to_excel(path, index=False)
     return send_file(path, as_attachment=True)
+
+
+@bp.route('/api/export_to_library/<int:class_id>', methods=['POST'])
+def export_to_library(class_id):
+    """导出成绩到文档库（Markdown格式）"""
+    cls = db.get_class_by_id(class_id)
+    if not cls or cls['created_by'] != g.user['id']:
+        return jsonify({"status": "error", "msg": "无权限访问"}), 403
+
+    try:
+        result = ScoreDocumentService.generate_from_class(class_id, g.user['id'])
+        if result:
+            return jsonify({
+                "status": "success",
+                "msg": "成绩已导出到文档库",
+                "asset_id": result['asset_id'],
+                "filename": result['filename']
+            })
+        else:
+            return jsonify({"status": "error", "msg": "暂无成绩数据可导出"})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": f"导出失败: {str(e)}"})
 
 
 @bp.route('/clear_data/<int:class_id>', methods=['POST'])

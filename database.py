@@ -413,6 +413,9 @@ class Database:
         # 教务系统绑定表迁移
         self._migrate_table(cursor, conn, "jwxt_bindings", "cookies", "TEXT")
 
+        # [NEW] 成绩文档同步功能：file_assets 添加 source_class_id 字段
+        self._migrate_table(cursor, conn, "file_assets", "source_class_id", "INTEGER")
+
     def _migrate_table(self, cursor, conn, table, column, type_def):
         """辅助函数：检查列是否存在，不存在则添加"""
         try:
@@ -1361,4 +1364,50 @@ class Database:
             sql = f"UPDATE notifications SET {', '.join(updates)} WHERE related_id = ?"
             conn.execute(sql, params)
             conn.commit()
+
+    # ================= 成绩文档同步功能 [NEW] =================
+
+    def get_file_asset_by_path(self, path):
+        """通过路径获取文件资产（支持物理路径和原始文件名匹配）"""
+        import os
+        conn = self.get_connection()
+        basename = os.path.basename(path)
+        row = conn.execute(
+            "SELECT * FROM file_assets WHERE physical_path = ? OR original_name LIKE ?",
+            (path, f"%{basename}%")
+        ).fetchone()
+        return dict(row) if row else None
+
+    def save_score_document(self, data):
+        """
+        保存成绩文档到文件资产表
+        :param data: dict 包含 file_hash, original_name, file_size, physical_path,
+                     parsed_content, meta_info, doc_category, course_name,
+                     source_class_id, uploaded_by
+        :return: 新记录的 ID
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO file_assets
+            (file_hash, original_name, file_size, physical_path, parsed_content,
+             meta_info, doc_category, course_name, source_class_id, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data['file_hash'], data['original_name'], data['file_size'],
+            data.get('physical_path'), data['parsed_content'], data['meta_info'],
+            data['doc_category'], data.get('course_name'), data.get('source_class_id'),
+            data.get('uploaded_by')
+        ))
+        conn.commit()
+        return cursor.lastrowid
+
+    def count_score_documents_for_class(self, class_id):
+        """统计班级的成绩文档数量（用于命名冲突检测）"""
+        conn = self.get_connection()
+        result = conn.execute(
+            "SELECT COUNT(*) as cnt FROM file_assets WHERE source_class_id = ?",
+            (class_id,)
+        ).fetchone()
+        return result['cnt'] if result else 0
 

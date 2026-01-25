@@ -59,14 +59,22 @@ class MachineTestScoreExporter(BaseExportTemplate, BaseExcelExporter):
         num_questions = len(questions)
 
         # 2. 获取学生成绩数据 (核心数据来源)
-        # 根据 class_name 在数据库中查找 class_id，然后获取成绩
+        # 优先级：source_class_id（精确） → class_name（模糊匹配）
         students_data = []
         conn = db.get_connection()
 
-        # 模糊匹配班级
-        class_row = conn.execute("SELECT id FROM classes WHERE name LIKE ? LIMIT 1", (f"%{class_name}%",)).fetchone()
-        if class_row:
-            class_id = class_row['id']
+        # 优先级 1: 使用 source_class_id 直接查询（成绩文档自动生成时会设置）
+        class_id = None
+        if meta_info and isinstance(meta_info, dict) and meta_info.get('source_class_id'):
+            class_id = meta_info['source_class_id']
+
+        # 优先级 2: 模糊匹配班级名称
+        if not class_id and class_name:
+            class_row = conn.execute("SELECT id FROM classes WHERE name LIKE ? LIMIT 1", (f"%{class_name}%",)).fetchone()
+            if class_row:
+                class_id = class_row['id']
+
+        if class_id:
             # 获取该班级所有学生及成绩
             db_students = db.get_students_with_grades(class_id)
             for stu in db_students:

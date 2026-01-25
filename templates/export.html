@@ -486,9 +486,10 @@
             .then(blob => {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
+                const ext = url.split('.').pop().split('?')[0];
                 a.href = url;
                 const fname = json['course_name'] || 'Export_Document';
-                a.download = `${fname}.docx`;
+                a.download = `${fname}.${ext}`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();

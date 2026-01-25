@@ -59,9 +59,9 @@
         <span>批改核心: <strong class="text-indigo-600">{{ cls['strategy'] }}</strong></span>
     </div>
     <div class="flex items-center gap-2">
-        <a href="/export/{{ cls['id'] }}" class="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-md shadow-emerald-200 hover:bg-emerald-600 hover:shadow-lg transition-all text-xs font-bold transform hover:-translate-y-0.5">
-            <i class="fas fa-file-excel"></i> 导出成绩
-        </a>
+        <button onclick="openExportModal({{ cls['id'] }})" class="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-md shadow-emerald-200 hover:bg-emerald-600 hover:shadow-lg transition-all text-xs font-bold transform hover:-translate-y-0.5">
+            <i class="fas fa-file-export"></i> 导出成绩
+        </button>
         <button onclick="clearData()" class="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors" title="清空成绩">
             <i class="fas fa-eraser"></i>
         </button>
@@ -475,5 +475,7 @@
         }
     }
 </script>
+
+{% include 'components/export_choice_modal.html' %}
 
 {% endblock %}

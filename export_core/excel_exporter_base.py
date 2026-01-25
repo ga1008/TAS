@@ -5,6 +5,8 @@ from openpyxl.utils import get_column_letter
 
 
 class BaseExcelExporter:
+    FILE_EXTENSION = "xlsx"
+
     def __init__(self):
         self.wb = openpyxl.Workbook()
         self.ws = self.wb.active
@@ -36,7 +38,7 @@ class BaseExcelExporter:
 
         # 设置纸张大小为 A4
         self.ws.sheet_properties.pageSetUpPr.fitToPage = True
-        self.ws.page_setup.paperSize = self.ws.page_setup.PAPERSIZE_A4
+        # self.ws.page_setup.paperSize = self.ws.page_setup.PAPERSIZE_A4
 
     def set_cell_style(self, cell, font_name='宋体', font_size=11, bold=False, align_h='center', align_v='center',
                        border=True):
