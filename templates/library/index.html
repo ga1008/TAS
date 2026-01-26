@@ -117,6 +117,7 @@
                 <button onclick="setCategory('syllabus')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="syllabus">1. 教学大纲</button>
                 <button onclick="setCategory('plan')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="plan">2. 考核计划</button>
                 <button onclick="setCategory('standard')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="standard">3. 评分细则</button>
+                <button onclick="setCategory('score_sheet')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="score_sheet">8. 考核登分表</button>
                 <button onclick="setCategory('exam')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="exam">9. 期末试卷</button>
                 <button onclick="setCategory('other')" class="tab-btn pb-3 text-sm font-bold text-slate-500 hover:text-slate-700 border-b-2 border-transparent hover:border-slate-300 transition-colors" data-cat="other">其他资料</button>
             </div>
@@ -181,14 +182,19 @@
                     <button onclick="switchView('metadata')" class="view-tab px-3 py-1.5 rounded-md text-xs font-bold transition-all text-slate-500 hover:text-slate-700" data-view="metadata">
                         <i class="fas fa-tags mr-1"></i> 元数据
                     </button>
+                    <!-- T016: Score sheet view tab (hidden by default, shown only for score_sheet docs) -->
+                    <button onclick="switchView('scoreSheet')" class="view-tab px-3 py-1.5 rounded-md text-xs font-bold transition-all text-slate-500 hover:text-slate-700 hidden" data-view="scoreSheet" id="scoreSheetTab">
+                        <i class="fas fa-table mr-1"></i> 成绩表
+                    </button>
                 </div>
 
                 <div id="previewActionGroup" class="hidden flex items-center gap-2 mr-2 border-l border-slate-200 pl-4">
                     <button id="btnSaveAll" onclick="saveAllChanges()" class="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center shadow-indigo-200">
                         <i class="fas fa-save mr-1.5"></i> 保存
                     </button>
-                    <button onclick="goToExportPage()" class="px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 transition border border-transparent">
-                        <i class="fas fa-file-word mr-1"></i> 导出
+                    <!-- T019: Export button - shows fa-file-excel for score_sheet, fa-file-word otherwise -->
+                    <button onclick="goToExportPage()" id="btnExport" class="px-3 py-1.5 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 transition border border-transparent">
+                        <i class="fas fa-file-word mr-1" id="exportIcon"></i> <span id="exportLabel">导出</span>
                     </button>
                 </div>
 
@@ -236,6 +242,53 @@
                     <div class="mt-4 text-xs text-slate-400 flex items-center gap-1">
                         <i class="fas fa-lightbulb"></i>
                         <span>元数据用于文档分类、筛选和导出时的自动填充。</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- T016: Score Sheet View (editable student grades table) -->
+            <div id="viewScoreSheet" class="view-panel absolute inset-0 hidden opacity-0 transition-opacity duration-200 overflow-y-auto custom-scrollbar bg-slate-50">
+                <div class="p-6">
+                    <!-- Header with stats -->
+                    <div class="bg-white rounded-xl p-4 mb-4 border border-slate-100 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div class="bg-teal-50 text-teal-600 w-10 h-10 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-table"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-slate-700">学生成绩表</h4>
+                                    <p class="text-xs text-slate-400" id="scoreSheetStats">加载中...</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] bg-amber-50 text-amber-600 px-2 py-1 rounded border border-amber-100">
+                                    <i class="fas fa-edit mr-1"></i> 点击单元格编辑
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Editable grades table -->
+                    <div class="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm" id="scoreSheetTable">
+                                <thead class="bg-slate-50 border-b border-slate-100">
+                                    <tr id="scoreSheetHeader">
+                                        <!-- Dynamic headers -->
+                                    </tr>
+                                </thead>
+                                <tbody id="scoreSheetBody" class="divide-y divide-slate-50">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Footer hint -->
+                    <div class="mt-3 text-xs text-slate-400 flex items-center gap-1">
+                        <i class="fas fa-info-circle"></i>
+                        <span>修改成绩后会自动保存并更新文档内容</span>
                     </div>
                 </div>
             </div>
@@ -988,8 +1041,35 @@
                 tab.classList.remove('hidden');
             });
 
-            // 重置为预览视图
-            switchView('preview');
+            // T016-T019: Score sheet specific handling
+            const scoreSheetTab = document.getElementById('scoreSheetTab');
+            const exportIcon = document.getElementById('exportIcon');
+            const exportLabel = document.getElementById('exportLabel');
+
+            if (state.currentDocType === 'score_sheet') {
+                // Show score sheet tab
+                scoreSheetTab.classList.remove('hidden');
+
+                // T019: Update export button to show Excel icon
+                exportIcon.className = 'fas fa-file-excel mr-1 text-emerald-600';
+                exportLabel.innerText = '导出Excel';
+
+                // Load score sheet data for the editable table
+                await loadScoreSheetData(fileDetail.meta_info);
+
+                // Default to score sheet view for score_sheet documents
+                switchView('scoreSheet');
+            } else {
+                // Hide score sheet tab for non-score_sheet documents
+                scoreSheetTab.classList.add('hidden');
+
+                // Reset export button to Word icon
+                exportIcon.className = 'fas fa-file-word mr-1';
+                exportLabel.innerText = '导出';
+
+                // 重置为预览视图
+                switchView('preview');
+            }
 
         } catch(e) {
             console.error(e);
@@ -1332,6 +1412,7 @@
         if(cat === 'standard') return { bg: 'bg-emerald-50', color: 'text-emerald-500', fa: 'fa-list-check' };
         if(cat === 'syllabus') return { bg: 'bg-amber-50', color: 'text-amber-600', fa: 'fa-book-open' };
         if(cat === 'plan') return { bg: 'bg-indigo-50', color: 'text-indigo-600', fa: 'fa-clipboard-list' };
+        if(cat === 'score_sheet') return { bg: 'bg-teal-50', color: 'text-teal-600', fa: 'fa-table' };
         return { bg: 'bg-slate-100', color: 'text-slate-500', fa: 'fa-file-alt' };
     }
 
@@ -1346,6 +1427,265 @@
         console.log('allFiles:', state.allFiles);
         console.log('currentFilter:', state.currentFilter);
     }
+
+    // === T016-T018: Score Sheet Editable Table Functions ===
+
+    // Cache for score sheet data
+    let scoreSheetData = null;
+
+    async function loadScoreSheetData(metaInfo) {
+        const sourceClassId = metaInfo?.source_class_id;
+        if (!sourceClassId) {
+            document.getElementById('scoreSheetStats').innerText = '无关联班级';
+            document.getElementById('scoreSheetBody').innerHTML = `
+                <tr><td colspan="10" class="text-center py-8 text-slate-400">
+                    <i class="fas fa-exclamation-circle mr-2"></i> 此文档未关联班级，无法显示成绩表
+                </td></tr>
+            `;
+            return;
+        }
+
+        try {
+            // Fetch students with grades from the class
+            const res = await fetch(`/api/class/${sourceClassId}/students_with_grades`);
+            if (!res.ok) throw new Error('获取成绩数据失败');
+
+            const students = await res.json();
+            scoreSheetData = {
+                classId: sourceClassId,
+                students: students,
+                questionColumns: extractQuestionColumns(students)
+            };
+
+            renderScoreSheetTable();
+
+            // Update stats
+            const graded = students.filter(s => s.total_score != null).length;
+            const avgScore = graded > 0
+                ? (students.filter(s => s.total_score != null).reduce((sum, s) => sum + (s.total_score || 0), 0) / graded).toFixed(1)
+                : '-';
+            document.getElementById('scoreSheetStats').innerText =
+                `共 ${students.length} 人，已批改 ${graded} 人，平均分 ${avgScore}`;
+
+        } catch (e) {
+            console.error('加载成绩数据失败:', e);
+            document.getElementById('scoreSheetStats').innerText = '加载失败';
+            document.getElementById('scoreSheetBody').innerHTML = `
+                <tr><td colspan="10" class="text-center py-8 text-rose-400">
+                    <i class="fas fa-exclamation-triangle mr-2"></i> ${escapeHtml(e.message)}
+                </td></tr>
+            `;
+        }
+    }
+
+    function extractQuestionColumns(students) {
+        // Extract main question columns from the first student with score_details
+        for (const s of students) {
+            if (s.score_details) {
+                try {
+                    const details = JSON.parse(s.score_details);
+                    if (Array.isArray(details) && details.length > 0) {
+                        // Filter to only main questions (using same logic as backend)
+                        return details.filter(d => isMainQuestion(d.name || '')).map((d, idx) => ({
+                            name: d.name || `题${idx+1}`,
+                            index: idx
+                        }));
+                    }
+                } catch (e) {}
+            }
+        }
+        return [];
+    }
+
+    function isMainQuestion(name) {
+        if (!name) return false;
+        name = name.trim();
+        // Chinese numerals: 一、二、三...
+        if (/^[一二三四五六七八九十]+/.test(name)) return true;
+        // 第X format: 第一、第二、第1、第2...
+        if (/^第[一二三四五六七八九十\d]+/.test(name)) return true;
+        // 任务X format: 任务一、任务1...
+        if (/^任务[一二三四五六七八九十\d]+/.test(name)) return true;
+        return false;
+    }
+
+    function renderScoreSheetTable() {
+        if (!scoreSheetData) return;
+
+        const { students, questionColumns } = scoreSheetData;
+        const headerRow = document.getElementById('scoreSheetHeader');
+        const tbody = document.getElementById('scoreSheetBody');
+
+        // Build header
+        let headerHtml = `
+            <th class="px-3 py-2 text-left text-xs font-bold text-slate-500 uppercase">序号</th>
+            <th class="px-3 py-2 text-left text-xs font-bold text-slate-500 uppercase">学号</th>
+            <th class="px-3 py-2 text-left text-xs font-bold text-slate-500 uppercase">姓名</th>
+        `;
+        questionColumns.forEach((q, idx) => {
+            headerHtml += `<th class="px-3 py-2 text-center text-xs font-bold text-slate-500 uppercase">${escapeHtml(q.name)}</th>`;
+        });
+        headerHtml += `<th class="px-3 py-2 text-center text-xs font-bold text-teal-600 uppercase">总分</th>`;
+        headerHtml += `<th class="px-3 py-2 text-center text-xs font-bold text-slate-500 uppercase">状态</th>`;
+        headerRow.innerHTML = headerHtml;
+
+        // Build body
+        let bodyHtml = '';
+        students.forEach((s, rowIdx) => {
+            let scoreDetails = [];
+            try {
+                scoreDetails = JSON.parse(s.score_details || '[]');
+            } catch (e) {}
+
+            const statusText = s.status === 'PASS' ? '通过' :
+                              s.status === 'ERROR' ? '批改失败' :
+                              s.total_score != null ? '已批改' : '未批改';
+            const statusClass = s.status === 'ERROR' ? 'text-rose-500' :
+                               s.total_score != null ? 'text-emerald-600' : 'text-slate-400';
+
+            bodyHtml += `<tr class="hover:bg-slate-50 transition-colors">`;
+            bodyHtml += `<td class="px-3 py-2 text-slate-400 text-xs">${rowIdx + 1}</td>`;
+            bodyHtml += `<td class="px-3 py-2 text-slate-600 text-sm font-mono">${escapeHtml(s.student_id)}</td>`;
+            bodyHtml += `<td class="px-3 py-2 text-slate-700 text-sm font-medium">${escapeHtml(s.name)}</td>`;
+
+            // Question score cells (editable)
+            questionColumns.forEach((q, qIdx) => {
+                const score = scoreDetails[q.index]?.score ?? '-';
+                const cellId = `cell_${s.student_id}_q_${q.index}`;
+                bodyHtml += `
+                    <td class="px-1 py-1 text-center">
+                        <input type="number" id="${cellId}"
+                               class="w-14 px-2 py-1 text-center text-sm border border-transparent rounded
+                                      hover:border-slate-200 focus:border-teal-400 focus:ring-1 focus:ring-teal-100
+                                      bg-transparent hover:bg-white focus:bg-white outline-none transition-all"
+                               value="${score === '-' ? '' : score}"
+                               data-student-id="${s.student_id}"
+                               data-field="q_${q.index}"
+                               onblur="handleScoreCellBlur(this)"
+                               onkeydown="handleScoreCellKeydown(event, this)">
+                    </td>
+                `;
+            });
+
+            // Total score cell (editable)
+            const totalScore = s.total_score != null ? s.total_score : '-';
+            const totalCellId = `cell_${s.student_id}_total`;
+            bodyHtml += `
+                <td class="px-1 py-1 text-center">
+                    <input type="number" id="${totalCellId}"
+                           class="w-14 px-2 py-1 text-center text-sm font-bold border border-transparent rounded
+                                  hover:border-teal-200 focus:border-teal-400 focus:ring-1 focus:ring-teal-100
+                                  bg-teal-50 hover:bg-teal-100 focus:bg-white outline-none transition-all text-teal-700"
+                           value="${totalScore === '-' ? '' : totalScore}"
+                           data-student-id="${s.student_id}"
+                           data-field="total"
+                           onblur="handleScoreCellBlur(this)"
+                           onkeydown="handleScoreCellKeydown(event, this)">
+                </td>
+            `;
+
+            bodyHtml += `<td class="px-3 py-2 text-center text-xs ${statusClass}">${statusText}</td>`;
+            bodyHtml += `</tr>`;
+        });
+
+        tbody.innerHTML = bodyHtml || `
+            <tr><td colspan="${3 + questionColumns.length + 2}" class="text-center py-8 text-slate-400">
+                暂无学生数据
+            </td></tr>
+        `;
+    }
+
+    // T017: Handle cell edit blur - auto save
+    async function handleScoreCellBlur(input) {
+        const studentId = input.dataset.studentId;
+        const field = input.dataset.field;
+        const value = input.value.trim();
+
+        // Skip if empty or no change
+        if (!value && value !== '0') return;
+
+        const numValue = parseFloat(value);
+        if (isNaN(numValue)) {
+            showToast('请输入有效数字', 'error');
+            return;
+        }
+
+        // Show saving indicator
+        input.classList.add('bg-amber-50', 'border-amber-300');
+
+        try {
+            const res = await fetch('/api/update_score_cell', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    asset_id: state.currentPreviewId,
+                    student_id: studentId,
+                    field: field,
+                    value: numValue
+                })
+            });
+
+            const data = await res.json();
+            if (data.status === 'success') {
+                // T018: Update total score if a question score was changed
+                if (field.startsWith('q_')) {
+                    const totalInput = document.getElementById(`cell_${studentId}_total`);
+                    if (totalInput && data.new_total !== undefined) {
+                        totalInput.value = data.new_total;
+                        // Flash effect on total
+                        totalInput.classList.add('bg-emerald-100');
+                        setTimeout(() => totalInput.classList.remove('bg-emerald-100'), 500);
+                    }
+                }
+
+                input.classList.remove('bg-amber-50', 'border-amber-300');
+                input.classList.add('bg-emerald-50', 'border-emerald-300');
+                setTimeout(() => {
+                    input.classList.remove('bg-emerald-50', 'border-emerald-300');
+                }, 500);
+
+                // Refresh preview content (markdown)
+                const parser = (typeof marked !== 'undefined' && marked.parse) ? marked.parse : (t => t);
+                const fileRes = await fetch(`/api/file_detail/${state.currentPreviewId}`);
+                const fileData = await fileRes.json();
+                if (fileData.status === 'success') {
+                    document.getElementById('editContent').value = fileData.file.parsed_content || '';
+                    document.getElementById('viewPreview').innerHTML = parser(fileData.file.parsed_content || '');
+                }
+
+            } else {
+                throw new Error(data.msg || '保存失败');
+            }
+        } catch (e) {
+            console.error('保存成绩失败:', e);
+            input.classList.remove('bg-amber-50', 'border-amber-300');
+            input.classList.add('bg-rose-50', 'border-rose-300');
+            showToast('保存失败: ' + e.message, 'error');
+            setTimeout(() => {
+                input.classList.remove('bg-rose-50', 'border-rose-300');
+            }, 2000);
+        }
+    }
+
+    // Handle Enter key to move to next cell
+    function handleScoreCellKeydown(event, input) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            input.blur();
+
+            // Move to next input
+            const allInputs = Array.from(document.querySelectorAll('#scoreSheetBody input[type="number"]'));
+            const currentIdx = allInputs.indexOf(input);
+            if (currentIdx >= 0 && currentIdx < allInputs.length - 1) {
+                allInputs[currentIdx + 1].focus();
+                allInputs[currentIdx + 1].select();
+            }
+        } else if (event.key === 'Escape') {
+            input.blur();
+        }
+    }
+
+    // === END Score Sheet Functions ===
 
     // --- 暴露函数到全局作用域（供 onclick 调用）---
     window.refreshAll = refreshAll;

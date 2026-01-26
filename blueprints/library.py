@@ -670,3 +670,120 @@ def api_delete_student_detail(detail_id):
     except Exception as e:
         traceback.print_exc()
         return jsonify({"msg": f"删除失败: {str(e)}"}), 500
+
+
+# === T015: Score Sheet Cell Update API ===
+
+@bp.route('/api/update_score_cell', methods=['POST'])
+def update_score_cell():
+    """
+    T015: Update individual student score cell in a score sheet document.
+
+    Updates the grade in the grades table and regenerates the score document's markdown content.
+
+    Request body:
+    {
+        "asset_id": 123,              # file_assets.id for the score sheet document
+        "student_id": "202401001",    # Student ID
+        "field": "total" | "q_0" | "q_1" ...,  # Which field to update
+        "value": 85                   # New score value
+    }
+    """
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    data = request.json or {}
+    asset_id = data.get('asset_id')
+    student_id = str(data.get('student_id', '')).strip()
+    field = data.get('field', '')
+    value = data.get('value')
+
+    if not asset_id or not student_id or not field:
+        return jsonify({"msg": "参数错误: 缺少 asset_id, student_id 或 field"}), 400
+
+    try:
+        value = float(value) if value is not None else 0
+    except (ValueError, TypeError):
+        return jsonify({"msg": "参数错误: value 必须是数字"}), 400
+
+    # 1. Get the score sheet document and its source_class_id
+    record = db.get_file_by_id(asset_id)
+    if not record:
+        return jsonify({"msg": "文档不存在"}), 404
+
+    if record.get('doc_category') != 'score_sheet':
+        return jsonify({"msg": "此文档不是考核登分表"}), 400
+
+    # Parse meta_info to get source_class_id
+    meta_info = {}
+    if record.get('meta_info'):
+        try:
+            meta_info = json.loads(record['meta_info'])
+        except:
+            pass
+
+    source_class_id = meta_info.get('source_class_id')
+    if not source_class_id:
+        return jsonify({"msg": "此文档未关联班级，无法编辑成绩"}), 400
+
+    # 2. Get the student's current grade
+    conn = db.get_connection()
+    grade_row = conn.execute(
+        "SELECT * FROM grades WHERE class_id=? AND student_id=?",
+        (source_class_id, student_id)
+    ).fetchone()
+
+    if not grade_row:
+        return jsonify({"msg": f"未找到学生 {student_id} 的成绩记录"}), 404
+
+    # 3. Update the score
+    try:
+        score_details = json.loads(grade_row['score_details'] or '[]')
+    except:
+        score_details = []
+
+    if field == 'total':
+        # Directly update total score
+        new_total = value
+    elif field.startswith('q_'):
+        # Update a specific question score
+        q_idx = int(field.replace('q_', ''))
+        if 0 <= q_idx < len(score_details):
+            score_details[q_idx]['score'] = value
+        # Recalculate total from score_details
+        new_total = sum(item.get('score', 0) or 0 for item in score_details)
+    else:
+        return jsonify({"msg": f"未知字段: {field}"}), 400
+
+    # 4. Save the updated grade
+    conn.execute(
+        "UPDATE grades SET total_score=?, score_details=? WHERE class_id=? AND student_id=?",
+        (new_total, json.dumps(score_details, ensure_ascii=False), source_class_id, student_id)
+    )
+    conn.commit()
+
+    # 5. Regenerate the score document's markdown content
+    from services.score_document_service import ScoreDocumentService
+    try:
+        new_metadata = ScoreDocumentService.build_metadata(source_class_id)
+        new_content = ScoreDocumentService.build_markdown_content(source_class_id, new_metadata)
+
+        # Update the file_assets record
+        db.update_file_parsed_content(asset_id, new_content)
+        db.update_file_metadata(
+            file_id=asset_id,
+            meta_info=new_metadata,
+            doc_category='score_sheet',
+            course_name=new_metadata.get('course_name'),
+            academic_year=None
+        )
+    except Exception as e:
+        # Log but don't fail - the grade is already updated
+        traceback.print_exc()
+
+    return jsonify({
+        "status": "success",
+        "msg": "成绩更新成功",
+        "new_total": new_total,
+        "score_details": score_details
+    })

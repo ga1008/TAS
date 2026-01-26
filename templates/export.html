@@ -127,15 +127,17 @@
         const currentFileMeta = {{ (file.meta_info or '{}') | safe }};
         const currentUserName = {{ user.username | tojson | safe }};
         const fileId = {{ file.id }};
+        const docCategory = {{ (file.doc_category or 'other') | tojson | safe }};
 
         let signatureCache = [];
+        let scoreSheetConfig = null;  // T009: 缓存考核登分表配置
 
         document.addEventListener('DOMContentLoaded', async () => {
             const loader = document.getElementById('templateList');
 
             try {
-                // 1. 强制等待所有数据（模板+签名）都加载完成
-                await Promise.all([loadTemplates(), loadSignatures()]);
+                // 1. 强制等待所有数据（模板+签名+考核登分表配置）都加载完成
+                await Promise.all([loadTemplates(), loadSignatures(), loadScoreSheetConfig()]);
 
                 // 2. 数据全部就绪后，再执行默认选中逻辑
                 // 这样能确保渲染表单时，signatureCache 已经有值了
@@ -155,6 +157,21 @@
                     console.log(`[Init] Loaded ${signatureCache.length} signatures.`);
                 }
             } catch(e) { console.error('签名加载失败', e); }
+        }
+
+        // T009: 加载考核登分表导出配置
+        async function loadScoreSheetConfig() {
+            if (docCategory !== 'score_sheet') return;
+            try {
+                const res = await fetch(`/api/export/score_sheet/${fileId}/config`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        scoreSheetConfig = data.export_config;
+                        console.log('[Init] Loaded score sheet config:', scoreSheetConfig);
+                    }
+                }
+            } catch(e) { console.error('考核登分表配置加载失败', e); }
         }
 
         async function loadTemplates() {
@@ -286,6 +303,12 @@
                 }
             });
 
+            // T009: 渲染动态题目分值字段（仅考核登分表且有配置时）
+            if (scoreSheetConfig && scoreSheetConfig.question_fields && scoreSheetConfig.question_fields.length > 0) {
+                const questionFieldsHtml = renderDynamicQuestionFields(scoreSheetConfig.question_fields);
+                container.insertAdjacentHTML('beforeend', questionFieldsHtml);
+            }
+
             // 动画显示表单区域
             section.classList.remove('hidden');
             requestAnimationFrame(() => section.classList.remove('opacity-0'));
@@ -376,6 +399,41 @@
             `;
         }
 
+        // T009: 渲染动态题目分值字段
+        function renderDynamicQuestionFields(questionFields) {
+            if (!questionFields || questionFields.length === 0) return '';
+
+            const commonClasses = "w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-sky-400 transition-colors bg-white focus:ring-2 focus:ring-sky-50";
+
+            let fieldsHtml = questionFields.map((q, idx) => `
+                <div class="flex-1 min-w-[80px]">
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">${q.label || q.name}</label>
+                    <input type="number"
+                           name="question_score_${idx}"
+                           data-question-name="${q.name}"
+                           value="${q.max_score || 0}"
+                           class="${commonClasses} text-center"
+                           min="0"
+                           max="100"
+                           step="1">
+                </div>
+            `).join('');
+
+            return `
+                <div class="bg-teal-50/50 p-4 rounded-xl border border-teal-200">
+                    <label class="block text-xs font-bold text-teal-700 mb-3 border-l-2 border-teal-500 pl-2">
+                        <i class="fas fa-table mr-1"></i> 各大题满分配置
+                    </label>
+                    <div class="flex flex-wrap gap-3">
+                        ${fieldsHtml}
+                    </div>
+                    <p class="text-[10px] text-teal-500 mt-2">
+                        <i class="fas fa-info-circle mr-1"></i> 已从成绩文档自动识别 ${questionFields.length} 道大题，可根据需要调整满分值
+                    </p>
+                </div>
+            `;
+        }
+
         // 初始化签名选择器：填充选项 + 绑定自动匹配
         function initSigSelector(fieldName, bindToName) {
             const select = document.querySelector(`select[name="${fieldName}"]`);
@@ -456,6 +514,21 @@
             const formData = new FormData(document.getElementById('dynamicForm'));
             const json = {};
             formData.forEach((value, key) => json[key] = value);
+
+            // T010: Collect dynamic question scores into array (for score_sheet documents)
+            if (scoreSheetConfig && scoreSheetConfig.question_fields) {
+                const questionScoresArray = [];
+                scoreSheetConfig.question_fields.forEach((q, idx) => {
+                    const input = document.querySelector(`input[name="question_score_${idx}"]`);
+                    if (input) {
+                        questionScoresArray.push({
+                            name: q.name,
+                            score: parseInt(input.value) || 0
+                        });
+                    }
+                });
+                json.question_scores_array = questionScoresArray;
+            }
 
             // 获取选中的模板
             const tplInput = document.querySelector('input[name="template"]:checked');

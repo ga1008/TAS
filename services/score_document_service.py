@@ -5,10 +5,88 @@
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime
 
 from extensions import db
 from utils.academic_year import infer_academic_year_semester
+
+
+def is_main_question(name: str) -> bool:
+    """
+    判断题目名称是否为大题
+
+    大题规则:
+    - 以中文数字开头 (一、二、三...)
+    - 以 "第X" 格式开头 (第一、第二...)
+    - 以 "任务X" 格式开头 (任务一、任务1...)
+
+    小题规则:
+    - 以阿拉伯数字开头 (1、2、1.1、2.1...)
+
+    Args:
+        name: 题目名称
+
+    Returns:
+        True if 大题, False if 小题
+    """
+    if not name or not isinstance(name, str):
+        return False
+
+    name = name.strip()
+
+    # 中文数字: 一、二、三...
+    if re.match(r'^[一二三四五六七八九十]+', name):
+        return True
+
+    # "第X" 格式: 第一、第二、第1、第2...
+    if re.match(r'^第[一二三四五六七八九十\d]+', name):
+        return True
+
+    # 任务X 格式: 任务一、任务1...
+    if re.match(r'^任务[一二三四五六七八九十\d]+', name):
+        return True
+
+    return False
+
+
+def aggregate_main_questions(score_details):
+    """
+    从 score_details 中提取大题，聚合小题分数
+
+    Args:
+        score_details: 原始分项成绩列表 [{"name": "1.1", "score": 10}, ...]
+
+    Returns:
+        Tuple[main_scores, question_meta]:
+        - main_scores: [{"name": "第一大题", "score": 30}, ...] 用于显示
+        - question_meta: [{"name": "第一大题", "max_score": 30}, ...] 用于元数据
+    """
+    if not score_details or not isinstance(score_details, list):
+        return [], []
+
+    main_scores = []
+    question_meta = []
+
+    for item in score_details:
+        if not isinstance(item, dict):
+            continue
+
+        name = item.get('name', '')
+        score = item.get('score', 0)
+
+        # 只保留大题
+        if is_main_question(name):
+            main_scores.append({
+                'name': name,
+                'score': score if score is not None else 0
+            })
+            question_meta.append({
+                'name': name,
+                'max_score': score if score is not None else 0
+            })
+
+    return main_scores, question_meta
 
 
 class ScoreDocumentService:
@@ -59,7 +137,7 @@ class ScoreDocumentService:
                 'physical_path': None,
                 'parsed_content': content,
                 'meta_info': json.dumps(metadata, ensure_ascii=False),
-                'doc_category': 'other',
+                'doc_category': 'score_sheet',
                 'course_name': metadata.get('course_name'),
                 'source_class_id': class_id,
                 'uploaded_by': user_id
@@ -148,6 +226,23 @@ class ScoreDocumentService:
             metadata['average_score'] = 0
             metadata['pass_rate'] = 0
 
+        # === 大题分数元数据 (T005) ===
+        # 从第一个有 score_details 的学生获取大题信息
+        question_scores = []
+        for s in graded:
+            if s.get('score_details'):
+                try:
+                    details = json.loads(s['score_details'])
+                    if isinstance(details, list):
+                        _, question_scores = aggregate_main_questions(details)
+                        break
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        metadata['question_scores'] = question_scores
+        metadata['total_max_score'] = sum(q.get('max_score', 0) for q in question_scores) if question_scores else 0
+        # === END 大题分数元数据 ===
+
         return metadata
 
     @staticmethod
@@ -189,14 +284,19 @@ class ScoreDocumentService:
             "",
         ])
 
-        # 获取分项成绩列名（从第一个有成绩的学生获取）
+        # 获取分项成绩列名（从第一个有成绩的学生获取）- 仅保留大题 (T006)
         score_columns = []
         for s in students:
             if s.get('score_details'):
                 try:
                     details = json.loads(s['score_details'])
                     if isinstance(details, list):
-                        score_columns = [d.get('name', f'题{i+1}') for i, d in enumerate(details)]
+                        # 仅保留大题列名
+                        score_columns = [
+                            d.get('name', f'题{i+1}')
+                            for i, d in enumerate(details)
+                            if is_main_question(d.get('name', ''))
+                        ]
                         break
                 except:
                     pass
@@ -219,7 +319,7 @@ class ScoreDocumentService:
             name = s.get('name', '')
             gender = s.get('gender', '') or '-'
 
-            # 解析分项成绩
+            # 解析分项成绩 - 仅保留大题 (T006)
             scores = {}
             if s.get('score_details'):
                 try:
@@ -227,7 +327,9 @@ class ScoreDocumentService:
                     if isinstance(details, list):
                         for i, d in enumerate(details):
                             col_name = d.get('name', f'题{i+1}')
-                            scores[col_name] = d.get('score', '-')
+                            # 仅保留大题分数
+                            if is_main_question(col_name):
+                                scores[col_name] = d.get('score', '-')
                 except:
                     pass
 

@@ -130,3 +130,66 @@ def export_word_v2():
         import traceback
         traceback.print_exc()
         return jsonify({"msg": f"导出失败: {str(e)}"}), 500
+
+
+@bp.route('/api/export/score_sheet/<int:asset_id>/config')
+def get_score_sheet_export_config(asset_id):
+    """
+    获取考核登分表的 Excel 导出配置
+
+    返回动态字段配置，用于前端生成表单
+
+    Returns:
+        {
+            "status": "success",
+            "export_config": {
+                "auto_fill": {...},  // 自动填充字段
+                "question_fields": [{"name": ..., "max_score": ...}, ...],
+                "total_score": ...
+            }
+        }
+    """
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    file_record = db.get_file_by_id(asset_id)
+    if not file_record:
+        return jsonify({"msg": "文档不存在"}), 404
+
+    if file_record.get('doc_category') != 'score_sheet':
+        return jsonify({"msg": "该文档不是考核登分表类型"}), 400
+
+    # 解析 meta_info
+    meta_info = {}
+    if file_record.get('meta_info'):
+        try:
+            meta_info = json.loads(file_record['meta_info'])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # 构建导出配置
+    question_scores = meta_info.get('question_scores', [])
+
+    export_config = {
+        "auto_fill": {
+            "course_name": meta_info.get('course_name', ''),
+            "course_code": meta_info.get('course_code', ''),
+            "class_name": meta_info.get('class_name', ''),
+            "teacher": meta_info.get('teacher', ''),
+            "academic_year_semester": meta_info.get('academic_year_semester', '')
+        },
+        "question_fields": [
+            {
+                "name": q.get('name', f'题目{i+1}'),
+                "label": q.get('name', f'第{i+1}题'),
+                "max_score": q.get('max_score', 0)
+            }
+            for i, q in enumerate(question_scores)
+        ],
+        "total_score": meta_info.get('total_max_score', 100)
+    }
+
+    return jsonify({
+        "status": "success",
+        "export_config": export_config
+    })

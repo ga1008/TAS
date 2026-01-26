@@ -42,19 +42,33 @@ class MachineTestScoreExporter(BaseExportTemplate, BaseExcelExporter):
         teacher_name = form_data.get('teacher_name', '')
         total_score = form_data.get('total_score', '100')
 
-        # 解析题目配置
-        q_config_str = form_data.get('questions_config', "一:20,二:30,三:20,四:30")
-        # 格式化为 list: [{'name': '一', 'score': '20'}, ...]
+        # 解析题目配置 - 支持新旧两种格式 (T011)
+        # 新格式：[{"name": "一", "score": 20}, ...] (从 question_scores_array 传入)
+        # 旧格式："一:20,二:30,三:20,四:30" (从 questions_config 传入)
         questions = []
-        try:
-            for item in q_config_str.split(','):
-                parts = item.split(':')
-                if len(parts) >= 2:
-                    questions.append({'name': parts[0].strip(), 'score': parts[1].strip()})
-                elif len(parts) == 1:
-                    questions.append({'name': f"题{len(questions) + 1}", 'score': parts[0].strip()})
-        except:
-            questions = [{'name': '一', 'score': '100'}]  # Fallback
+
+        # 优先使用新格式 (动态表单传入的数组)
+        question_scores_array = form_data.get('question_scores_array', [])
+        if question_scores_array and isinstance(question_scores_array, list):
+            for item in question_scores_array:
+                if isinstance(item, dict):
+                    questions.append({
+                        'name': str(item.get('name', '')),
+                        'score': str(item.get('score', 0))
+                    })
+
+        # Fallback: 使用旧格式 (文本输入)
+        if not questions:
+            q_config_str = form_data.get('questions_config', "一:20,二:30,三:20,四:30")
+            try:
+                for item in q_config_str.split(','):
+                    parts = item.split(':')
+                    if len(parts) >= 2:
+                        questions.append({'name': parts[0].strip(), 'score': parts[1].strip()})
+                    elif len(parts) == 1:
+                        questions.append({'name': f"题{len(questions) + 1}", 'score': parts[0].strip()})
+            except:
+                questions = [{'name': '一', 'score': '100'}]  # Fallback
 
         num_questions = len(questions)
 

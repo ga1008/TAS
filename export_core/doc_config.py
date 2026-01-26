@@ -7,7 +7,8 @@ class DocumentTypeConfig:
         "standard": "评分细则",
         "syllabus": "教学大纲",
         "plan": "考核计划",
-        "student_list": "学生名单"
+        "student_list": "学生名单",
+        "score_sheet": "考核登分表"
     }
 
     # ==================== 字段配置 Schema ====================
@@ -93,6 +94,20 @@ class DocumentTypeConfig:
                 {"key": "college", "label": "学院", "type": "text", "placeholder": "如: 数字科技学院"},
                 {"key": "enrollment_year", "label": "入学年份", "type": "text", "placeholder": "如: 2024"},
                 {"key": "education_type", "label": "培养类型", "type": "select", "options": ["普本", "专升本", "专科"]}
+            ]
+        },
+        "score_sheet": {
+            "label": "考核登分表元数据",
+            "fields": [
+                {"key": "academic_year_semester", "label": "学年学期", "type": "text", "placeholder": "如: 2025-2026学年度第一学期"},
+                {"key": "course_name", "label": "课程名称", "type": "text", "required": True},
+                {"key": "course_code", "label": "课程编号", "type": "text", "placeholder": "如: E020001B4"},
+                {"key": "class_name", "label": "班级名称", "type": "text"},
+                {"key": "teacher", "label": "任课教师", "type": "text"},
+                {"key": "student_count", "label": "学生人数", "type": "number"},
+                {"key": "graded_count", "label": "已批改人数", "type": "number"},
+                {"key": "average_score", "label": "平均分", "type": "number"},
+                {"key": "pass_rate", "label": "及格率", "type": "number"}
             ]
         }
     }
