@@ -99,6 +99,7 @@ def export_word_v2():
 
     # 生成文件
     ext = getattr(exporter, 'FILE_EXTENSION', 'docx')
+    doc_type = file_record.get('doc_category', 'general')
 
     # === [改进] 智能文件名生成 ===
     # 使用新的文件名生成工具，支持完整的元数据和文件类型匹配
@@ -107,7 +108,7 @@ def export_word_v2():
         form_data=form_data,
         file_type=ext,
         use_ai=False,  # 暂时不使用 AI，保持快速响应
-        doc_type='general'
+        doc_type=doc_type
     )
 
     # 生成本地保存路径（使用 UUID 避免冲突）
@@ -115,16 +116,20 @@ def export_word_v2():
     save_path = os.path.join(Config.UPLOAD_FOLDER, save_filename)
 
     try:
+        content = file_record['parsed_content']
+        meta_info = json.loads(file_record.get('meta_info') or '{}')
         exporter.generate(content, meta_info, form_data, save_path)
 
-        # === [改进] MIME type 根据 ext 自动选择 ===
-        if ext == 'xlsx':
-            mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        else:
-            mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        # 4. 适配 MIME Type
+        mime_map = {
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'pdf': 'application/pdf'
+        }
+        mimetype = mime_map.get(ext, 'application/octet-stream')
 
+        # 使用处理好的 download_filename 返回给前端
         return send_file(save_path, as_attachment=True, download_name=download_filename, mimetype=mimetype)
-
     except Exception as e:
         import traceback
         traceback.print_exc()

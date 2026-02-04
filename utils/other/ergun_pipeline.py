@@ -39,8 +39,10 @@ if not os.path.isfile(PDF_PATH):
     raise FileNotFoundError(f"PDF文件未找到：{PDF_PATH}")
 OUT_DIR = os.path.dirname(PDF_PATH)   # 输出目录
 
-BASE_URL = "https://xiaoai.plus/v1"
-API_KEY = input("请输入OpenAI API Key：").strip()  # 输入API Key
+# BASE_URL = "https://xiaoai.plus/v1/"
+BASE_URL = "http://127.0.0.1:23333/v1/"
+# API_KEY = input("请输入OpenAI API Key：").strip()  # 输入API Key
+API_KEY = "cs-sk-f0fd0228-4540-470f-8237-789684ac5f7e"
 MODEL = input("输入模型ID（如 gpt-4-turbo-0613）：").strip() or "gpt-4o"
 
 # Narrative anchors
@@ -48,9 +50,9 @@ START_SENT = "我是雨和雪的老熟人了，我有九十岁了。"
 END_SENT = "我落泪了，因为我已分不清天上人间了。"
 
 # Chunk sizing (chars, after whitespace normalization; Chinese chars ~ tokens close to 1:1)
-CHUNK_MIN_CHARS = 1000
-CHUNK_TARGET_CHARS = 1500
-CHUNK_MAX_CHARS = 2000
+CHUNK_MIN_CHARS = 500
+CHUNK_TARGET_CHARS = 1000
+CHUNK_MAX_CHARS = 1500
 
 # Retry policy
 MAX_RETRIES = 4
@@ -591,9 +593,9 @@ def call_ai_for_chunk(client: OpenAI, chunk: Chunk, cache_dir: str) -> Dict[str,
                         {"role": "user", "content": user_msg},
                     ],
                     temperature=0.0,
-                    timeout=300.0,
+                    timeout=600.0,
                     # 可选：限制输出，避免超大响应拖慢（视模型/平台支持情况）
-                    max_tokens=12000,
+                    # max_tokens=12000,
                 )
                 msg = resp.choices[0].message
                 content = extract_visible_text_from_choice_message(msg)
