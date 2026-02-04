@@ -57,6 +57,8 @@ docker-compose up
 ### 数据流程
 1. 管理员通过 `/admin` 配置 AI 厂商/模型
 2. 教师上传试卷 + 评分标准 → AI 生成 Python 批改脚本 → 保存至 `grading_core/graders/`
+   - **逻辑核心**: AI 生成 Python 代码，本地快速批改。支持 `extra_prompt` 字段提供额外生成指导（如文件名模糊匹配）。
+   - **AI 直接核心**: AI 直接批改，支持多模态（图片、视频、PDF）。使用 Volcengine Files API 处理大文件。
 3. 教师创建班级，上传学生名单
 4. 学生提交作业（自动解压 zip/rar）
 5. 系统对每份提交运行批改脚本

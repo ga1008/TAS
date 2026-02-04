@@ -106,6 +106,31 @@
         </div>
     {% endif %}
 
+    <!-- Feature 001: Extra Prompt for Logic Core Generation -->
+    <div class="md:col-span-2 space-y-2 mt-2">
+        <div class="flex justify-between items-center px-1">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <i class="fas fa-lightbulb mr-1 text-amber-500"></i> 额外生成提示
+            </label>
+            <span id="extraPromptCounter" class="text-[10px] text-slate-400 font-medium">0 / 2000</span>
+        </div>
+        <div class="glass-panel rounded-xl p-1">
+            <textarea
+                name="extra_prompt"
+                id="extra_prompt"
+                rows="4"
+                maxlength="5000"
+                placeholder="示例提示词：&#10;- 学生可能将 test1.py 错写成 test01.py 或 test_1.py，请使用模糊匹配&#10;- 允许学生提交 PDF 格式的实验报告，提取其中的代码部分&#10;- 对代码中的注释进行检查，确保有适当的函数注释和行内注释"
+                class="w-full bg-white/50 border border-slate-200 text-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all resize-none text-sm leading-relaxed"
+                oninput="updateExtraPromptCounter(this)"
+            >{{ ref_task['extra_prompt'] if ref_task else '' }}</textarea>
+        </div>
+        <div id="extraPromptWarning" class="hidden text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-2">
+            <i class="fas fa-exclamation-triangle mt-0.5"></i>
+            <span>提示词超过 2000 字符，可能增加 Token 消耗。建议精简内容。</span>
+        </div>
+    </div>
+
     <div class="md:col-span-2 mt-6 pt-4 border-t border-slate-100">
         <button type="submit" id="btnSubmit" class="w-full bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-slate-900 hover:shadow-xl transition-all flex items-center justify-center gap-2 transform active:scale-95 duration-200">
             <i class="fas fa-magic text-indigo-400"></i>

@@ -216,6 +216,37 @@
     }
 
     // ===========================
+    // Feature 001: Extra Prompt Character Counter
+    // ===========================
+    function updateExtraPromptCounter(textarea) {
+        const count = textarea.value.length;
+        const counter = document.getElementById('extraPromptCounter');
+        const warning = document.getElementById('extraPromptWarning');
+        const limit = 2000;
+
+        counter.textContent = `${count} / ${limit}`;
+
+        // Update counter color based on count
+        if (count > limit) {
+            counter.classList.remove('text-slate-400');
+            counter.classList.add('text-amber-600', 'font-bold');
+            warning.classList.remove('hidden');
+        } else {
+            counter.classList.add('text-slate-400');
+            counter.classList.remove('text-amber-600', 'font-bold');
+            warning.classList.add('hidden');
+        }
+    }
+
+    // Initialize counter on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const extraPrompt = document.getElementById('extra_prompt');
+        if (extraPrompt) {
+            updateExtraPromptCounter(extraPrompt);
+        }
+    });
+
+    // ===========================
     // 4. 表单提交 - 提交后跳转到核心列表
     // ===========================
     document.getElementById('createForm').addEventListener('submit', function(e) {

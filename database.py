@@ -393,6 +393,7 @@ class Database:
         self._migrate_table(cursor, conn, "ai_tasks", "extra_desc", "TEXT DEFAULT ''")
         self._migrate_table(cursor, conn, "ai_tasks", "max_score", "INTEGER DEFAULT 100")
         self._migrate_table(cursor, conn, "ai_tasks", "course_name", "TEXT DEFAULT ''")
+        self._migrate_table(cursor, conn, "ai_tasks", "extra_prompt", "TEXT DEFAULT ''")  # Feature 001: Extra prompt for logic core generation
         self._migrate_table(cursor, conn, "users", "has_seen_help", "BOOLEAN DEFAULT 0")
         self._migrate_table(cursor, conn, "file_assets", "parsed_content", "TEXT")
         self._migrate_table(cursor, conn, "file_assets", "meta_info", "TEXT")
@@ -887,13 +888,13 @@ class Database:
     # ================= AI 任务相关 =================
     def insert_ai_task(self, name, status="pending", log_info="等待队列中...",
                        exam_path=None, standard_path=None,
-                       strictness='standard', extra_desc='', max_score=100, user_id=1, grader_id=None, course_name=None):
+                       strictness='standard', extra_desc='', max_score=100, user_id=1, grader_id=None, course_name=None, extra_prompt=''):
         conn = self.get_connection()
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO ai_tasks (name, status, log_info, exam_path, standard_path, strictness, extra_desc, max_score, created_by, grader_id, course_name)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (name, status, log_info, exam_path, standard_path, strictness, extra_desc, max_score, user_id, grader_id, course_name)
+            """INSERT INTO ai_tasks (name, status, log_info, exam_path, standard_path, strictness, extra_desc, max_score, created_by, grader_id, course_name, extra_prompt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (name, status, log_info, exam_path, standard_path, strictness, extra_desc, max_score, user_id, grader_id, course_name, extra_prompt)
         )
         conn.commit()
         return cur.lastrowid

@@ -116,6 +116,7 @@ def create_task():
     name = request.form.get('task_name')
     strictness = request.form.get('strictness', 'standard')
     extra_desc = request.form.get('extra_desc', '')
+    extra_prompt = request.form.get('extra_prompt', '')  # Feature 001: Extra prompt for logic core generation
     max_score = int(request.form.get('max_score', 100))
 
     f_exam = request.files.get('exam_file')
@@ -135,7 +136,7 @@ def create_task():
 
     user_id = g.user['id']
     task_id = db.insert_ai_task(name, "pending", "提交中...", exam_path, std_path, strictness, extra_desc, max_score,
-                                user_id, course_name)
+                                user_id, course_name, extra_prompt)  # Feature 001: Add extra_prompt parameter
 
     # 创建任务提交通知
     NotificationService.notify_task_created(user_id, task_id, name)
@@ -143,7 +144,7 @@ def create_task():
     # 启动线程（传入 user_id 和 task_name 以便在状态变更时更新通知）
     app_config = current_app.config  # 传递 config 给线程
     t = threading.Thread(target=AiService.generate_grader_worker,
-                         args=(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config, course_name, user_id, name))
+                         args=(task_id, exam_text, std_text, strictness, extra_desc, extra_prompt, max_score, app_config, course_name, user_id, name))  # Feature 001: Add extra_prompt
     t.start()
 
     # 刷新 AI 欢迎语缓存（在用户生成评分核心后）

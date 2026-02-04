@@ -171,7 +171,7 @@ class AiService:
             return True, json_text, {}
 
     @staticmethod
-    def generate_grader_worker(task_id, exam_text, std_text, strictness, extra_desc, max_score, app_config, course_name, user_id=None, task_name=None):
+    def generate_grader_worker(task_id, exam_text, std_text, strictness, extra_desc, extra_prompt, max_score, app_config, course_name, user_id=None, task_name=None):
         """后台生成任务 (Thread Worker)"""
         from blueprints.notifications import NotificationService
 
@@ -202,7 +202,10 @@ class AiService:
             prompt_parts.append(f"### 4. 分数控制\n满分必须严格等于 **{max_score}分**。")
             if extra_desc: prompt_parts.append(f"### 5. 用户额外指令\n{extra_desc}")
 
-            prompt_parts.append(f"### 6. 输入素材\n---试卷---\n{exam_text}\n---标准---\n{std_text}")
+            # Feature 001: Integrate extra_prompt into AI generation
+            if extra_prompt: prompt_parts.append(f"### 6. 额外生成提示\n{extra_prompt}")
+
+            prompt_parts.append(f"### 7. 输入素材\n---试卷---\n{exam_text}\n---标准---\n{std_text}")
             prompt_parts.append(EXAMPLE_PROMPT)
 
             final_prompt = "\n".join(prompt_parts)
