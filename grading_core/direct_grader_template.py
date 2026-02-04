@@ -67,12 +67,17 @@ class {class_name}(BaseGrader):
         media_count = 0
         SOFT_MEDIA_LIMIT = 5  # 软限制：5个文件时显示警告
         MAX_FILE_SIZE = 512 * 1024 * 1024  # 512 MB
+        MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB - 单张图片大小限制
+        MAX_TEXT_LENGTH = 10000  # 文本内容最大字符数（防止 token 超限）
 
         # 1. 扫描文件
         for root, _, files in os.walk(student_dir):
             for f in files:
                 if f.startswith('.'): continue
                 full_path = os.path.join(root, f)
+
+                # 获取文件扩展名（必须在文件大小检查之前）
+                ext = os.path.splitext(f)[1].lower()
 
                 # 文件大小过滤
                 try:
@@ -81,19 +86,30 @@ class {class_name}(BaseGrader):
                         print(f"[Grader] 跳过超大文件: {{os.path.basename(full_path)}} ({{file_size / 1024 / 1024:.1f}} MB)")
                         self.res.add_deduction(f"跳过文件 {{os.path.basename(full_path)}} (超过512MB限制)")
                         continue
+                    # 额外检查：图片文件大小限制
+                    if ext in ['.jpg', '.png', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.heic']:
+                        if file_size > MAX_IMAGE_SIZE:
+                            print(f"[Grader] 跳过大图片: {{os.path.basename(full_path)}} ({{file_size / 1024 / 1024:.2f}} MB)")
+                            self.res.add_deduction(f"跳过图片 {{os.path.basename(full_path)}} (超过{{MAX_IMAGE_SIZE / 1024 / 1024:.0f}}MB限制，请压缩后重试)")
+                            continue
                 except Exception as e:
                     print(f"[Grader] 无法获取文件大小 {{full_path}}: {{e}}")
                     continue
-
-                ext = os.path.splitext(f)[1].lower()
 
                 # 文本类作业
                 if ext in ['.py', '.java', '.txt', '.md', '.c', '.cpp', '.html', '.css', '.js', '.doc', '.docx']:
                     try:
                         content = self.read_text_content(full_path)
                         if content:
-                            # 注意：这里的双花括号是为了在 format 后保留单花括号
-                            text_content_buffer += f"\\n--- 学生作业文件: {{f}} ---\\n{{content}}\\n"
+                            # 截断过长的文本内容（防止 token 超限）
+                            if len(content) > 3000:  # 单个文件最多 3000 字符
+                                content = content[:3000] + "\\n[内容过长，已截断]"
+                            # 检查总长度
+                            if len(text_content_buffer) < MAX_TEXT_LENGTH:
+                                # 注意：这里的双花括号是为了在 format 后保留单花括号
+                                text_content_buffer += f"\\n--- 学生作业文件: {{f}} ---\\n{{content}}\\n"
+                            else:
+                                print(f"[Grader] 文本内容过长，跳过文件: {{f}}")
                     except Exception as e:
                         print(f"[Grader] 读取文本文件失败 {{full_path}}: {{e}}")
 
@@ -125,10 +141,14 @@ class {class_name}(BaseGrader):
             # 构造 content 列表 (Volcengine Responses API 格式)
             content_list = []
 
-            # 添加文本内容
+            # 添加文本内容 (使用 type: "text" 而不是 "input_text")
             if text_content_buffer:
+                # 截断过长的文本内容（防止 token 超限）
+                if len(text_content_buffer) > MAX_TEXT_LENGTH:
+                    text_content_buffer = text_content_buffer[:MAX_TEXT_LENGTH] + "\\n[内容过长，已截断]"
+                    print(f"[Grader] 文本内容过长，已截断到 {{MAX_TEXT_LENGTH}} 字符")
                 content_list.append({{
-                    "type": "input_text",
+                    "type": "text",
                     "text": f"请根据上述标准对本条作业进行批改。\\n\\n【学生文本作业内容】:\\n{{text_content_buffer}}"
                 }})
 
@@ -151,8 +171,10 @@ class {class_name}(BaseGrader):
                             fid = uploader.upload_file(vf)
                             if fid:
                                 content_list.append({{
-                                    "type": "input_file",
-                                    "file_id": fid
+                                    "type": "video_url",
+                                    "video_url": {{
+                                        "url": fid
+                                    }}
                                 }})
                                 print(f"[Grader] 视频文件已上传: {{os.path.basename(vf)}} -> {{fid}}")
                             else:
@@ -163,15 +185,17 @@ class {class_name}(BaseGrader):
                             fid = uploader.upload_file(vf)
                             if fid:
                                 content_list.append({{
-                                    "type": "input_file",
-                                    "file_id": fid
+                                    "type": "video_url",
+                                    "video_url": {{
+                                        "url": fid
+                                    }}
                                 }})
                                 print(f"[Grader] PDF文件已上传: {{os.path.basename(vf)}} -> {{fid}}")
                             else:
                                 print(f"[Grader] PDF文件上传失败: {{os.path.basename(vf)}}")
                                 self.res.add_deduction(f"PDF文件处理失败: {{os.path.basename(vf)}}")
                         elif is_image:
-                            # 图片：转换为 base64
+                            # 图片：转换为 base64 (使用 type: "image_url" 而不是 "input_image")
                             mime_type, _ = mimetypes.guess_type(vf)
                             if not mime_type:
                                 mime_type = 'image/png'
@@ -180,7 +204,7 @@ class {class_name}(BaseGrader):
                                 b64_str = base64.b64encode(image_file.read()).decode('utf-8')
 
                             content_list.append({{
-                                "type": "input_image",
+                                "type": "image_url",
                                 "image_url": {{
                                     "url": f"data:{{mime_type}};base64,{{b64_str}}"
                                 }}
@@ -232,7 +256,24 @@ class {class_name}(BaseGrader):
 
         except Exception as e:
             self.res.total_score = 0
-            self.res.add_deduction(f"批改服务异常: {{str(e)}}")
+            error_msg = str(e)
+            # 检查是否是 token 超限错误
+            if "Total tokens" in error_msg and "exceed max message tokens" in error_msg:
+                friendly_msg = "作业内容过大（图片或文本过多），请减少图片数量或压缩图片大小后重试"
+                self.res.add_deduction(friendly_msg)
+                print(f"[Grader] Token 超限: {{friendly_msg}}")
+            elif "Upstream API Error" in error_msg:
+                # 提取上游 API 的实际错误信息
+                import re
+                api_error_match = re.search(r"'message':\s*'([^']+)'", error_msg)
+                if api_error_match:
+                    api_error = api_error_match.group(1)
+                    self.res.add_deduction(f"AI 服务错误: {{api_error}}")
+                    print(f"[Grader] API Error: {{api_error}}")
+                else:
+                    self.res.add_deduction(f"批改服务异常: {{error_msg}}")
+            else:
+                self.res.add_deduction(f"批改服务异常: {{error_msg}}")
             import traceback
             traceback.print_exc()
 

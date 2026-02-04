@@ -56,39 +56,72 @@ async def call_ai_platform_chat(
             if platform_type == "volcengine":
                 async with AsyncArk(api_key=api_key, base_url=base_url if base_url else None) as client:
 
-                    # 检查是否包含 file_ids，如果有，必须走 Responses API
+                    # 检查是否包含 file_ids 或多模态 content（content 是列表）
                     has_files = any("file_ids" in m and m["file_ids"] for m in messages)
+                    # 新增：检测 content 是否为列表（多模态内容：图片、视频等）
+                    has_multimodal_content = any(
+                        isinstance(m.get("content"), list)
+                        for m in messages
+                    )
 
-                    if has_files:
-                        # --- 分支 A: 使用 Responses API (支持 File ID / PDF) ---
+                    if has_files or has_multimodal_content:
+                        # --- 分支 A: 使用 Responses API (支持 File ID / PDF / 多模态) ---
 
                         user_content_list = []
-                        current_file_ids = []
-                        current_text = ""
 
-                        # 简单的合并逻辑：把所有 context 里的文件和文本都放到当前输入
-                        for msg in messages:
-                            if "file_ids" in msg:
-                                current_file_ids.extend(msg["file_ids"])
-                            if msg["content"]:
-                                current_text += f"{msg['content']}\n"
+                        # 处理多模态 content（新格式）
+                        if has_multimodal_content:
+                            # 直接使用多模态 content（已经包含 text, image_url, video_url）
+                            for msg in messages:
+                                if isinstance(msg.get("content"), list):
+                                    user_content_list.extend(msg["content"])
 
-                        # 1. 文件部分
-                        for fid in current_file_ids:
-                            real_fid = fid.get("id") if isinstance(fid, dict) else fid
-                            user_content_list.append({
-                                "type": "input_file",
-                                "file_id": real_fid
-                            })
+                        # 处理 file_ids（旧格式兼容）
+                        if has_files:
+                            current_file_ids = []
+                            current_text = ""
 
-                        # 2. 文本部分
-                        full_text = f"{system_prompt}\n\n{current_text}"
-                        user_content_list.append({
-                            "type": "input_text",
-                            "text": full_text
-                        })
+                            # 简单的合并逻辑：把所有 context 里的文件和文本都放到当前输入
+                            for msg in messages:
+                                if "file_ids" in msg:
+                                    current_file_ids.extend(msg["file_ids"])
+                                if msg["content"] and not isinstance(msg["content"], list):
+                                    current_text += f"{msg['content']}\n"
 
-                        # 调用 Stream API
+                            # 1. 文件部分 (视频/PDF使用 video_url)
+                            for fid in current_file_ids:
+                                real_fid = fid.get("id") if isinstance(fid, dict) else fid
+                                user_content_list.append({
+                                    "type": "video_url",
+                                    "video_url": {
+                                        "url": real_fid
+                                    }
+                                })
+
+                            # 2. 文本部分 (使用 text 而不是 input_text)
+                            if current_text:
+                                full_text = f"{system_prompt}\n\n{current_text}"
+                                user_content_list.append({
+                                    "type": "text",
+                                    "text": full_text
+                                })
+                        else:
+                            # 多模态模式下，添加 system_prompt 到第一个 text 元素
+                            for i, item in enumerate(user_content_list):
+                                if item.get("type") == "text":
+                                    user_content_list[i] = {
+                                        "type": "text",
+                                        "text": f"{system_prompt}\n\n{item['text']}"
+                                    }
+                                    break
+                            else:
+                                # 如果没有 text 元素，添加一个
+                                user_content_list.insert(0, {
+                                    "type": "text",
+                                    "text": system_prompt
+                                })
+
+                        # 调用 Responses Stream API
                         stream = await client.responses.create(
                             model=model_name,
                             input=[
