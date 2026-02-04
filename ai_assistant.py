@@ -55,7 +55,6 @@ async def ai_chat_task(req: AIChatRequest):
         # 注意：这里在 async 中调用了同步的 sqlite，对于低并发场景可接受。
         # 高并发建议使用 aiosqlite，但为保持代码一致性，此处直接调用。
         ai_config = db.get_best_ai_config(req.model_capability)
-
         # 降级策略：如果找不到 thinking，找 standard
         if not ai_config and req.model_capability == "thinking":
             print(f"[AI] 未找到 thinking 模型，降级为 standard")

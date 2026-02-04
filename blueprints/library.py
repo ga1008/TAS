@@ -13,6 +13,7 @@ from export_core.doc_config import DocumentTypeConfig
 from extensions import db
 from services.ai_service import AiService
 from services.file_service import FileService
+# 确保这里正确导入了这两个函数
 from utils.common import calculate_file_hash, generate_title_from_content, create_text_asset, extract_title_and_content
 
 bp = Blueprint('library', __name__)
@@ -30,9 +31,6 @@ def _clean_and_validate_students(raw_students):
     seen_ids = set()
     errors = []
 
-    # 获取数据库中已存在的学号（可选：如果需要全局唯一性校验，需在此处查询 DB）
-    # current_db_ids = db.get_all_student_ids(class_id) # 示例
-
     for idx, s in enumerate(raw_students):
         row_num = idx + 1
 
@@ -40,12 +38,10 @@ def _clean_and_validate_students(raw_students):
         raw_id = s.get('student_id', '')
         raw_name = s.get('name', '')
 
-        # [TODO Resolved] 处理 Excel 导入可能出现的 '202401.0' 格式
         if isinstance(raw_id, float):
             s_id = str(int(raw_id))
         else:
             s_id = str(raw_id).strip()
-            # 处理可能的 '.0' 后缀
             if s_id.endswith('.0'):
                 s_id = s_id[:-2]
 
@@ -53,12 +49,11 @@ def _clean_and_validate_students(raw_students):
 
         # 2. 基础有效性校验
         if not s_id or not name:
-            # 只有当两个都为空时才完全忽略，否则记录错误
             if s_id or name:
                 errors.append(f"第 {row_num} 行数据不完整: 学号或姓名缺失")
             continue
 
-            # 3. 批次内去重
+        # 3. 批次内去重
         if s_id in seen_ids:
             errors.append(f"第 {row_num} 行学号 {s_id} 重复，已自动跳过")
             continue
@@ -112,7 +107,6 @@ def api_library_files():
         is_admin=g.user.get('is_admin', False)
     )
 
-    # 补全权限标记
     for f in files:
         f['is_owner'] = (f['uploaded_by'] == g.user['id']) or g.user.get('is_admin')
 
@@ -184,7 +178,6 @@ def parse_file_asset():
             if not success:
                 return jsonify({"msg": error_msg or "解析失败"}), 400
 
-            # 学生名单解析成功，返回解析结果
             return jsonify({
                 "status": "success",
                 "file_id": record['id'],
@@ -219,10 +212,9 @@ def save_pasted_document():
 
     if not content: return jsonify({"msg": "内容不能为空"}), 400
 
-    # 生成标题并保存
-    # 注意：这里调用 FileService 的辅助方法，如果没封装，可以用 AiService 生成标题
-    title = FileService.generate_title_from_content(content, doc_type)
-    file_id, filename = FileService.create_text_asset(content, title, g.user['id'])
+    # [修复] 直接调用 utils.common 的函数，不使用 FileService
+    title = generate_title_from_content(content, doc_type)
+    file_id, filename = create_text_asset(content, title, g.user['id'])
 
     if not file_id: return jsonify({"msg": "保存失败"}), 500
 
@@ -233,7 +225,6 @@ def save_pasted_document():
 def parse_and_save_pasted_document():
     """
     粘贴入库：先让 AI 整理成 JSON 结构，然后后端拆包存库。
-    解决：之前存入的是 raw json 导致的格式错误问题。
     """
     if not g.user:
         return jsonify({"msg": "Unauthorized"}), 401
@@ -249,12 +240,12 @@ def parse_and_save_pasted_document():
     standard_config = db.get_best_ai_config("standard") or db.get_best_ai_config("thinking")
 
     if not standard_config:
-        # 如果没有 AI 配置，直接保存原始内容
+        # 如果没有 AI 配置，直接保存原始内容 (调用 common 模块函数)
         title = generate_title_from_content(content, doc_type)
         file_id, filename = create_text_asset(content, title, g.user['id'])
         return jsonify({"status": "success", "file_id": file_id, "title": filename, "msg": "未配置AI，已原样保存"})
 
-    # Prompt 要求返回 JSON，以便分离标题和正文
+    # Prompt 要求返回 JSON
     prompt = (
         f"请对以下{doc_label}内容进行深度规整。\n"
         "1. 去除无用的页眉页脚、乱码。\n"
@@ -278,7 +269,7 @@ def parse_and_save_pasted_document():
         if not normalized_content:
             return jsonify({"msg": "AI 解析内容为空"}), 500
 
-        # === 核心修正：这里存入的是 normalized_content (Markdown)，而不是 ai_text (JSON) ===
+        # [修复] 直接调用 common 模块函数
         file_id, filename = create_text_asset(normalized_content, title, g.user['id'])
 
         if not file_id:
@@ -304,8 +295,6 @@ def update_file_content():
     record = db.get_file_by_id(file_id)
     if not record: return jsonify({"msg": "文件不存在"}), 404
 
-    # 文档库共享设计：所有登录用户都可以编辑文档内容
-
     db.update_file_parsed_content(file_id, content)
     return jsonify({"status": "success", "msg": "保存成功"})
 
@@ -318,7 +307,6 @@ def get_doc_type_schema():
         schema = DocumentTypeConfig.get_field_schema(doc_type)
         return jsonify({"type": doc_type, "schema": schema})
     else:
-        # 返回所有类型的 Schema
         all_schemas = {}
         for dt in DocumentTypeConfig.TYPES.keys():
             all_schemas[dt] = DocumentTypeConfig.get_field_schema(dt)
@@ -335,7 +323,6 @@ def get_file_detail(file_id):
     if not record:
         return jsonify({"msg": "文件不存在"}), 404
 
-    # 解析 meta_info JSON
     meta_info = {}
     if record.get('meta_info'):
         try:
@@ -343,7 +330,6 @@ def get_file_detail(file_id):
         except:
             pass
 
-    # 权限标记
     is_owner = (int(record['uploaded_by']) == int(g.user['id'])) or g.user.get('is_admin')
 
     return jsonify({
@@ -380,11 +366,9 @@ def update_file_metadata():
     if not record:
         return jsonify({"msg": "文件不存在"}), 404
 
-    # 文档库共享设计：所有登录用户都可以编辑文档元数据
-
-    # 从元数据中提取关键字段用于数据库索引
     course_name = meta_info.get('course_name') if isinstance(meta_info, dict) else None
-    academic_year = meta_info.get('academic_year_semester', '').split('学年')[0] if isinstance(meta_info, dict) else None
+    academic_year = meta_info.get('academic_year_semester', '').split('学年')[0] if isinstance(meta_info,
+                                                                                               dict) else None
 
     db.update_file_metadata(
         file_id=file_id,
@@ -416,15 +400,12 @@ def update_file_full():
     if not record:
         return jsonify({"msg": "文件不存在"}), 404
 
-    # 文档库共享设计：所有登录用户都可以编辑文档内容和元数据
-
-    # 更新内容
     if content is not None:
         db.update_file_parsed_content(file_id, content)
 
-    # 更新元数据
     course_name = meta_info.get('course_name') if isinstance(meta_info, dict) else None
-    academic_year = meta_info.get('academic_year_semester', '').split('学年')[0] if isinstance(meta_info, dict) else None
+    academic_year = meta_info.get('academic_year_semester', '').split('学年')[0] if isinstance(meta_info,
+                                                                                               dict) else None
 
     db.update_file_metadata(
         file_id=file_id,
@@ -450,7 +431,6 @@ def delete_file_asset():
         return jsonify({"msg": "无权删除此文件"}), 403
 
     db.delete_file_asset(file_id)
-    # 尝试删除物理文件
     try:
         if os.path.exists(file_record['physical_path']):
             os.remove(file_record['physical_path'])
@@ -476,10 +456,7 @@ def reparse_file():
     if not file_record:
         return jsonify({"msg": "文件不存在"}), 404
 
-    # 文档库共享设计：所有登录用户都可以触发文件解析
-
     try:
-        # 调用智能解析
         success, content, meta = AiService.smart_parse_content(file_id, doc_type)
 
         if not success:
@@ -488,7 +465,7 @@ def reparse_file():
         return jsonify({
             "status": "success",
             "msg": "解析成功",
-            "parsed_content": content[:500] if content else ""  # 返回前500字符预览
+            "parsed_content": content[:500] if content else ""
         })
     except Exception as e:
         traceback.print_exc()
@@ -508,10 +485,6 @@ def ai_generate_document():
 
     if not prompt and not uploaded_files and not existing_file_ids:
         return jsonify({"msg": "请输入提示词或提供参考素材"}), 400
-
-    # 逻辑迁移：调用 AiService 处理复杂生成任务
-    # 为了不让 Controller 过于臃肿，这部分逻辑建议封装到 Service
-    # 但为了确保功能完全一致，这里保留关键流程
 
     try:
         image_payloads = []
@@ -551,24 +524,23 @@ def ai_generate_document():
         user_msg.append("\n请严格遵循 JSON 输出格式 {metadata:..., content:...}")
 
         # D. 调用 AI
-        config_type = "vision" if image_payloads else "thinking"  # 优先 thinking
+        config_type = "vision" if image_payloads else "thinking"
         best_conf = db.get_best_ai_config(config_type) or db.get_best_ai_config("standard")
 
         if not best_conf: return jsonify({"msg": "未配置 AI 模型"}), 500
 
+        # [修复] 修正 model_capability 赋值
         payload = {
             "system_prompt": sys_prompt,
             "messages": [],
             "new_message": "\n".join(user_msg),
-            "model_capability": "vision" if image_payloads else best_conf['provider_type']  # 这里的逻辑根据实际 provider 调整
+            "model_capability": config_type  # <--- 正确传递 capability
         }
 
         if image_payloads:
             payload["messages"].append({"role": "user", "content": "参考图", "file_ids": image_payloads})
             payload["model_capability"] = "vision"
 
-        # 发送请求 (复用 ai_helper 或者 requests)
-        # 这里假设 extensions 或 ai_helper 能直接用，或者直接 requests
         endpoint = current_app.config['AI_ASSISTANT_CHAT_ENDPOINT']
         resp = httpx.post(endpoint, json=payload, timeout=240.0)
 
@@ -578,15 +550,16 @@ def ai_generate_document():
         ai_text = resp.json().get("response_text", "")
 
         # E. 解析与保存
-        success, content, meta = AiService._process_ai_json_response(ai_text, None, doc_type)  # 复用 Service 内部解析方法
+        success, content, meta = AiService._process_ai_json_response(ai_text, None, doc_type)
 
-        # 尝试生成标题
         title = meta.get("course_name", "") + " " + DocumentTypeConfig.TYPES.get(doc_type, "文档")
-        if len(title) < 5: title = FileService.generate_title_from_content(content, doc_type)
 
-        file_id, filename = FileService.create_text_asset(content, title, g.user['id'])
+        # [修复] 直接调用 common 模块函数
+        if len(title) < 5:
+            title = generate_title_from_content(content, doc_type)
 
-        # 更新 Meta
+        file_id, filename = create_text_asset(content, title, g.user['id'])
+
         if file_id and meta:
             conn = db.get_connection()
             conn.execute("UPDATE file_assets SET meta_info=? WHERE id=?",
@@ -613,13 +586,11 @@ def api_update_student_detail(detail_id):
         return jsonify({"msg": "学号和姓名不能为空"}), 400
 
     try:
-        # 获取当前记录以得到 student_list_id
         conn = db.get_connection()
         current = conn.execute("SELECT * FROM student_details WHERE id=?", (detail_id,)).fetchone()
         if not current:
             return jsonify({"msg": "记录不存在"}), 404
 
-        # 校验同一名单下是否存在重复学号 (排除自己)
         conflict = conn.execute(
             "SELECT id FROM student_details WHERE student_list_id=? AND student_id=? AND id!=?",
             (current['student_list_id'], student_id, detail_id)
@@ -649,7 +620,6 @@ def api_delete_student_detail(detail_id):
     if not g.user: return jsonify({"msg": "Unauthorized"}), 401
 
     try:
-        # 获取学生详情以获取 student_list_id
         conn = db.get_connection()
         student = conn.execute("SELECT * FROM student_details WHERE id=?", (detail_id,)).fetchone()
 
@@ -658,10 +628,8 @@ def api_delete_student_detail(detail_id):
 
         student_list_id = student['student_list_id']
 
-        # 删除学生
         db.delete_student_detail(detail_id)
 
-        # 更新学生名单的 student_count
         new_count = len(db.get_student_details(student_list_id))
         conn.execute("UPDATE student_lists SET student_count=? WHERE id=?", (new_count, student_list_id))
         conn.commit()
@@ -672,23 +640,9 @@ def api_delete_student_detail(detail_id):
         return jsonify({"msg": f"删除失败: {str(e)}"}), 500
 
 
-# === T015: Score Sheet Cell Update API ===
-
 @bp.route('/api/update_score_cell', methods=['POST'])
 def update_score_cell():
-    """
-    T015: Update individual student score cell in a score sheet document.
-
-    Updates the grade in the grades table and regenerates the score document's markdown content.
-
-    Request body:
-    {
-        "asset_id": 123,              # file_assets.id for the score sheet document
-        "student_id": "202401001",    # Student ID
-        "field": "total" | "q_0" | "q_1" ...,  # Which field to update
-        "value": 85                   # New score value
-    }
-    """
+    """T015: Update individual student score cell in a score sheet document."""
     if not g.user:
         return jsonify({"msg": "Unauthorized"}), 401
 
@@ -706,7 +660,6 @@ def update_score_cell():
     except (ValueError, TypeError):
         return jsonify({"msg": "参数错误: value 必须是数字"}), 400
 
-    # 1. Get the score sheet document and its source_class_id
     record = db.get_file_by_id(asset_id)
     if not record:
         return jsonify({"msg": "文档不存在"}), 404
@@ -714,7 +667,6 @@ def update_score_cell():
     if record.get('doc_category') != 'score_sheet':
         return jsonify({"msg": "此文档不是考核登分表"}), 400
 
-    # Parse meta_info to get source_class_id
     meta_info = {}
     if record.get('meta_info'):
         try:
@@ -726,7 +678,6 @@ def update_score_cell():
     if not source_class_id:
         return jsonify({"msg": "此文档未关联班级，无法编辑成绩"}), 400
 
-    # 2. Get the student's current grade
     conn = db.get_connection()
     grade_row = conn.execute(
         "SELECT * FROM grades WHERE class_id=? AND student_id=?",
@@ -736,39 +687,32 @@ def update_score_cell():
     if not grade_row:
         return jsonify({"msg": f"未找到学生 {student_id} 的成绩记录"}), 404
 
-    # 3. Update the score
     try:
         score_details = json.loads(grade_row['score_details'] or '[]')
     except:
         score_details = []
 
     if field == 'total':
-        # Directly update total score
         new_total = value
     elif field.startswith('q_'):
-        # Update a specific question score
         q_idx = int(field.replace('q_', ''))
         if 0 <= q_idx < len(score_details):
             score_details[q_idx]['score'] = value
-        # Recalculate total from score_details
         new_total = sum(item.get('score', 0) or 0 for item in score_details)
     else:
         return jsonify({"msg": f"未知字段: {field}"}), 400
 
-    # 4. Save the updated grade
     conn.execute(
         "UPDATE grades SET total_score=?, score_details=? WHERE class_id=? AND student_id=?",
         (new_total, json.dumps(score_details, ensure_ascii=False), source_class_id, student_id)
     )
     conn.commit()
 
-    # 5. Regenerate the score document's markdown content
     from services.score_document_service import ScoreDocumentService
     try:
         new_metadata = ScoreDocumentService.build_metadata(source_class_id)
         new_content = ScoreDocumentService.build_markdown_content(source_class_id, new_metadata)
 
-        # Update the file_assets record
         db.update_file_parsed_content(asset_id, new_content)
         db.update_file_metadata(
             file_id=asset_id,
@@ -778,7 +722,6 @@ def update_score_cell():
             academic_year=None
         )
     except Exception as e:
-        # Log but don't fail - the grade is already updated
         traceback.print_exc()
 
     return jsonify({

@@ -3,10 +3,9 @@ from typing import Dict, List
 from fastapi import HTTPException
 from openai import AsyncOpenAI
 from volcenginesdkarkruntime import AsyncArk
-# [修正] 使用正确的事件类名
 from volcenginesdkarkruntime.types.responses import (
     ResponseReasoningSummaryTextDeltaEvent,
-    ResponseTextDeltaEvent,  # 原 ResponseOutputTextDeltaEvent 是错误的
+    ResponseTextDeltaEvent,
     ResponseCompletedEvent
 )
 from ai_utils.ai_concurrency_manager import concurrency_manager
@@ -47,8 +46,8 @@ async def call_ai_platform_chat(
     except KeyError as e:
         raise HTTPException(500, f"AI 配置解析错误，缺少字段: {e}")
 
-    # 2. 并发控制
-    async with concurrency_manager.access(p_id, p_name, p_limit):
+    # 2. 并发控制 (使用 with 而不是 async with)
+    with concurrency_manager.access(p_id, p_name, p_limit):
         try:
             response_content = ""
 
@@ -56,96 +55,67 @@ async def call_ai_platform_chat(
             if platform_type == "volcengine":
                 async with AsyncArk(api_key=api_key, base_url=base_url if base_url else None) as client:
 
-                    # 检查是否包含 file_ids 或多模态 content（content 是列表）
+                    # 检查是否包含 file_ids 或多模态 content 列表
                     has_files = any("file_ids" in m and m["file_ids"] for m in messages)
-                    # 新增：检测 content 是否为列表（多模态内容：图片、视频等）
-                    has_multimodal_content = any(
-                        isinstance(m.get("content"), list)
-                        for m in messages
-                    )
+                    has_multimodal_content = any(isinstance(m.get("content"), list) for m in messages)
 
                     if has_files or has_multimodal_content:
-                        # --- 分支 A: 使用 Responses API (支持 File ID / PDF / 多模态) ---
-
                         user_content_list = []
 
-                        # 处理多模态 content（新格式）
-                        if has_multimodal_content:
-                            # 直接使用多模态 content（已经包含 text, image_url, video_url）
-                            for msg in messages:
-                                if isinstance(msg.get("content"), list):
-                                    user_content_list.extend(msg["content"])
+                        # A. 处理 System Prompt (作为第一个 input_text)
+                        user_content_list.append({
+                            "type": "input_text",
+                            "text": f"{system_prompt}\n"
+                        })
 
-                        # 处理 file_ids（旧格式兼容）
-                        if has_files:
-                            current_file_ids = []
-                            current_text = ""
+                        # B. 处理消息中的多模态内容
+                        for msg in messages:
+                            if msg["role"] == "user":
+                                raw_content = msg["content"]
 
-                            # 简单的合并逻辑：把所有 context 里的文件和文本都放到当前输入
-                            for msg in messages:
-                                if "file_ids" in msg:
-                                    current_file_ids.extend(msg["file_ids"])
-                                if msg["content"] and not isinstance(msg["content"], list):
-                                    current_text += f"{msg['content']}\n"
+                                # 处理内容列表 (新标准)
+                                if isinstance(raw_content, list):
+                                    for item in raw_content:
+                                        if item.get("type") in ["input_text", "input_file", "input_video",
+                                                                "input_image"]:
+                                            user_content_list.append(item)
 
-                            # 1. 文件部分 (视频/PDF使用 video_url)
-                            for fid in current_file_ids:
-                                real_fid = fid.get("id") if isinstance(fid, dict) else fid
-                                user_content_list.append({
-                                    "type": "video_url",
-                                    "video_url": {
-                                        "url": real_fid
-                                    }
-                                })
+                                # 处理纯文本 (兼顾旧版 file_ids 的情况)
+                                elif isinstance(raw_content, str):
+                                    # 先尝试查找该消息是否有 file_ids (旧版兼容逻辑)
+                                    msg_file_ids = msg.get("file_ids", [])
+                                    if msg_file_ids:
+                                        # 如果有 file_ids，先添加文件
+                                        # 注意：这里只能默认映射为 input_file，可能对图片不准确
+                                        # 但这能保证文档解析功能恢复正常
+                                        for fid in msg_file_ids:
+                                            user_content_list.append({
+                                                "type": "input_file",
+                                                "file_id": fid
+                                            })
 
-                            # 2. 文本部分 (使用 text 而不是 input_text)
-                            if current_text:
-                                full_text = f"{system_prompt}\n\n{current_text}"
-                                user_content_list.append({
-                                    "type": "text",
-                                    "text": full_text
-                                })
-                        else:
-                            # 多模态模式下，添加 system_prompt 到第一个 text 元素
-                            for i, item in enumerate(user_content_list):
-                                if item.get("type") == "text":
-                                    user_content_list[i] = {
-                                        "type": "text",
-                                        "text": f"{system_prompt}\n\n{item['text']}"
-                                    }
-                                    break
-                            else:
-                                # 如果没有 text 元素，添加一个
-                                user_content_list.insert(0, {
-                                    "type": "text",
-                                    "text": system_prompt
-                                })
+                                    # 再添加文本
+                                    user_content_list.append({
+                                        "type": "input_text",
+                                        "text": raw_content
+                                    })
 
                         # 调用 Responses Stream API
                         stream = await client.responses.create(
                             model=model_name,
-                            input=[
-                                {
-                                    "role": "user",
-                                    "content": user_content_list
-                                }
-                            ],
+                            input=[{"role": "user", "content": user_content_list}],
                             stream=True
                         )
 
-                        # 处理流式响应
                         async for event in stream:
-                            # [修正] 使用 ResponseTextDeltaEvent
                             if isinstance(event, ResponseTextDeltaEvent):
                                 response_content += event.delta
-                            # 也可以收集思考过程(Reasoning)，如果需要的话
-                            if isinstance(event, ResponseReasoningSummaryTextDeltaEvent):
+                            elif isinstance(event, ResponseReasoningSummaryTextDeltaEvent):
                                 pass
 
                     else:
-                        # --- 分支 B: 无文件，走标准 OpenAI 兼容接口 ---
+                        # --- 分支 B: 纯文本兼容模式 ---
                         final_messages = [{"role": "system", "content": system_prompt}, *n_messages]
-
                         extra_kwargs = {}
                         if "thinking" in model_name or "reasoner" in model_name:
                             extra_kwargs["thinking"] = {"type": "enabled"}
@@ -167,7 +137,6 @@ async def call_ai_platform_chat(
                         messages=final_messages
                     )
                     response_content = completion.choices[0].message.content
-
             else:
                 raise HTTPException(400, f"不支持的协议类型: {platform_type}")
 

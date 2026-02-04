@@ -1,6 +1,7 @@
 import mimetypes
 import os
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed # 引入线程池
 
 import pandas as pd
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, send_file, g
@@ -101,14 +102,48 @@ def api_grade_student(class_id, student_id):
 
 @bp.route('/run_grading_logic/<int:class_id>', methods=['POST'])
 def run_batch_grading(class_id):
-    # 批量批改逻辑，循环调用 Service
+    """
+    批量批改逻辑 - 并行优化版
+    使用线程池并发处理学生作业，并发数由 ThreadPoolExecutor 控制（设为 8），
+    实际 AI 请求并发数由 ai_concurrency_manager 根据数据库配置动态控制。
+    """
     students = db.get_students_with_grades(class_id)
+
+    # 清空旧成绩
     db.clear_grades(class_id)
-    for s in students:
-        GradingService.grade_single_student(class_id, s['student_id'])
+
+    total_students = len(students)
+    print(f"[BatchGrading] 开始批改 {total_students} 名学生 (ClassID: {class_id})")
+
+    # 并发执行
+    # max_workers 设置为 8，可以允许一定的文件 IO 并发，
+    # 而 AI 调用的并发上限会被 ai_concurrency_manager 里的 Semaphore 自动限制（例如 3）
+    success_count = 0
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        # 提交所有任务
+        future_to_student = {
+            executor.submit(GradingService.grade_single_student, class_id, s['student_id']): s
+            for s in students
+        }
+
+        # 等待完成
+        for future in as_completed(future_to_student):
+            student = future_to_student[future]
+            try:
+                success, msg, _ = future.result()
+                if success:
+                    success_count += 1
+                    print(f"[BatchGrading] 学生 {student['name']} ({student['student_id']}) 批改完成")
+                else:
+                    print(f"[BatchGrading] 学生 {student['name']} 批改失败: {msg}")
+            except Exception as exc:
+                print(f"[BatchGrading] 学生 {student['name']} 处理异常: {exc}")
+
+    print(f"[BatchGrading] 批改结束. 成功: {success_count}/{total_students}")
 
     # === 生成成绩文档到文档库 ===
     try:
+        # 注意：生成文档是在主线程进行的，不受影响
         from services.score_document_service import ScoreDocumentService
         result = ScoreDocumentService.generate_from_class(class_id, g.user['id'])
         if result:
@@ -118,7 +153,7 @@ def run_batch_grading(class_id):
         logging.error(f"[ScoreDoc] Generation failed: {e}")
     # === END ===
 
-    return jsonify({"msg": "批量批改完成"})
+    return jsonify({"msg": f"批量批改完成，成功 {success_count}/{total_students} 人"})
 
 
 @bp.route('/upload_zips/<int:class_id>', methods=['POST'])

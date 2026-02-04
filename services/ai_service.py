@@ -22,7 +22,7 @@ class AiService:
     def smart_parse_content(file_id, doc_category_hint="exam"):
         """
         智能解析统一入口：
-        1. 优先尝试 Vision 模式 (V3)
+        1. 优先尝试 Vision 模式 (V3) - 升级适配多模态 input_file/input_image
         2. 失败则回退到 Text 模式 (V2)
         3. 均失败则回退到本地 Python 提取
         """
@@ -31,7 +31,6 @@ class AiService:
 
         # 缓存命中
         if record.get('parsed_content'):
-            # 尝试恢复 meta_info
             try:
                 meta = json.loads(record.get('meta_info', '{}'))
             except:
@@ -44,29 +43,51 @@ class AiService:
 
         # 1. 尝试 Vision 解析
         vision_config = db.get_best_ai_config("vision")
-        if vision_config and ext in ['.docx', '.doc', '.pdf', '.jpg', '.png']:
+        # 支持的文件类型扩展
+        if vision_config and ext in ['.docx', '.doc', '.pdf', '.jpg', '.png', '.jpeg', '.bmp']:
             try:
                 target_path = physical_path
-                if ext != '.pdf' and ext not in ['.jpg', '.png']:
-                    # 需要转换
+                # 非 PDF/图片 则尝试转换为 PDF (如 docx)
+                if ext not in ['.pdf', '.jpg', '.png', '.jpeg', '.bmp']:
                     converted = convert_to_pdf(physical_path)
-                    if converted and os.path.exists(converted): target_path = converted
+                    if converted and os.path.exists(converted):
+                        target_path = converted
+
+                # 获取最终用于上传的文件扩展名
+                final_ext = os.path.splitext(target_path)[1].lower()
 
                 uploader = VolcFileManager(api_key=vision_config['api_key'], base_url=vision_config.get('base_url'))
                 remote_id = uploader.upload_file(target_path)
 
                 if remote_id:
-                    prompt = DocumentTypeConfig.get_prompt_by_type(doc_category_hint)
-                    prompt += "\n【特别指令】请保持表格结构，识别勾选框，并以JSON格式返回 {content:..., metadata:...}。"
+                    prompt_text = DocumentTypeConfig.get_prompt_by_type(doc_category_hint)
+                    prompt_text += "\n【特别指令】请保持表格结构，识别勾选框，并以JSON格式返回 {content:..., metadata:...}。"
+
+                    # [修正] 构建多模态 content 列表
+                    content_list = []
+
+                    # 1. 添加文件 (根据类型区分)
+                    if final_ext == '.pdf':
+                        content_list.append({"type": "input_file", "file_id": remote_id})
+                    elif final_ext in ['.jpg', '.png', '.jpeg', '.bmp']:
+                        content_list.append({"type": "input_image", "file_id": remote_id})
+                    else:
+                        # 兜底：默认为 input_file
+                        content_list.append({"type": "input_file", "file_id": remote_id})
+
+                    # 2. 添加文本提示词
+                    content_list.append({"type": "input_text", "text": prompt_text})
 
                     resp = asyncio.run(call_ai_platform_chat(
                         system_prompt="你是高校教学资料结构化专家。",
-                        messages=[{"role": "user", "content": prompt, "file_ids": [remote_id]}],
+                        messages=[{"role": "user", "content": content_list}],  # 不再使用 file_ids
                         platform_config=vision_config
                     ))
                     if resp and "[PARSE_ERROR]" not in resp:
                         return AiService._process_ai_json_response(resp, file_id, doc_category_hint)
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 error_log.append(f"Vision error: {e}")
 
         # 2. 回退到 Text 模式
@@ -111,7 +132,7 @@ class AiService:
             academic_year = f"{year_match.group(1)}-{year_match.group(2)}"
 
         # 尝试匹配学期 (如 第一学期, 第二学期, 第三学期)
-        semester_match = re.search(r'(第[一二三]学期)', full_str)
+        semester_match = re.search(r'(第[一二三 ]+学期)', full_str)
         if semester_match:
             semester = semester_match.group(1)
 
@@ -119,36 +140,29 @@ class AiService:
 
     @staticmethod
     def _process_ai_json_response(json_text, file_id, doc_category):
-        """内部辅助：清洗 JSON 并入库"""
         try:
             cleaned = json_text.strip()
             match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned, re.DOTALL)
             if match:
                 cleaned = match.group(1)
             else:
-                # 简单的边界查找
                 s, e = cleaned.find('{'), cleaned.rfind('}')
                 if s != -1 and e != -1: cleaned = cleaned[s:e + 1]
 
             data = json.loads(cleaned)
             content = data.get("content", "")
             meta = data.get("metadata", {})
+            if not content: content = json_text
 
-            if not content: content = json_text  # 兜底
-
-            # 处理学年学期字段：如果只有 academic_year_semester，则拆分
             if meta.get('academic_year_semester') and (not meta.get('academic_year') or not meta.get('semester')):
-                parsed_year, parsed_semester = AiService._parse_academic_year_semester(meta.get('academic_year_semester'))
-                if parsed_year and not meta.get('academic_year'):
-                    meta['academic_year'] = parsed_year
-                if parsed_semester and not meta.get('semester'):
-                    meta['semester'] = parsed_semester
+                parsed_year, parsed_semester = AiService._parse_academic_year_semester(
+                    meta.get('academic_year_semester'))
+                if parsed_year and not meta.get('academic_year'): meta['academic_year'] = parsed_year
+                if parsed_semester and not meta.get('semester'): meta['semester'] = parsed_semester
 
-            # 反过来：如果有 academic_year 和 semester 但没有 academic_year_semester，则合成
             if meta.get('academic_year') and meta.get('semester') and not meta.get('academic_year_semester'):
                 meta['academic_year_semester'] = f"{meta.get('academic_year')}学年度{meta.get('semester')}"
 
-            # 入库
             conn = db.get_connection()
             conn.execute('''UPDATE file_assets
                             SET parsed_content=?,
@@ -161,26 +175,19 @@ class AiService:
                             WHERE id = ?''',
                          (content, json.dumps(meta, ensure_ascii=False), doc_category,
                           meta.get('academic_year'), str(meta.get('semester', '')), meta.get('course_name'),
-                          meta.get('cohort_tag'),
-                          file_id))
+                          meta.get('cohort_tag'), file_id))
             conn.commit()
             return True, content, meta
         except Exception as e:
-            # 即使JSON解析失败，也保存原始内容
             db.update_file_parsed_content(file_id, json_text)
             return True, json_text, {}
 
     @staticmethod
-    def generate_grader_worker(task_id, exam_text, std_text, strictness, extra_desc, extra_prompt, max_score, app_config, course_name, user_id=None, task_name=None):
-        """后台生成任务 (Thread Worker)"""
+    def generate_grader_worker(task_id, exam_text, std_text, strictness, extra_desc, extra_prompt, max_score,
+                               app_config, course_name, user_id=None, task_name=None):
         from blueprints.notifications import NotificationService
-
-        # 注意：线程中无法直接获取 Flask 上下文，这里只做纯逻辑处理或传递必要参数
-        # 实际 DB 操作在 database.py 中使用的是 check_same_thread=False，可以直接调用
-
         def update_status(status, log, grader_id=None):
             db.update_ai_task(task_id, status=status, log_info=log, grader_id=grader_id, course_name=course_name)
-            # 同步更新通知
             if user_id:
                 if status == 'processing':
                     NotificationService.notify_task_processing(user_id, task_id, task_name or '批改核心', log)
@@ -191,138 +198,103 @@ class AiService:
 
         try:
             update_status("processing", "正在组装 Prompt...")
-
-            # 组装 Prompt (逻辑同原 app.py)
             prompt_parts = [BASE_CREATOR_PROMPT]
             strict_prompt = STRICT_MODE_PROMPT if strictness == 'strict' else (
                 LOOSE_MODE_PROMPT if strictness == 'loose' else "### 3. 评分风格：标准模式")
             prompt_parts.append(strict_prompt)
             prompt_parts[0] = prompt_parts[0].replace("{strictness_label}", strictness)
-
             prompt_parts.append(f"### 4. 分数控制\n满分必须严格等于 **{max_score}分**。")
             if extra_desc: prompt_parts.append(f"### 5. 用户额外指令\n{extra_desc}")
-
-            # Feature 001: Integrate extra_prompt into AI generation
             if extra_prompt: prompt_parts.append(f"### 6. 额外生成提示\n{extra_prompt}")
-
             prompt_parts.append(f"### 7. 输入素材\n---试卷---\n{exam_text}\n---标准---\n{std_text}")
             prompt_parts.append(EXAMPLE_PROMPT)
-
             final_prompt = "\n".join(prompt_parts)
 
-            # 调用 AI
             update_status("processing", "AI 正在生成代码...")
-            payload = {
-                "system_prompt": "你是一名资深的 Python 自动化测试工程师。",
-                "messages": [], "new_message": final_prompt, "model_capability": "thinking"
-            }
-
-            # 这里的 Endpoint 需要从 config 传进来，或者硬编码，因为无法访问 app.config
+            payload = {"system_prompt": "你是一名资深的 Python 自动化测试工程师。", "messages": [],
+                       "new_message": final_prompt, "model_capability": "thinking"}
             endpoint = app_config.get('AI_ASSISTANT_CHAT_ENDPOINT', "http://127.0.0.1:9011/api/ai/chat")
-
             response = httpx.post(endpoint, json=payload, timeout=600.0)
             if response.status_code != 200: raise Exception(f"AI Error: {response.text}")
 
             ai_content = response.json().get("response_text", "")
-
-            # 提取代码
             code_match = re.search(r'```python(.*?)```', ai_content, re.DOTALL)
             code = code_match.group(1).strip() if code_match else ai_content
-
-            # 提取 ID
             id_match = re.search(r'ID\s*=\s*["\']([^"\']+)["\']', code)
             if not id_match: raise Exception("未找到 ID 定义")
             grader_id = id_match.group(1)
 
-            # 保存文件
             save_path = os.path.join(app_config['GRADERS_DIR'], f"{grader_id}.py")
             with open(save_path, 'w', encoding='utf-8') as f:
                 f.write(code)
 
-            # 热重载
             GraderFactory._loaded = False
             GraderFactory.load_graders()
-
             if grader_id in GraderFactory._graders:
                 update_status("success", "生成成功", grader_id)
             else:
                 update_status("failed", "代码生成但加载失败", grader_id)
-
         except Exception as e:
             update_status("failed", f"执行异常: {str(e)}")
 
     @staticmethod
     def parse_student_list(file_id):
-        """
-        解析学生名单
-        返回: (success, data, error_message)
-        data 格式: {
-            "metadata": {...},
-            "students": [
-                {"student_id": "...", "name": "...", "gender": "..."},
-                ...
-            ]
-        }
-        """
         record = db.get_file_by_id(file_id)
-        if not record:
-            return False, None, "文件记录不存在"
-
-        # 如果已解析过，直接返回
+        if not record: return False, None, "文件记录不存在"
         if record.get('parsed_content'):
             try:
                 meta = json.loads(record.get('meta_info', '{}'))
             except:
                 meta = {}
-            # 需要重新解析学生列表
-            return AiService._parse_student_list_from_content(
-                record['parsed_content'], meta
-            )
+            return AiService._parse_student_list_from_content(record['parsed_content'], meta)
 
         physical_path = record['physical_path']
         ext = os.path.splitext(physical_path)[1].lower()
 
-        # 1. 尝试 Vision 解析 (支持 docx, pdf, 图片)
+        # 1. Vision 解析 (doc/pdf/img)
         vision_config = db.get_best_ai_config("vision")
         if vision_config and ext in ['.docx', '.doc', '.pdf', '.jpg', '.png', '.xlsx', '.xls', '.csv']:
             try:
                 target_path = physical_path
-
-                # 转换非PDF文件
                 if ext not in ['.pdf', '.jpg', '.png']:
                     from utils.file_converter import convert_to_pdf
                     converted = convert_to_pdf(physical_path)
-                    if converted and os.path.exists(converted):
-                        target_path = converted
+                    if converted and os.path.exists(converted): target_path = converted
 
-                uploader = VolcFileManager(api_key=vision_config['api_key'],
-                                          base_url=vision_config.get('base_url'))
+                final_ext = os.path.splitext(target_path)[1].lower()
+                uploader = VolcFileManager(api_key=vision_config['api_key'], base_url=vision_config.get('base_url'))
                 remote_id = uploader.upload_file(target_path)
 
                 if remote_id:
                     from export_core.doc_config import DocumentTypeConfig
                     prompt = DocumentTypeConfig.get_prompt_by_type("student_list")
 
+                    # [修正] 构建多模态 content
+                    content_list = []
+                    if final_ext == '.pdf':
+                        content_list.append({"type": "input_file", "file_id": remote_id})
+                    elif final_ext in ['.jpg', '.png']:
+                        content_list.append({"type": "input_image", "file_id": remote_id})
+                    else:
+                        content_list.append({"type": "input_file", "file_id": remote_id})
+
+                    content_list.append({"type": "input_text", "text": prompt})
+
                     resp = asyncio.run(call_ai_platform_chat(
                         system_prompt="你是学生信息结构化专家。",
-                        messages=[{"role": "user", "content": prompt, "file_ids": [remote_id]}],
+                        messages=[{"role": "user", "content": content_list}],
                         platform_config=vision_config
                     ))
 
                     if resp and "[PARSE_ERROR]" not in resp:
-                        # 保存解析结果
                         AiService._process_ai_json_response(resp, file_id, "student_list")
+                        updated = db.get_file_by_id(file_id)
+                        meta = json.loads(updated.get('meta_info', '{}'))
+                        return AiService._parse_student_list_from_content(updated['parsed_content'], meta)
+            except Exception:
+                pass
 
-                        # 重新解析学生列表
-                        updated_record = db.get_file_by_id(file_id)
-                        meta = json.loads(updated_record.get('meta_info', '{}'))
-                        return AiService._parse_student_list_from_content(
-                            updated_record['parsed_content'], meta
-                        )
-            except Exception as e:
-                pass  # 继续尝试其他方法
-
-        # 2. 回退到 Text 模式
+        # 2. Text 模式
         success, raw_text = FileService.extract_text_from_file(physical_path)
         if success and raw_text:
             standard_config = db.get_best_ai_config("thinking") or db.get_best_ai_config("standard")
@@ -330,22 +302,18 @@ class AiService:
                 from export_core.doc_config import DocumentTypeConfig
                 prompt = DocumentTypeConfig.get_prompt_by_type("student_list")
                 prompt += f"\n请解析以下内容并返回JSON：\n{raw_text[:50000]}"
-
                 try:
                     resp = asyncio.run(call_ai_platform_chat(
                         system_prompt="你是学生信息结构化专家。",
                         messages=[{"role": "user", "content": prompt}],
                         platform_config=standard_config
                     ))
-
                     if resp:
                         AiService._process_ai_json_response(resp, file_id, "student_list")
-                        updated_record = db.get_file_by_id(file_id)
-                        meta = json.loads(updated_record.get('meta_info', '{}'))
-                        return AiService._parse_student_list_from_content(
-                            updated_record['parsed_content'], meta
-                        )
-                except Exception as e:
+                        updated = db.get_file_by_id(file_id)
+                        meta = json.loads(updated.get('meta_info', '{}'))
+                        return AiService._parse_student_list_from_content(updated['parsed_content'], meta)
+                except Exception:
                     pass
 
         return False, None, "解析失败，请确保文件格式正确"
