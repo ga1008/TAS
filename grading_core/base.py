@@ -12,12 +12,19 @@ class GradingResult:
         self.total_score = 0
         self.is_pass = False
         self.deduct_details = []
+        self.file_map = {}
 
         # --- 数据库兼容字段 ---
         # 虽然基类不应限制题目数量，但为了兼容现有的 SQLite 表结构 (task1_score, task2_score)，
         # 我们保留这两个字段作为"分桶"。
         # AI 在生成代码时，可以将"基础题"汇总入 task1，"提高题"汇总入 task2。
         self.sub_scores = []
+
+        # [NEW] 并发控制相关属性
+        # 如果子类是调用AI进行批改，请在子类 __init__ 中将 is_ai_grader 设为 True
+        # 并指定 ai_provider_id (对应数据库 ai_providers 表的 ID)
+        self.is_ai_grader = False
+        self.ai_provider_id = None
 
     def add_sub_score(self, name, score, *args, **kwargs):
         """

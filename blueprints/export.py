@@ -7,6 +7,7 @@ from flask import Blueprint, request, jsonify, send_file, render_template, g, cu
 
 from config import Config
 from export_core.manager import TemplateManager
+from export_core.filename_generator import get_export_filename, FilenameGenerator
 from extensions import db
 from utils.common import get_corrected_path
 
@@ -98,33 +99,31 @@ def export_word_v2():
 
     # 生成文件
     ext = getattr(exporter, 'FILE_EXTENSION', 'docx')
-    filename = f"export_{uuid.uuid4().hex}.{ext}"
-    save_path = os.path.join(Config.UPLOAD_FOLDER, filename)
+
+    # === [改进] 智能文件名生成 ===
+    # 使用新的文件名生成工具，支持完整的元数据和文件类型匹配
+    local_filename, download_filename = get_export_filename(
+        file_record=file_record,
+        form_data=form_data,
+        file_type=ext,
+        use_ai=False,  # 暂时不使用 AI，保持快速响应
+        doc_type='general'
+    )
+
+    # 生成本地保存路径（使用 UUID 避免冲突）
+    save_filename = f"export_{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(Config.UPLOAD_FOLDER, save_filename)
 
     try:
         exporter.generate(content, meta_info, form_data, save_path)
 
-        # === [FIX 2] 补全中文文件名处理 ===
-        dl_name = form_data.get('course_name', 'Document')
-        # 确保文件名是字符串
-        if not dl_name: dl_name = 'Document'
-
-        try:
-            # 尝试编码，如果不报错说明是纯 ASCII，不需要 quote
-            dl_name.encode('latin-1')
-            final_name = f"{dl_name}.{ext}"
-        except UnicodeEncodeError:
-            # 包含中文，使用 URL 编码防止 header 错误
-            final_name = f"{quote(dl_name)}.{ext}"
-        # 针对 Excel 修正 MIME type
-
-        mimetype = None
+        # === [改进] MIME type 根据 ext 自动选择 ===
         if ext == 'xlsx':
             mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         else:
             mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-        return send_file(save_path, as_attachment=True, download_name=final_name, mimetype=mimetype)
+        return send_file(save_path, as_attachment=True, download_name=download_filename, mimetype=mimetype)
 
     except Exception as e:
         import traceback

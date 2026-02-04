@@ -47,6 +47,20 @@
                     </div>
                 </div>
 
+                <!-- AI 辅助选项 (仅对 Excel 导出可用) -->
+                <div id="aiOptionSection" class="hidden mb-4 p-4 bg-indigo-50 rounded-xl border border-indigo-100 transition-all">
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" id="useAiFilename" class="mt-1 w-4 h-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500">
+                        <div class="flex-1">
+                            <label for="useAiFilename" class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                <i class="fas fa-robot text-indigo-500"></i>
+                                <span>使用 AI 生成智能文件名</span>
+                            </label>
+                            <p class="text-xs text-slate-500 mt-1 ml-6">AI 会根据课程、班级、学期等信息生成规范的文件名（如："8. 2025-2026-1《服务器配置与管理》考核登分表-软工2406班.xlsx"）</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 消息提示区域 -->
                 <div id="exportMsgBox" class="hidden rounded-xl p-3 text-sm font-medium flex items-center gap-2 mb-4 animate-fade-in">
                     <i class="fas fa-info-circle"></i>
@@ -129,10 +143,16 @@
             this.selectedOption = option;
             document.querySelectorAll('.export-option').forEach(el => el.classList.remove('selected'));
 
+            const aiSection = document.getElementById('aiOptionSection');
+
             if (option === 'library') {
                 document.getElementById('optionLibrary').classList.add('selected');
+                // 隐藏 AI 选项（文档库导出不需要）
+                aiSection.classList.add('hidden');
             } else {
                 document.getElementById('optionExcel').classList.add('selected');
+                // 显示 AI 选项
+                aiSection.classList.remove('hidden');
             }
 
             document.getElementById('btnExportConfirm').disabled = false;
@@ -143,13 +163,16 @@
             const txt = document.getElementById('exportMsgText');
             const icon = box.querySelector('i');
 
-            box.classList.remove('hidden', 'bg-rose-50', 'text-rose-600', 'bg-emerald-50', 'text-emerald-600');
+            box.classList.remove('hidden', 'bg-rose-50', 'text-rose-600', 'bg-emerald-50', 'text-emerald-600', 'bg-indigo-50', 'text-indigo-600');
 
             if (type === 'error') {
                 box.classList.add('bg-rose-50', 'text-rose-600');
                 icon.className = 'fas fa-exclamation-circle';
                 this.panel.classList.add('animate-shake');
                 setTimeout(() => this.panel.classList.remove('animate-shake'), 500);
+            } else if (type === 'info') {
+                box.classList.add('bg-indigo-50', 'text-indigo-600');
+                icon.className = 'fas fa-info-circle';
             } else {
                 box.classList.add('bg-emerald-50', 'text-emerald-600');
                 icon.className = 'fas fa-check-circle';
@@ -176,8 +199,24 @@
             if (!this.selectedOption || !this.classId) return;
 
             if (this.selectedOption === 'excel') {
-                // 直接跳转到 Excel 下载
-                window.location.href = `/export/${this.classId}`;
+                // Excel 导出
+                const useAi = document.getElementById('useAiFilename').checked;
+
+                if (useAi) {
+                    // 使用 AI 生成文件名，显示加载提示
+                    this.setLoading(true);
+                    this.showMsg('info', 'AI 正在生成智能文件名，请稍候...');
+
+                    // 等待一小段时间让用户看到提示
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // 跳转到 AI 文件名端点
+                    window.location.href = `/export/${this.classId}/ai_filename`;
+                } else {
+                    // 直接下载（使用模板文件名）
+                    window.location.href = `/export/${this.classId}`;
+                }
+
                 this.close();
                 return;
             }

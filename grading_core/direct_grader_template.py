@@ -30,6 +30,23 @@ class {class_name}(BaseGrader):
 {extra_instruction}
     \"\"\"
 
+    # [NEW] 新增初始化方法，用于支持并发控制
+    def __init__(self):
+        super().__init__()
+        # 1. 标记为 AI 核心
+        self.is_ai_grader = True
+        
+        # 2. 提前获取 AI 配置
+        # 这样做有两个好处：
+        #   a) GradingService 可以通过 self.ai_provider_id 获取厂商 ID，从而限制并发数
+        #   b) 避免批改每个学生时都重复查询数据库配置
+        self.ai_config = db.get_best_ai_config("vision") or db.get_best_ai_config("standard")
+        
+        if self.ai_config:
+            self.ai_provider_id = self.ai_config.get('provider_id')
+        else:
+            self.ai_provider_id = None
+
     @property
     def system_prompt(self):
         return f'''

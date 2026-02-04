@@ -439,6 +439,25 @@ class Database:
             conn.commit()
             print(f"[DB] 超级管理员已初始化: {admin_user}")
 
+    # [NEW] 新增：获取指定厂商的并发限制
+    def get_provider_concurrency(self, provider_id):
+        """
+        获取AI厂商的并发数限制
+        :return: int (默认返回 3)
+        """
+        if not provider_id:
+            return 3
+
+        conn = self.get_connection()
+        row = conn.execute(
+            "SELECT max_concurrent_requests FROM ai_providers WHERE id=?",
+            (provider_id,)
+        ).fetchone()
+
+        if row and row['max_concurrent_requests']:
+            return int(row['max_concurrent_requests'])
+        return 3  # 默认安全值
+
     def get_document_library_tree(self, user_id, is_admin=False):
         """
         获取文档库的目录树结构：学年 -> 学期 -> 课程 -> 适用人群

@@ -8,6 +8,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 
 from config import Config
 from extensions import db
+from export_core.filename_generator import get_export_filename
 from grading_core.factory import GraderFactory
 from services.file_service import FileService
 from services.grading_service import GradingService
@@ -259,6 +260,17 @@ def preview_file(class_id, student_id):
 
 @bp.route('/export/<int:class_id>')
 def export_excel(class_id):
+    """
+    导出班级成绩为 Excel 文件
+
+    改进：使用智能文件名生成，支持完整的元数据
+    支持通过 URL 参数 use_ai=1 启用 AI 文件名生成
+    """
+    import uuid
+
+    # 检查是否使用 AI 生成文件名
+    use_ai = request.args.get('use_ai', '0') == '1'
+
     # 确保 import json (已在头部添加)
     with db.get_connection() as conn:
         students_data = conn.execute('''
@@ -273,6 +285,9 @@ def export_excel(class_id):
                                      WHERE s.class_id = ?
                                      ''', (class_id,)).fetchall()
         cls = db.get_class_by_id(class_id)
+
+    if not cls:
+        return "班级不存在", 404
 
     data_list = []
     for row in students_data:
@@ -293,6 +308,7 @@ def export_excel(class_id):
                 pass
         data_list.append(item)
 
+    # 构建 DataFrame
     df = pd.DataFrame(data_list)
     fixed_cols = ['学号', '姓名']
     end_cols = ['总分', '扣分详情', '文件名']
@@ -300,9 +316,54 @@ def export_excel(class_id):
     final_cols = fixed_cols + dynamic_cols + end_cols
     df = df[final_cols]
 
-    path = os.path.join(Config.UPLOAD_FOLDER, f"{cls['name']}_成绩单.xlsx")
-    df.to_excel(path, index=False)
-    return send_file(path, as_attachment=True)
+    # === [改进] 智能文件名生成 ===
+    # 使用新的文件名生成工具，支持完整的元数据和 AI 生成
+
+    # [调试] 打印班级信息，确认字段正确传递
+    print(f"[Export Excel] class_info keys: {list(cls.keys()) if cls else 'None'}")
+    if cls:
+        print(f"[Export Excel] class_info[name]: {cls.get('name')}")
+        print(f"[Export Excel] class_info[course]: {cls.get('course')}")
+
+    local_filename, download_filename = get_export_filename(
+        class_info=cls,
+        file_type='xlsx',
+        use_ai=use_ai,  # 根据 URL 参数决定是否使用 AI
+        doc_type='score_sheet'
+    )
+
+    # [调试] 打印生成的文件名
+    print(f"[Export Excel] Generated download_filename: {download_filename}")
+    print(f"[Export Excel] Generated local_filename: {local_filename}")
+
+    # 生成本地保存路径（使用 UUID 避免冲突）
+    save_filename = f"export_{class_id}_{uuid.uuid4().hex[:8]}.xlsx"
+    save_path = os.path.join(Config.UPLOAD_FOLDER, save_filename)
+
+    print(f"[Export Excel] save_path: {save_path}")
+    print(f"[Export Excel] send_file download_name: {download_filename}")
+
+    # 保存 Excel 文件
+    df.to_excel(save_path, index=False)
+
+    # 返回文件（自动处理 Excel MIME type）
+    return send_file(
+        save_path,
+        as_attachment=True,
+        download_name=download_filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+
+@bp.route('/export/<int:class_id>/ai_filename')
+def export_excel_with_ai(class_id):
+    """
+    导出班级成绩为 Excel 文件（使用 AI 生成文件名）
+
+    这个端点专门用于需要 AI 生成文件名的场景
+    返回前会先调用 AI 生成文件名，用户需要稍等片刻
+    """
+    return export_excel(class_id)
 
 
 @bp.route('/api/export_to_library/<int:class_id>', methods=['POST'])
