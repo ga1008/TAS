@@ -58,14 +58,71 @@ class GraderFactory:
     @classmethod
     def get_all_strategies(cls):
         """
-        返回所有可用策略的列表 (id, name, course)，用于前端下拉框
+        返回所有可用策略的详细列表，包含数据库元数据
 
         Returns:
-            list of tuples: [(grader_id, grader_name, course_name)]
-            course_name: 使用 grader 的 COURSE 属性，如果不存在则返回 "未分类"
+            list of dict: [{
+                'id': grader_id,
+                'name': display_name,
+                'course': course_name,
+                'description': extra_desc,
+                'strictness': strictness,
+                'type': 'logic' | 'direct',
+                'created_at': timestamp,
+                'creator': creator_name
+            }]
         """
         cls.load_graders()
-        return [
-            (k, v.NAME, getattr(v, 'COURSE', None) or '未分类')
-            for k, v in cls._graders.items()
-        ]
+        strategies = []
+
+        # 引入 DB 避免循环导入
+        from extensions import db
+
+        # 获取所有任务信息用于增强展示
+        # 这里为了性能，可以只查 ai_tasks 表
+        conn = db.get_connection()
+        tasks = conn.execute(
+            "SELECT grader_id, extra_desc, strictness, created_at, created_by, status FROM ai_tasks WHERE status='success'").fetchall()
+        task_map = {t['grader_id']: dict(t) for t in tasks if t['grader_id']}
+
+        # 获取用户名映射
+        users = conn.execute("SELECT id, username FROM users").fetchall()
+        user_map = {u['id']: u['username'] for u in users}
+
+        for grader_id, grader_cls in cls._graders.items():
+            # 基础信息来自 Python 类
+            info = {
+                'id': grader_id,
+                'name': getattr(grader_cls, 'NAME', grader_id),
+                'course': getattr(grader_cls, 'COURSE', '未分类'),
+                'description': '系统内置或无描述',
+                'strictness': 'standard',
+                'type': 'logic',  # 默认为 logic, direct 会被覆盖
+                'created_at': '',
+                'creator': 'System'
+            }
+
+            # 尝试判断类型
+            if getattr(grader_cls, 'is_ai_grader', False) or 'DirectGrader' in grader_cls.__name__:
+                info['type'] = 'direct'
+
+            # 融合数据库信息
+            task_info = task_map.get(grader_id)
+            if task_info:
+                info['description'] = task_info.get('extra_desc') or '暂无额外描述'
+                info['strictness'] = task_info.get('strictness', 'standard')
+                info['created_at'] = task_info.get('created_at', '')
+
+                creator_id = task_info.get('created_by')
+                if creator_id:
+                    info['creator'] = user_map.get(creator_id, 'Unknown')
+
+                # 如果是 Direct 类型，确保类型标识正确
+                if 'direct' in grader_id:
+                    info['type'] = 'direct'
+
+            strategies.append(info)
+
+        # 按创建时间倒序
+        strategies.sort(key=lambda x: x['created_at'] or '0', reverse=True)
+        return strategies

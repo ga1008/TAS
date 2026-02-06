@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import re
+import uuid
 
 import httpx
 import pandas as pd
@@ -187,13 +188,20 @@ class AiService:
     def generate_grader_worker(task_id, exam_text, std_text, strictness, extra_desc, extra_prompt, max_score,
                                app_config, course_name, user_id=None, task_name=None):
         from blueprints.notifications import NotificationService
-        def update_status(status, log, grader_id=None):
-            db.update_ai_task(task_id, status=status, log_info=log, grader_id=grader_id, course_name=course_name)
+
+        # 1. 统一生成系统级 ID，不依赖 AI
+        # 使用 random hex 避免 uuid 过长，同时加前缀标识类型
+        grader_id = f"logic_{uuid.uuid4().hex[:12]}"
+
+        def update_status(status, log, gid=None):
+            # 确保即使失败也记录 grader_id 以便追踪
+            target_gid = gid if gid else grader_id
+            db.update_ai_task(task_id, status=status, log_info=log, grader_id=target_gid, course_name=course_name)
             if user_id:
                 if status == 'processing':
                     NotificationService.notify_task_processing(user_id, task_id, task_name or '批改核心', log)
                 elif status == 'success':
-                    NotificationService.notify_task_success(user_id, task_id, task_name or '批改核心', grader_id)
+                    NotificationService.notify_task_success(user_id, task_id, task_name or '批改核心', target_gid)
                 elif status == 'failed':
                     NotificationService.notify_task_failed(user_id, task_id, task_name or '批改核心', log)
 
@@ -205,9 +213,15 @@ class AiService:
             prompt_parts.append(strict_prompt)
             prompt_parts[0] = prompt_parts[0].replace("{strictness_label}", strictness)
             prompt_parts.append(f"### 4. 分数控制\n满分必须严格等于 **{max_score}分**。")
-            if extra_desc: prompt_parts.append(f"### 5. 用户额外指令\n{extra_desc}")
-            if extra_prompt: prompt_parts.append(f"### 6. 额外生成提示\n{extra_prompt}")
-            prompt_parts.append(f"### 7. 输入素材\n---试卷---\n{exam_text}\n---标准---\n{std_text}")
+
+            # 注入用户明确的命名要求
+            prompt_parts.append(
+                f"### 5. 命名要求\n请在代码中设置：ID = '{grader_id}'\nNAME = '{task_name}'\nCOURSE = '{course_name}'")
+
+            if extra_desc: prompt_parts.append(f"### 6. 用户额外指令\n{extra_desc}")
+            if extra_prompt: prompt_parts.append(f"### 7. 额外生成提示\n{extra_prompt}")
+
+            prompt_parts.append(f"### 8. 输入素材\n---试卷---\n{exam_text}\n---标准---\n{std_text}")
             prompt_parts.append(EXAMPLE_PROMPT)
             final_prompt = "\n".join(prompt_parts)
 
@@ -221,9 +235,18 @@ class AiService:
             ai_content = response.json().get("response_text", "")
             code_match = re.search(r'```python(.*?)```', ai_content, re.DOTALL)
             code = code_match.group(1).strip() if code_match else ai_content
-            id_match = re.search(r'ID\s*=\s*["\']([^"\']+)["\']', code)
-            if not id_match: raise Exception("未找到 ID 定义")
-            grader_id = id_match.group(1)
+
+            # === 关键改进：强制覆写核心属性 ===
+            # 防止 AI 生成的 ID/NAME 与系统不一致
+            # 使用正则替换类属性
+            code = re.sub(r'ID\s*=\s*["\'].*?["\']', f'ID = "{grader_id}"', code)
+            code = re.sub(r'NAME\s*=\s*["\'].*?["\']', f'NAME = "{task_name}"', code)
+            code = re.sub(r'COURSE\s*=\s*["\'].*?["\']', f'COURSE = "{course_name}"', code)
+
+            # 如果 AI 没写这些属性（少见），则手动注入到 class 定义后
+            if f'ID = "{grader_id}"' not in code:
+                # 简单粗暴注入到 import 后，或者类定义第一行（稍微复杂，这里假设正则替换已生效或AI遵循了指令）
+                pass
 
             save_path = os.path.join(app_config['GRADERS_DIR'], f"{grader_id}.py")
             with open(save_path, 'w', encoding='utf-8') as f:
@@ -231,10 +254,17 @@ class AiService:
 
             GraderFactory._loaded = False
             GraderFactory.load_graders()
+
             if grader_id in GraderFactory._graders:
                 update_status("success", "生成成功", grader_id)
             else:
-                update_status("failed", "代码生成但加载失败", grader_id)
+                # 尝试再次强制加载
+                GraderFactory.load_graders()
+                if grader_id in GraderFactory._graders:
+                    update_status("success", "生成成功", grader_id)
+                else:
+                    update_status("failed", "代码生成但加载失败(语法错误?)", grader_id)
+
         except Exception as e:
             update_status("failed", f"执行异常: {str(e)}")
 

@@ -291,7 +291,374 @@ tailwind.config = {
 
 ---
 
-## 8. 示例模板 (Example Snippet)
+## 8. 微交互动画规范 (Micro-interaction Animations)
+
+本系统强调**每个可交互元素都必须有视觉反馈**。以下是标准化的动画过渡类，应在页面中复用。
+
+### 8.1 核心缓动函数
+
+所有动画统一使用 Material Design 推荐的缓动曲线：
+
+```css
+/* 标准缓动 - 用于大多数过渡 */
+transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+/* 快速响应 - 用于微小变化 */
+transition: all 0.2s ease;
+
+/* 柔和弹性 - 用于强调效果 */
+transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+```
+
+### 8.2 标准动画类库
+
+以下 CSS 类应在需要时复制到页面的 `<style>` 块中：
+
+```css
+/* 玻璃面板悬浮效果 */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+.glass-panel:hover {
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+}
+
+/* 玻璃输入框 - 悬浮上浮 + 聚焦光环 */
+.glass-input {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(10px);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-input:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.glass-input:focus {
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    border-color: #818cf8;
+}
+
+/* 步骤徽章 - 缩放旋转 */
+.step-badge {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+.step-badge:hover {
+    transform: scale(1.1) rotate(-3deg);
+}
+
+/* 操作链接 - 上浮 + 阴影 + 按压反馈 */
+.action-link {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.action-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+.action-link:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* 下拉菜单展开动画 */
+.dropdown-menu {
+    animation: dropdownSlide 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes dropdownSlide {
+    from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 列表选项 - 水平滑动 */
+.option-item {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.option-item:hover {
+    transform: translateX(4px);
+}
+.option-item:active {
+    transform: translateX(2px) scale(0.99);
+}
+
+/* 表单输入框聚焦放大 */
+.form-input {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.form-input:focus {
+    transform: scale(1.01);
+}
+
+/* 信息卡片入场动画 */
+.info-card {
+    animation: infoSlide 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes infoSlide {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 下拉箭头旋转 */
+.chevron-icon {
+    transition: transform 0.25s ease;
+}
+.dropdown-open .chevron-icon {
+    transform: rotate(180deg);
+}
+
+/* 确认面板悬浮 - 带色彩阴影 */
+.confirm-panel {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.confirm-panel:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -15px rgba(16, 185, 129, 0.2);
+}
+
+/* 标签徽章缩放 */
+.tag-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+    transition: transform 0.2s ease;
+}
+.tag-badge:hover {
+    transform: scale(1.05);
+}
+
+/* 自定义滚动条 (带悬浮效果) */
+.custom-scroll::-webkit-scrollbar { width: 4px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+```
+
+### 8.3 动画时长指南
+
+| 交互类型 | 推荐时长 | 说明 |
+|---------|---------|------|
+| 悬浮反馈 | 0.2s | 按钮、链接、图标 |
+| 面板/卡片 | 0.3s | 大面积元素的悬浮效果 |
+| 入场动画 | 0.4s | 新元素出现时 |
+| 下拉展开 | 0.2s | 快速响应用户操作 |
+| 图标变换 | 0.25s | 箭头旋转、图标切换 |
+
+---
+
+## 9. 步骤式表单布局 (Step-based Form Layout)
+
+多步骤表单应采用**数字徽章 + 连接线**的设计，清晰展示流程。
+
+### 9.1 步骤连接线
+
+```css
+.step-line {
+    position: absolute;
+    left: 19px;  /* 对齐徽章中心 */
+    top: 35px;
+    bottom: -20px;
+    width: 2px;
+    background: #e2e8f0;
+    z-index: 0;
+    transition: background 0.3s ease;
+}
+.step-item:last-child .step-line { display: none; }
+.step-item:hover .step-line { background: #c7d2fe; }  /* 悬浮时高亮 */
+```
+
+### 9.2 步骤徽章
+
+```html
+<div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-sm font-bold shadow-lg shadow-indigo-200 step-badge cursor-default">
+    1
+</div>
+```
+
+* **颜色区分**: 不同步骤使用不同主色（如 indigo → sky → emerald）
+* **阴影跟随**: 使用 `shadow-{color}-200` 让阴影呼应徽章颜色
+
+### 9.3 完整步骤项结构
+
+```html
+<div class="relative z-20 step-item">
+    <div class="step-line"></div>
+    <div class="flex justify-between items-center mb-3 relative z-10">
+        <label class="text-sm font-bold text-slate-800 flex items-center gap-3">
+            <div class="step-badge ...">1</div>
+            步骤标题
+        </label>
+        <a href="#" class="action-link ...">
+            <i class="fas fa-plus"></i> 辅助操作
+        </a>
+    </div>
+    <div class="ml-13 relative">
+        <!-- 步骤内容 -->
+    </div>
+</div>
+```
+
+---
+
+## 10. 下拉选择器组件 (Dropdown Selector)
+
+自定义下拉选择器采用**玻璃输入框触发器 + 浮动面板**的设计。
+
+### 10.1 组件结构
+
+```html
+<div class="relative" id="dropdown-container">
+    <input type="hidden" name="field" id="field-input" required>
+
+    <!-- 触发器 -->
+    <div class="glass-input w-full px-4 py-4 rounded-xl cursor-pointer flex items-center justify-between group"
+         onclick="toggleDropdown('dropdown-menu')" id="dropdown-trigger">
+        <span id="display" class="text-slate-400 font-medium text-sm group-hover:text-indigo-500 transition-colors">
+            点击选择...
+        </span>
+        <i class="fas fa-chevron-down text-slate-300 text-xs group-hover:text-indigo-400 chevron-icon"></i>
+    </div>
+
+    <!-- 下拉面板 -->
+    <div id="dropdown-menu" class="hidden absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 z-50 overflow-hidden dropdown-menu transform origin-top">
+        <!-- 搜索栏 (可选) -->
+        <div class="p-3 border-b border-slate-50 bg-slate-50/80 backdrop-blur-sm sticky top-0 z-10">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input type="text" placeholder="搜索..."
+                       class="w-full bg-white border border-slate-200 text-xs pl-8 pr-3 py-2.5 rounded-lg outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all">
+            </div>
+        </div>
+
+        <!-- 选项列表 -->
+        <div class="max-h-[320px] overflow-y-auto custom-scroll p-2 space-y-1">
+            <div class="option-item p-3 hover:bg-indigo-50 rounded-xl cursor-pointer border border-transparent hover:border-indigo-100 group/item">
+                <!-- 选项内容 -->
+            </div>
+        </div>
+    </div>
+</div>
+```
+
+### 10.2 JavaScript 控制逻辑
+
+```javascript
+function toggleDropdown(menuId) {
+    const menu = document.getElementById(menuId);
+    const isHidden = menu.classList.contains('hidden');
+
+    // 关闭所有其他下拉
+    document.querySelectorAll('[id$="-menu"]').forEach(el => {
+        el.classList.add('hidden');
+        const triggerId = el.id.replace('-menu', '-trigger');
+        const trigger = document.getElementById(triggerId);
+        if (trigger) trigger.classList.remove('dropdown-open');
+    });
+
+    const triggerId = menuId.replace('-menu', '-trigger');
+    const trigger = document.getElementById(triggerId);
+
+    if (isHidden) {
+        menu.classList.remove('hidden');
+        if (trigger) trigger.classList.add('dropdown-open');
+    }
+}
+
+// 点击外部关闭
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#dropdown-container')) {
+        document.querySelectorAll('[id$="-menu"]').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('[id$="-trigger"]').forEach(el => el.classList.remove('dropdown-open'));
+    }
+});
+```
+
+### 10.3 选项卡片设计
+
+每个选项应包含：图标 + 标题 + 标签徽章 + 悬浮动画
+
+```html
+<div class="option-item p-3 hover:bg-indigo-50 rounded-xl cursor-pointer border border-transparent hover:border-indigo-100 group/item">
+    <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-bold shadow-sm group-hover/item:scale-110 transition-transform">
+            <i class="fas fa-code"></i>
+        </div>
+        <div>
+            <h4 class="text-sm font-bold text-slate-700 group-hover/item:text-indigo-700 transition-colors">选项标题</h4>
+            <div class="flex items-center gap-2 mt-1.5">
+                <span class="tag-badge bg-slate-100 text-slate-500">分类</span>
+                <span class="tag-badge bg-blue-50 text-blue-500 border border-blue-100">状态</span>
+            </div>
+        </div>
+    </div>
+</div>
+```
+
+---
+
+## 11. 双栏确认布局 (Two-column Confirm Layout)
+
+适用于"配置 + 确认"类页面，如新建任务、提交表单等。
+
+### 11.1 布局结构
+
+```html
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+    <!-- 左侧配置区 (2/3 宽度) -->
+    <div class="lg:col-span-2">
+        <div class="glass-panel rounded-2xl shadow-sm p-8">
+            <!-- 配置表单 -->
+        </div>
+    </div>
+
+    <!-- 右侧确认区 (1/3 宽度, 粘性定位) -->
+    <div class="lg:col-span-1 h-full">
+        <div class="glass-panel confirm-panel p-8 rounded-2xl shadow-lg border-t-4 border-emerald-500 sticky top-24 flex flex-col">
+            <!-- 头部 -->
+            <div class="flex items-center gap-3 mb-8 pb-4 border-b border-slate-100">
+                <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-800">信息确认</h3>
+                    <p class="text-[10px] text-slate-400 uppercase tracking-wider">Confirm & Launch</p>
+                </div>
+            </div>
+
+            <!-- 内容区 -->
+            <div class="space-y-6 flex-1">
+                <!-- 只读/确认字段 -->
+            </div>
+
+            <!-- 提交按钮 -->
+            <div class="mt-8 pt-6 border-t border-slate-100">
+                <button type="submit" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-200 hover:shadow-xl hover:shadow-emerald-300 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-2 active:scale-95 group">
+                    <span class="group-hover:scale-110 transition-transform"><i class="fas fa-rocket"></i></span>
+                    <span>立即提交</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+```
+
+### 11.2 设计要点
+
+* **确认面板粘性定位**: `sticky top-24` 保持可见
+* **顶部色带**: `border-t-4 border-emerald-500` 突出重要性
+* **悬浮效果**: 使用 `.confirm-panel` 类添加上浮 + 彩色阴影
+* **按钮动效**: 包含图标放大 (`group-hover:scale-110`) 和按压反馈 (`active:scale-95`)
+
+---
+
+## 12. 示例模板 (Example Snippet)
 
 当需要生成一个“卡片信息展示”组件时，请参照以下结构：
 

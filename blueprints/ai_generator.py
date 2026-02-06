@@ -36,25 +36,36 @@ def ai_core_list_page():
     display_list = []
 
     active_ids = set()
-    for sid, sname, course in strategies:
+
+    # [修复] 适配新的 GraderFactory 返回的字典结构
+    for strategy in strategies:
+        sid = strategy['id']
+        sname = strategy['name']
+        # course = strategy['course'] # 这里暂时用不到
+
         active_ids.add(sid)
         task = db.get_task_by_grader_id(sid)
+
         # 只有 Admin 或者 创建者本人 才是 is_owner
         is_owner = False
         if task and task.get('creator_id') == g.user['id']:
             is_owner = True
 
-        creator_name = task.get('creator_name', 'System') if task else 'Built-in'
+        # 优先使用 Task 中的创建者，否则使用 Strategy 中的（可能为 System）
+        creator_name = task.get('creator_name', 'System') if task else strategy.get('creator', 'System')
+
         info = {
             "type": "grader",
             "id": sid,
             "name": sname,
             "status": "success",
             "log_info": "Ready",
-            "created_at": task['created_at'] if task else "未知",
-            "source": "AI 生成" if task else "系统内置",
+            "created_at": strategy.get('created_at') or (task['created_at'] if task else "未知"),
+            "source": "AI 生成" if task or strategy.get('type') == 'direct' else "系统内置",
             "creator": creator_name,
-            "is_owner": is_owner
+            "is_owner": is_owner,
+            "description": strategy.get('description', ''),
+            "strictness": strategy.get('strictness', 'standard')
         }
         display_list.append(info)
 
@@ -116,7 +127,7 @@ def create_task():
     name = request.form.get('task_name')
     strictness = request.form.get('strictness', 'standard')
     extra_desc = request.form.get('extra_desc', '')
-    extra_prompt = request.form.get('extra_prompt', '')  # Feature 001: Extra prompt for logic core generation
+    extra_prompt = request.form.get('extra_prompt', '')  # Feature 001
     max_score = int(request.form.get('max_score', 100))
 
     f_exam = request.files.get('exam_file')
@@ -142,18 +153,18 @@ def create_task():
 
     user_id = g.user['id']
     task_id = db.insert_ai_task(name, "pending", "提交中...", exam_path, std_path, strictness, extra_desc, max_score,
-                                user_id, course_name, extra_prompt)  # Feature 001: Add extra_prompt parameter
+                                user_id, course_name, extra_prompt)
 
     # 创建任务提交通知
     NotificationService.notify_task_created(user_id, task_id, name)
 
-    # 启动线程（传入 user_id 和 task_name 以便在状态变更时更新通知）
-    app_config = current_app.config  # 传递 config 给线程
+    # 启动线程
+    app_config = current_app.config
     t = threading.Thread(target=AiService.generate_grader_worker,
-                         args=(task_id, exam_text, std_text, strictness, extra_desc, extra_prompt, max_score, app_config, course_name, user_id, name))  # Feature 001: Add extra_prompt
+                         args=(task_id, exam_text, std_text, strictness, extra_desc, extra_prompt, max_score, app_config, course_name, user_id, name))
     t.start()
 
-    # 刷新 AI 欢迎语缓存（在用户生成评分核心后）
+    # 刷新 AI 欢迎语缓存
     try:
         from services.ai_content_service import invalidate_cache
         invalidate_cache(g.user['id'], 'ai_generator')
@@ -211,38 +222,31 @@ def delete_grader():
     task = None
 
     # 1. 尝试逻辑：先判断是不是 Task ID (数字)
-    # 失败的任务通常只剩下 Task ID，没有 grader_id
     if str(raw_id).isdigit():
         task = db.get_ai_task_by_id(int(raw_id))
 
-    # 2. 如果没找到，或者传来的明显是 grader_id (如 "direct_xxxx")
-    # 则尝试按 grader_id 查找
+    # 2. 尝试按 grader_id 查找
     if not task:
         task = db.get_task_by_grader_id(raw_id)
 
     if not task:
-        # 如果既找不到任务，文件也不存在，可能是旧数据遗留
         return jsonify({"msg": "任务记录不存在，无法删除"}), 404
 
     # 3. 权限检查
-    # 必须是创建者或者管理员
     if task.get('created_by') != g.user['id'] and not g.user.get('is_admin'):
         return jsonify({"msg": "您无权删除他人创建的核心"}), 403
 
     # 4. 执行删除操作
-
-    # A. 物理文件删除 (只有当 grader_id 存在时才需要删文件)
+    # A. 物理文件删除
     grader_id = task.get('grader_id')
     if grader_id:
         file_path = os.path.join(Config.GRADERS_DIR, f"{grader_id}.py")
-        # 即使文件不存在也不报错，继续删数据库记录
         if os.path.exists(file_path):
             timestamp = int(time.time())
             backup_name = f"{grader_id}_{timestamp}.py.bak"
             backup_path = os.path.join(Config.TRASH_DIR, backup_name)
             try:
                 shutil.move(file_path, backup_path)
-
                 # 记录进回收站表
                 GraderFactory.load_graders()
                 g_cls = GraderFactory._graders.get(grader_id)
@@ -251,11 +255,10 @@ def delete_grader():
             except Exception as e:
                 print(f"[Delete Error] Move file failed: {e}")
 
-    # B. 数据库状态软删除 (关键修复：使用 Task ID 更新)
-    # 这样即使 grader_id 为空，也能成功将状态置为 deleted
+    # B. 数据库状态软删除
     db.update_ai_task_status(task['id'], "deleted")
 
-    # C. 尝试热重载 (移除内存中的对象)
+    # C. 尝试热重载
     GraderFactory._loaded = False
     GraderFactory.load_graders()
 
@@ -264,7 +267,6 @@ def delete_grader():
 
 @bp.route('/api/create_direct_grader', methods=['POST'])
 def create_direct_grader():
-    """【补全】创建直通模式评分核心"""
     if not g.user: return jsonify({"msg": "Unauthorized"}), 401
 
     name = request.form.get('grader_name')
@@ -275,7 +277,6 @@ def create_direct_grader():
 
     course_name = request.form.get('course_name', '').strip()
 
-    # 验证必填字段 (T027)
     if not name or not name.strip():
         return jsonify({"msg": "核心名称不能为空"}), 400
     if not course_name:
@@ -288,7 +289,6 @@ def create_direct_grader():
     if not exam_path or not std_path: return jsonify({"msg": "文件缺失"}), 400
 
     # 智能解析
-    # 这里需要获取 file_id，可以通过 hash 获取
     with open(exam_path, 'rb') as f:
         ex_rec = db.get_file_by_hash(calculate_file_hash(f))
     with open(std_path, 'rb') as f:
@@ -319,7 +319,7 @@ def create_direct_grader():
     GraderFactory._loaded = False
     GraderFactory.load_graders()
 
-    # 刷新 AI 欢迎语缓存（在用户生成评分核心后）
+    # 刷新 AI 欢迎语缓存
     try:
         from services.ai_content_service import invalidate_cache
         invalidate_cache(g.user['id'], 'ai_generator')
@@ -331,25 +331,7 @@ def create_direct_grader():
 
 @bp.route('/api/ai/generate_name', methods=['POST'])
 def generate_core_name():
-    """
-    API: 根据上传的文档生成批改核心名称
-    Feature 001: AI Auto-Generation of Core Names
-
-    Request:
-        {
-            "exam_file_id": "file_hash_or_id",
-            "standard_file_id": "file_hash_or_id",
-            "course_name": "optional_course_name"
-        }
-
-    Response:
-        {
-            "status": "success" | "error",
-            "name": "generated_name",
-            "confidence": 0.9,
-            "message": "error_message_if_any"
-        }
-    """
+    """API: 生成核心名称"""
     if not g.user:
         return jsonify({"status": "error", "name": None, "confidence": 0, "message": "Unauthorized"}), 401
 
@@ -360,12 +342,7 @@ def generate_core_name():
         course_name = data.get('course_name', '')
 
         if not exam_file_id or not standard_file_id:
-            return jsonify({
-                "status": "error",
-                "name": None,
-                "confidence": 0,
-                "message": "文件ID不能为空"
-            }), 400
+            return jsonify({"status": "error", "name": None, "confidence": 0, "message": "文件ID不能为空"}), 400
 
         result = AiService.generate_core_name(exam_file_id, standard_file_id, course_name)
         return jsonify(result)
@@ -373,34 +350,12 @@ def generate_core_name():
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"generate_core_name error: {e}")
-        return jsonify({
-            "status": "error",
-            "name": None,
-            "confidence": 0,
-            "message": f"生成失败: {str(e)}"
-        }), 500
+        return jsonify({"status": "error", "name": None, "confidence": 0, "message": f"生成失败: {str(e)}"}), 500
 
 
 @bp.route('/api/ai/extract_course', methods=['POST'])
 def extract_course_name():
-    """
-    API: 从上传的文档中提取课程名称
-    Feature 001: Course Name Auto-Fill
-
-    Request:
-        {
-            "exam_file_id": "file_hash_or_id",
-            "standard_file_id": "file_hash_or_id"
-        }
-
-    Response:
-        {
-            "status": "success" | "error",
-            "course_name": "extracted_course_name",
-            "source": "metadata" | "ai_analysis" | "manual",
-            "message": "error_message_if_any"
-        }
-    """
+    """API: 提取课程名称"""
     if not g.user:
         return jsonify({"status": "error", "course_name": None, "source": "manual", "message": "Unauthorized"}), 401
 
@@ -410,12 +365,7 @@ def extract_course_name():
         standard_file_id = data.get('standard_file_id')
 
         if not exam_file_id or not standard_file_id:
-            return jsonify({
-                "status": "error",
-                "course_name": None,
-                "source": "manual",
-                "message": "文件ID不能为空"
-            }), 400
+            return jsonify({"status": "error", "course_name": None, "source": "manual", "message": "文件ID不能为空"}), 400
 
         result = AiService.extract_course_name(exam_file_id, standard_file_id)
         return jsonify(result)
@@ -423,9 +373,4 @@ def extract_course_name():
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"extract_course_name error: {e}")
-        return jsonify({
-            "status": "error",
-            "course_name": None,
-            "source": "manual",
-            "message": f"提取失败: {str(e)}"
-        }), 500
+        return jsonify({"status": "error", "course_name": None, "source": "manual", "message": f"提取失败: {str(e)}"}), 500
