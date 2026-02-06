@@ -52,11 +52,11 @@
     }
 </style>
 
-<!-- 快捷操作按钮 -->
 <div class="mb-6 flex justify-between items-center">
     <div class="flex items-center gap-2 text-sm text-slate-500">
         <i class="fas fa-code-branch"></i>
-        <span>批改核心: <strong class="text-indigo-600">{{ cls['strategy'] }}</strong></span>
+        <span>批改核心: <strong class="text-indigo-600" onclick="jumpTo('{{ grader_name }}', '{{ strategy }}')" style="cursor: pointer;">
+            {{ grader_name }}</strong></span>
     </div>
     <div class="flex items-center gap-2">
         <button onclick="openExportModal({{ cls['id'] }})" class="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg shadow-md shadow-emerald-200 hover:bg-emerald-600 hover:shadow-lg transition-all text-xs font-bold transform hover:-translate-y-0.5">
@@ -72,9 +72,7 @@
 </div>
 
 <div class="space-y-8">
-    <!-- 上传和批改区域 -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- 作业上传 -->
         <div class="lg:col-span-2 glass-panel rounded-2xl shadow-sm p-6 relative overflow-hidden group">
             <div class="absolute top-0 left-0 w-1.5 h-full bg-sky-500"></div>
 
@@ -86,12 +84,28 @@
             <div id="dropzone" class="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 p-8 text-center transition-all duration-300 hover:border-sky-400 hover:bg-sky-50 relative cursor-pointer">
                 <input type="file" id="fileInput" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="handleFiles(this.files)">
 
-                <div class="pointer-events-none transform transition-transform group-hover:scale-105 duration-300">
+                <div id="dropzoneDefault" class="pointer-events-none transform transition-transform group-hover:scale-105 duration-300">
                     <div class="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-4 text-sky-400">
                         <i class="fas fa-cloud-upload-alt text-3xl"></i>
                     </div>
                     <p class="text-slate-600 font-bold">拖拽全班作业压缩包到此处</p>
                     <p class="text-xs text-slate-400 mt-2">支持 .zip, .rar (文件名需包含学号或姓名)</p>
+                </div>
+
+                <div id="dropzoneSuccess" class="hidden pointer-events-none">
+                    <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-500">
+                        <i class="fas fa-check-circle text-3xl"></i>
+                    </div>
+                    <p class="text-emerald-600 font-bold">上传成功</p>
+                    <div class="flex items-center justify-center gap-4 mt-3 text-sm">
+                        <span class="bg-sky-50 text-sky-600 px-3 py-1 rounded-full border border-sky-100">
+                            <i class="fas fa-file-archive mr-1"></i> <span id="uploadedCount">0</span> 个文件
+                        </span>
+                        <span class="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full border border-emerald-100">
+                            <i class="fas fa-user-check mr-1"></i> <span id="matchedCount">0</span>/<span id="totalStudents">0</span> 匹配
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-3">点击可重新上传</p>
                 </div>
             </div>
 
@@ -99,7 +113,6 @@
             </div>
         </div>
 
-        <!-- 智能批改 -->
         <div class="glass-panel rounded-2xl shadow-sm p-6 flex flex-col relative overflow-hidden">
             <div class="absolute -right-6 -top-6 text-slate-50 opacity-10 pointer-events-none">
                 <i class="fas fa-robot text-9xl"></i>
@@ -116,7 +129,8 @@
                         <i class="fas fa-info-circle text-indigo-400 mt-0.5 text-xs"></i>
                         <p class="text-xs text-slate-500 leading-relaxed">
                             系统将解压并逐个分析学生作业。<br>
-                            <span class="text-indigo-600 font-medium">预计耗时: 30-60秒/人 (AI模式)</span>
+                            <span class="text-indigo-600 font-medium">AI 模式: 1-5min/人</span><br>
+                            <span class="text-indigo-600 font-medium">逻辑模式: 嗖的一声！</span>
                         </p>
                     </div>
                 </div>
@@ -132,7 +146,6 @@
         </div>
     </div>
 
-    <!-- 进度面板 -->
     <div id="progressPanel" class="hidden sticky top-20 z-30 transform transition-all duration-500 ease-out">
         <div class="bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-indigo-100 p-1">
             <div class="flex items-center p-4 gap-4">
@@ -164,17 +177,19 @@
         </div>
     </div>
 
-    <!-- 成绩表格 -->
     <div class="glass-panel rounded-2xl shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-slate-100" id="gradesTable">
+            <table class="min-w-full divide-y divide-slate-100 table-fixed" id="gradesTable">
                 <thead class="bg-slate-50/80">
-                    <tr>
-                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-30">学号</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-40">姓名</th>
+                    <tr class="w-full">
+                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-[120px]">学号</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-[120px]">姓名</th>
+
                         <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">AI 评分细则</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-24">总分</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-90">状态 / 报告</th>
+
+                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-[100px]">总分</th>
+
+                        <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-[320px]">状态 / 报告</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-slate-50 text-sm">
@@ -183,15 +198,15 @@
                         class="group hover:bg-slate-50 transition-colors duration-200
                                {{ 'bg-red-50/50' if s['status'] == 'MISSING' else ('bg-orange-50/50' if s['status'] == 'ERROR' else '') }}">
 
-                        <td class="px-6 py-4 font-mono text-slate-500 text-xs">{{ s['student_id'] }}</td>
+                        <td class="px-6 py-4 font-mono text-slate-500 text-xs truncate">{{ s['student_id'] }}</td>
 
                         <td class="px-6 py-4">
                             <div class="flex items-center">
-                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs mr-3 border border-indigo-100">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs mr-3 border border-indigo-100 flex-shrink-0">
                                     {{ s['name'][0] }}
                                 </div>
                                 <a href="/grading/{{ cls['id'] }}/student/{{ s['student_id'] }}" target="_blank"
-                                   class="font-bold text-slate-700 hover:text-indigo-600 transition-colors flex items-center gap-1">
+                                   class="font-bold text-slate-700 hover:text-indigo-600 transition-colors flex items-center gap-1 truncate">
                                     {{ s['name'] }}
                                     <i class="fas fa-external-link-alt text-[10px] opacity-0 group-hover:opacity-100 text-slate-400 transition-opacity"></i>
                                 </a>
@@ -233,11 +248,11 @@
                             {% elif s['status'] == 'ERROR' %}
                                 <div class="flex flex-col">
                                     <span class="text-orange-500 font-bold text-xs flex items-center"><i class="fas fa-exclamation-triangle mr-1"></i> 异常</span>
-                                    <span class="text-[10px] text-orange-400 truncate max-w-[150px]">{{ s['deduct_details'] }}</span>
+                                    <span class="text-[10px] text-orange-400 truncate max-w-[280px]">{{ s['deduct_details'] }}</span>
                                 </div>
                             {% elif s['status'] == 'PASS' or s['status'] == 'FAIL' %}
                                 {% if s['deduct_details'] %}
-                                    <div class="flex flex-wrap max-w-xs gap-1">
+                                    <div class="flex flex-wrap gap-1">
                                     {% for detail in s['deduct_details'].split(';') %}
                                         {% if detail.strip() %}
                                             <span class="deduct-pill">{{ detail }}</span>
@@ -251,7 +266,7 @@
                                 {% endif %}
                             {% endif %}
 
-                            <div class="text-[10px] text-slate-400 mt-1.5 flex items-center truncate max-w-[200px]">
+                            <div class="text-[10px] text-slate-400 mt-1.5 flex items-center truncate max-w-[280px]">
                                 {% if s['filename'] %}
                                     <i class="fas fa-file-archive mr-1.5"></i> {{ s['filename'] }}
                                 {% endif %}
@@ -276,6 +291,13 @@
     const CLASS_ID = {{ cls['id'] }};
     let isProcessing = false;
     let stopFlag = false;
+    let uploadCount = 0;
+
+    function jumpTo(grader_name, strategy) {
+        if (grader_name !== '未知核心或核心已删除' && strategy) {
+            window.open('/grader/{{ strategy }}')
+        }
+    }
 
     // === 文件上传逻辑 ===
     function handleFiles(files) {
@@ -291,10 +313,25 @@
         fetch(`/upload_zips/${CLASS_ID}`, { method: 'POST', body: formData })
         .then(res => res.json())
         .then(data => {
-            statusDiv.innerHTML = '<span class="text-emerald-600 font-bold flex items-center"><i class="fas fa-check-circle mr-2"></i> 上传完成! 页面即将刷新...</span>';
-            statusDiv.classList.remove('bg-indigo-50', 'text-indigo-700');
-            statusDiv.classList.add('bg-emerald-50');
-            setTimeout(() => location.reload(), 1500);
+            // 更新上传区域显示
+            document.getElementById('dropzoneDefault').classList.add('hidden');
+            document.getElementById('dropzoneSuccess').classList.remove('hidden');
+            document.getElementById('uploadedCount').textContent = data.count;
+            document.getElementById('matchedCount').textContent = data.matched_count;
+            document.getElementById('totalStudents').textContent = data.total_students;
+
+            // 更改上传框边框颜色
+            const dropzone = document.getElementById('dropzone');
+            dropzone.classList.remove('border-slate-200', 'bg-slate-50/50');
+            dropzone.classList.add('border-emerald-300', 'bg-emerald-50/30');
+
+            // 更新表格中匹配的学生状态
+            if (data.matched_students && data.matched_students.length > 0) {
+                updateMatchedStudentsStatus(data.matched_students);
+            }
+
+            statusDiv.classList.add('hidden');
+            uploadCount = data.count;
         })
         .catch(err => {
             alert('上传失败: ' + err);
@@ -302,9 +339,42 @@
         });
     }
 
+    // 更新匹配学生的状态显示
+    function updateMatchedStudentsStatus(matchedStudents) {
+        matchedStudents.forEach(student => {
+            const row = document.getElementById(`row-${student.student_id}`);
+            if (row) {
+                const statusCell = row.querySelector('.col-status');
+                const filename = student.filename;
+                const isZip = filename.toLowerCase().endsWith('.zip');
+                const isRar = filename.toLowerCase().endsWith('.rar');
+                const icon = isRar ? 'fa-file-archive' : 'fa-file-zipper';
+                const iconColor = isRar ? 'text-orange-500' : 'text-sky-500';
+
+                // 只有在还没有批改结果时才更新状态
+                const currentStatus = statusCell.innerHTML;
+                if (currentStatus.includes('未提交') || currentStatus.trim() === '-' || !currentStatus.trim()) {
+                    statusCell.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+                                <i class="fas ${icon} ${iconColor}"></i>
+                                <span class="text-slate-500">已就绪</span>
+                            </span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1.5 flex items-center truncate max-w-[280px]">
+                            <i class="fas fa-file-archive mr-1.5"></i> ${filename}
+                        </div>
+                    `;
+                    // 移除未提交的红色背景
+                    row.classList.remove('bg-red-50/50');
+                }
+            }
+        });
+    }
+
     // === 批量批改逻辑 ===
     async function startBatchGrading() {
-        if (!confirm('【AI核心耗时预警】\n\n• AI 将深度阅读代码与截图\n• 预计耗时: 30-60秒/人\n• 请保持页面开启\n\n确定开始吗？')) return;
+        {#if (!confirm('【AI核心耗时预警】\n\n• AI 将深度阅读代码与截图\n• 预计耗时: 30-60秒/人\n• 请保持页面开启\n\n确定开始吗？')) return;#}
 
         // UI 初始化
         isProcessing = true;
@@ -359,6 +429,9 @@
         }
 
         finishGrading(processed, total);
+
+        {#结束后强制刷新学生列表，确保数据一致#}
+        setTimeout(() => location.reload(), 1000);
     }
 
     function stopBatchGrading() {
@@ -398,16 +471,16 @@
 
         let statusHtml = '';
         if (data.deduct) {
-            statusHtml += '<div class="flex flex-wrap max-w-xs gap-1">';
+            statusHtml += '<div class="flex flex-wrap gap-1">';
             data.deduct.split(';').forEach(d => {
                 if (d.trim()) statusHtml += `<span class="deduct-pill">${d}</span>`;
             });
             statusHtml += '</div>';
         } else {
-            statusHtml = '<span class="text-emerald-600 font-bold text-xs flex items-center bg-emerald-50 px-2 py-1 rounded border border-emerald-100 w-fit"><i class="fas fa-check mr-1"></i> 完美通过</span>';
+            statusHtml = '<span class="text-emerald-600 font-bold text-xs flex items-center bg-emerald-50 px-2 py-1 rounded border border-emerald-100 w-fit"><i class="fas fa-check mr-1"></i> 正常批改 </span>';
         }
         if (data.filename) {
-            statusHtml += `<div class="text-[10px] text-slate-400 mt-1.5 flex items-center"><i class="fas fa-file-archive mr-1.5"></i> ${data.filename}</div>`;
+            statusHtml += `<div class="text-[10px] text-slate-400 mt-1.5 flex items-center truncate max-w-[280px]"><i class="fas fa-file-archive mr-1.5"></i> ${data.filename}</div>`;
         }
         row.querySelector('.col-status').innerHTML = statusHtml;
         row.className = row.className.replace(/bg-\w+-50\/50/g, '');
@@ -417,7 +490,7 @@
         row.querySelector('.col-status').innerHTML = `
             <div class="flex flex-col">
                 <span class="text-orange-500 font-bold text-xs flex items-center"><i class="fas fa-exclamation-triangle mr-1"></i> ${msg}</span>
-                ${filename ? `<div class="text-[10px] text-slate-400 mt-1">${filename}</div>` : ''}
+                ${filename ? `<div class="text-[10px] text-slate-400 mt-1 truncate max-w-[280px]">${filename}</div>` : ''}
             </div>
         `;
         row.classList.add('bg-orange-50/50');
@@ -448,6 +521,7 @@
             })
             .then(data => {
                 alert(data.msg || '成绩已清空');
+                uploadCount = 0;
                 location.reload();
             })
             .catch(err => {
@@ -473,6 +547,41 @@
                 alert('删除任务失败: ' + err.message);
             });
         }
+    }
+
+    // === 页面加载时检查文件匹配状态 ===
+    document.addEventListener('DOMContentLoaded', function() {
+        loadFileMatches();
+    });
+
+    function loadFileMatches() {
+        fetch(`/api/file_matches/${CLASS_ID}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.count > 0) {
+                // 更新上传区域显示
+                document.getElementById('dropzoneDefault').classList.add('hidden');
+                document.getElementById('dropzoneSuccess').classList.remove('hidden');
+                document.getElementById('uploadedCount').textContent = data.count;
+                document.getElementById('matchedCount').textContent = data.matched_count;
+                document.getElementById('totalStudents').textContent = data.total_students;
+
+                // 更改上传框边框颜色
+                const dropzone = document.getElementById('dropzone');
+                dropzone.classList.remove('border-slate-200', 'bg-slate-50/50');
+                dropzone.classList.add('border-emerald-300', 'bg-emerald-50/30');
+
+                // 更新表格中匹配的学生状态
+                if (data.matched_students && data.matched_students.length > 0) {
+                    updateMatchedStudentsStatus(data.matched_students);
+                }
+
+                uploadCount = data.count;
+            }
+        })
+        .catch(err => {
+            console.error('Failed to load file matches:', err);
+        });
     }
 </script>
 

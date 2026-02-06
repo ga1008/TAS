@@ -5,6 +5,54 @@
     let currentFileType = ''; // 'exam', 'std', 'direct_exam', 'direct_std'
     let selectedFileId = null;
     let selectedFileName = '';
+    let showAllFiles = false; // 是否显示所有文件类型
+
+    // 文件类型筛选配置
+    const FILE_TYPE_FILTERS = {
+        // 试卷类型：文档类
+        exam: {
+            label: '试卷文档',
+            extensions: ['.pdf', '.doc', '.docx', '.txt', '.md'],
+            chips: [
+                { label: 'PDF', ext: '.pdf', icon: 'fa-file-pdf', color: 'rose' },
+                { label: 'Word', ext: '.doc,.docx', icon: 'fa-file-word', color: 'blue' },
+                { label: '文本', ext: '.txt,.md', icon: 'fa-file-alt', color: 'slate' }
+            ]
+        },
+        // 评分标准：文档类
+        std: {
+            label: '评分标准',
+            extensions: ['.pdf', '.doc', '.docx', '.txt', '.md', '.xlsx', '.xls'],
+            chips: [
+                { label: 'PDF', ext: '.pdf', icon: 'fa-file-pdf', color: 'rose' },
+                { label: 'Word', ext: '.doc,.docx', icon: 'fa-file-word', color: 'blue' },
+                { label: 'Excel', ext: '.xlsx,.xls', icon: 'fa-file-excel', color: 'emerald' },
+                { label: '文本', ext: '.txt,.md', icon: 'fa-file-alt', color: 'slate' }
+            ]
+        },
+        // Direct AI 试卷：多模态支持
+        direct_exam: {
+            label: '多模态试卷',
+            extensions: ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.mp4', '.mov'],
+            chips: [
+                { label: 'PDF', ext: '.pdf', icon: 'fa-file-pdf', color: 'rose' },
+                { label: 'Word', ext: '.doc,.docx', icon: 'fa-file-word', color: 'blue' },
+                { label: '图片', ext: '.jpg,.jpeg,.png', icon: 'fa-file-image', color: 'amber' },
+                { label: '视频', ext: '.mp4,.mov', icon: 'fa-file-video', color: 'purple' }
+            ]
+        },
+        // Direct AI 评分标准
+        direct_std: {
+            label: '评分标准',
+            extensions: ['.pdf', '.doc', '.docx', '.txt', '.md', '.xlsx', '.xls'],
+            chips: [
+                { label: 'PDF', ext: '.pdf', icon: 'fa-file-pdf', color: 'rose' },
+                { label: 'Word', ext: '.doc,.docx', icon: 'fa-file-word', color: 'blue' },
+                { label: 'Excel', ext: '.xlsx,.xls', icon: 'fa-file-excel', color: 'emerald' },
+                { label: '文本', ext: '.txt,.md', icon: 'fa-file-alt', color: 'slate' }
+            ]
+        }
+    };
 
     // --- Tab 切换逻辑 ---
     function switchTab(type) {
@@ -132,27 +180,87 @@
     // ===========================
     function openFileModal(type) {
         currentFileType = type;
+        showAllFiles = false; // 重置为筛选模式
         document.getElementById('fileModal').classList.remove('hidden');
+        document.getElementById('fileSearch').value = ''; // 清空搜索
+        renderFilterChips(); // 渲染筛选标签
         fetchFiles();
     }
+
     function closeFileModal() {
         document.getElementById('fileModal').classList.add('hidden');
         selectedFileId = null;
+    }
+
+    // 渲染筛选标签
+    function renderFilterChips() {
+        const container = document.getElementById('filterChipsContainer');
+        const showAllBtn = document.getElementById('filterShowAll');
+        const filterConfig = FILE_TYPE_FILTERS[currentFileType];
+
+        if (!filterConfig) {
+            container.innerHTML = '';
+            showAllBtn.classList.add('hidden');
+            return;
+        }
+
+        // 显示"显示全部"按钮
+        showAllBtn.classList.remove('hidden');
+        if (showAllFiles) {
+            showAllBtn.innerHTML = '<i class="fas fa-filter mr-1"></i> 智能筛选';
+            showAllBtn.classList.add('bg-indigo-100', 'text-indigo-600', 'border-indigo-200');
+            showAllBtn.classList.remove('bg-slate-100', 'text-slate-600', 'border-slate-200');
+        } else {
+            showAllBtn.innerHTML = '<i class="fas fa-th-list mr-1"></i> 显示全部';
+            showAllBtn.classList.remove('bg-indigo-100', 'text-indigo-600', 'border-indigo-200');
+            showAllBtn.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200');
+        }
+
+        // 渲染类型标签
+        if (showAllFiles) {
+            container.innerHTML = '<span class="text-[10px] text-slate-400 italic">显示所有文件类型</span>';
+        } else {
+            container.innerHTML = filterConfig.chips.map(chip => `
+                <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-${chip.color}-50 text-${chip.color}-600 border border-${chip.color}-100">
+{#                    <i class="fas ${chip.icon} mr-1"></i>${chip.label}#}
+                </span>
+            `).join('');
+        }
+    }
+
+    // 切换显示全部/筛选模式
+    function toggleShowAllFiles() {
+        showAllFiles = !showAllFiles;
+        renderFilterChips();
+        fetchFiles(document.getElementById('fileSearch').value);
     }
 
     function fetchFiles(query='') {
         const list = document.getElementById('fileList');
         list.innerHTML = '<div class="text-center py-10"><i class="fas fa-circle-notch fa-spin text-indigo-500"></i></div>';
 
-        fetch(`/api/files?q=${encodeURIComponent(query)}`)
+        // 构建 URL 参数
+        let url = `/api/files?q=${encodeURIComponent(query)}`;
+
+        // 如果不是显示全部模式，添加扩展名筛选
+        if (!showAllFiles && FILE_TYPE_FILTERS[currentFileType]) {
+            const extensions = FILE_TYPE_FILTERS[currentFileType].extensions.join(',');
+            url += `&category=${currentFileType}`;
+        }
+
+        fetch(url)
         .then(res => res.json())
         .then(files => {
             if(files.length === 0) {
-                list.innerHTML = `<div class="text-center text-slate-400 py-10 flex flex-col items-center"><i class="fas fa-folder-open text-3xl mb-2 opacity-30"></i><p class="text-xs">无相关文件</p></div>`;
+                const filterConfig = FILE_TYPE_FILTERS[currentFileType];
+                const hint = !showAllFiles && filterConfig
+                    ? `<p class="text-[10px] mt-2">当前筛选: ${filterConfig.label}</p><button type="button" onclick="toggleShowAllFiles()" class="mt-2 text-[10px] text-indigo-500 hover:text-indigo-700 underline">显示全部文件</button>`
+                    : '';
+                list.innerHTML = `<div class="text-center text-slate-400 py-10 flex flex-col items-center"><i class="fas fa-folder-open text-3xl mb-2 opacity-30"></i><p class="text-xs">无相关文件</p>${hint}</div>`;
                 return;
             }
             list.innerHTML = files.map(f => `
-                <div class="file-item border border-slate-100 rounded-xl p-3 hover:bg-slate-50 cursor-pointer transition flex justify-between items-center group"
+                <div class="file-item border border-slate-100 rounded-xl p-3 hover:bg-slate-50 cursor-pointer transition-all duration-200 flex justify-between items-center group hover:border-indigo-200"
                      onclick="selectFileItem(this, ${f.id}, '${escapeJs(f.original_name)}')">
                     <div class="flex items-center overflow-hidden">
                         <div class="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mr-3 group-hover:bg-indigo-100 transition">
@@ -177,8 +285,12 @@
         name = name.toLowerCase();
         if(name.endsWith('.pdf')) return 'fa-file-pdf';
         if(name.endsWith('.doc') || name.endsWith('.docx')) return 'fa-file-word';
-        if(name.endsWith('.jpg') || name.endsWith('.png')) return 'fa-file-image';
-        return 'fa-file-alt';
+        if(name.endsWith('.xls') || name.endsWith('.xlsx')) return 'fa-file-excel';
+        if(name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.gif')) return 'fa-file-image';
+        if(name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.avi')) return 'fa-file-video';
+        if(name.endsWith('.txt') || name.endsWith('.md')) return 'fa-file-alt';
+        if(name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z')) return 'fa-file-archive';
+        return 'fa-file';
     }
 
     function selectFileItem(el, id, name) {

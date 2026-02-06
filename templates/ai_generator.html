@@ -16,19 +16,32 @@
         background: rgba(255, 255, 255, 0.7);
         backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.5);
+        transition: box-shadow 0.3s ease, transform 0.3s ease;
+    }
+    .glass-panel:hover {
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
     }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .drag-active { background-color: #f0f9ff !important; border-color: #0ea5e9 !important; box-shadow: 0 0 15px rgba(14, 165, 233, 0.2); }
     .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+
+    /* Icon badge animation */
+    .icon-badge {
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+    }
+    .icon-badge:hover {
+        transform: scale(1.1) rotate(-3deg);
+        box-shadow: 0 8px 25px -5px rgba(99, 102, 241, 0.4);
+    }
 </style>
 
 <div class="max-w-6xl mx-auto space-y-6">
     <!-- 顶部操作栏 -->
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <span class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+            <span class="icon-badge bg-gradient-to-br from-indigo-500 to-purple-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
                 <i class="fas fa-magic text-lg"></i>
             </span>
             <div>
@@ -48,36 +61,7 @@
 </div>
 
 <!-- 文件选择模态框 -->
-<div id="fileModal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onclick="closeFileModal()"></div>
-    <div class="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden animate-fade-in-up">
-        <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-            <h3 class="font-bold text-slate-800 flex items-center gap-2">
-                <i class="fas fa-folder-open text-indigo-500"></i> 文件库选择
-            </h3>
-            <button onclick="closeFileModal()" class="text-slate-400 hover:text-slate-600 w-8 h-8 rounded-full hover:bg-slate-200 flex items-center justify-center transition">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <div class="p-4 bg-white border-b border-slate-50">
-            <div class="relative group">
-                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"></i>
-                <input type="text" id="fileSearch" placeholder="搜索文件名..."
-                       class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 outline-none transition"
-                       oninput="fetchFiles(this.value)">
-            </div>
-        </div>
-
-        <div id="fileList" class="flex-1 overflow-y-auto p-4 space-y-2 bg-white min-h-[300px]">
-        </div>
-
-        <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-            <button onclick="closeFileModal()" class="px-4 py-2 text-slate-500 hover:text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition">取消</button>
-            <button onclick="confirmFileSelection()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-md shadow-indigo-200 text-sm transition transform active:scale-95">确定选择</button>
-        </div>
-    </div>
-</div>
+{% include 'components/gen_modals.html' %}
 
 <!-- 脚本 -->
 {% include 'components/gen_form_scripts.html' %}

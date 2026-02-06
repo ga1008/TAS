@@ -81,8 +81,13 @@ def new_class():
 def grading_view(class_id):
     cls = db.get_class_by_id(class_id)
     if not cls or cls['created_by'] != g.user['id']: return "Unauthorized", 403
+
+    GraderFactory.load_graders()
+    grader = GraderFactory.get_grader(cls['strategy'])
+    grader_name = grader.NAME if grader else "未知核心或核心已删除"
+
     students = db.get_students_with_grades(class_id)
-    return render_template('grading.html', cls=cls, students=students, user=g.user)
+    return render_template('grading.html', cls=cls, students=students, user=g.user, grader_name=grader_name, strategy=cls['strategy'])
 
 
 @bp.route('/api/grade_student/<int:class_id>/<string:student_id>', methods=['POST'])
@@ -165,11 +170,80 @@ def upload_zips(class_id):
 
     files = request.files.getlist('files')
     count = 0
+    uploaded_files = []
     for file in files:
         if file and file.filename:
             file.save(os.path.join(raw_dir, file.filename))
+            uploaded_files.append(file.filename)
             count += 1
-    return jsonify({"msg": f"上传 {count} 个文件成功"})
+
+    # 匹配学生文件
+    students = db.get_students_with_grades(class_id)
+    matched_students = []
+
+    all_files = os.listdir(raw_dir) if os.path.exists(raw_dir) else []
+    for s in students:
+        student_id = s['student_id']
+        name = s['name']
+        matched_file = None
+        for f in all_files:
+            if str(student_id) in f or name in f:
+                matched_file = f
+                break
+        if matched_file:
+            matched_students.append({
+                'student_id': student_id,
+                'name': name,
+                'filename': matched_file
+            })
+
+    return jsonify({
+        "msg": f"上传 {count} 个文件成功",
+        "count": count,
+        "matched_count": len(matched_students),
+        "total_students": len(students),
+        "matched_students": matched_students
+    })
+
+
+@bp.route('/api/file_matches/<int:class_id>')
+def api_file_matches(class_id):
+    """获取班级学生的文件匹配状态"""
+    cls = db.get_class_by_id(class_id)
+    if not cls or cls['created_by'] != g.user['id']:
+        return jsonify({"msg": "Unauthorized"}), 403
+
+    ws_path = FileService.get_real_workspace_path(class_id)
+    raw_dir = os.path.join(ws_path, 'raw_zips')
+
+    students = db.get_students_with_grades(class_id)
+    matched_students = []
+    total_files = 0
+
+    if os.path.exists(raw_dir):
+        all_files = os.listdir(raw_dir)
+        total_files = len(all_files)
+        for s in students:
+            student_id = s['student_id']
+            name = s['name']
+            matched_file = None
+            for f in all_files:
+                if str(student_id) in f or name in f:
+                    matched_file = f
+                    break
+            if matched_file:
+                matched_students.append({
+                    'student_id': student_id,
+                    'name': name,
+                    'filename': matched_file
+                })
+
+    return jsonify({
+        "count": total_files,
+        "matched_count": len(matched_students),
+        "total_students": len(students),
+        "matched_students": matched_students
+    })
 
 
 # === 删除了这里重复的 student_detail 和 preview_file 的旧代码 ===
@@ -388,6 +462,55 @@ def export_to_library(class_id):
         return jsonify({"status": "error", "msg": f"导出失败: {str(e)}"})
 
 
+def _robust_rmtree(path, max_retries=3):
+    """
+    Windows 兼容的目录删除函数
+    处理文件锁定、只读属性等问题
+    """
+    import shutil
+    import stat
+    import time
+
+    def onerror(func, path, exc_info):
+        """错误处理：清除只读属性后重试"""
+        try:
+            os.chmod(path, stat.S_IWUSR | stat.S_IRUSR)
+            func(path)
+        except Exception:
+            pass  # 忽略，让重试机制处理
+
+    for attempt in range(max_retries):
+        try:
+            if os.path.exists(path):
+                shutil.rmtree(path, onerror=onerror)
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(0.5)  # 等待文件释放
+            else:
+                # 最后一次尝试：逐个删除文件
+                try:
+                    for root, dirs, files in os.walk(path, topdown=False):
+                        for name in files:
+                            file_path = os.path.join(root, name)
+                            try:
+                                os.chmod(file_path, stat.S_IWUSR | stat.S_IRUSR)
+                                os.remove(file_path)
+                            except Exception:
+                                pass
+                        for name in dirs:
+                            dir_path = os.path.join(root, name)
+                            try:
+                                os.rmdir(dir_path)
+                            except Exception:
+                                pass
+                    os.rmdir(path)
+                    return True
+                except Exception:
+                    raise e
+    return False
+
+
 @bp.route('/clear_data/<int:class_id>', methods=['POST'])
 def clear_data(class_id):
     """清空班级的所有成绩和上传的文件"""
@@ -400,15 +523,14 @@ def clear_data(class_id):
 
     # 删除上传的文件和解压的文件
     ws_path = FileService.get_real_workspace_path(class_id)
-    import shutil
     if os.path.exists(ws_path):
         try:
-            shutil.rmtree(ws_path)
+            _robust_rmtree(ws_path)
             os.makedirs(ws_path, exist_ok=True)  # 重建目录
         except Exception as e:
             return jsonify({"msg": f"文件删除失败: {str(e)}"}), 500
 
-    return jsonify({"msg": "成绩和文件已清空"})
+    return jsonify({"msg": "成绩和文件已清空\n\n注意：再次批改需要重新上传文件"})
 
 
 @bp.route('/delete_class/<int:class_id>', methods=['POST'])
@@ -423,10 +545,9 @@ def delete_class(class_id):
 
     # 删除工作空间文件
     ws_path = FileService.get_real_workspace_path(class_id)
-    import shutil
     if os.path.exists(ws_path):
         try:
-            shutil.rmtree(ws_path)
+            _robust_rmtree(ws_path)
         except Exception as e:
             return jsonify({"msg": f"文件删除失败: {str(e)}"}), 500
 

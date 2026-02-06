@@ -132,9 +132,24 @@ def my_files():
 
 @bp.route('/api/files')
 def all_files():
-    """【补全】获取所有文件（用于公共选择）"""
+    """【补全】获取所有文件（用于公共选择）
+
+    Query params:
+        q: 搜索关键字
+        ext: 扩展名筛选（逗号分隔），如 ext=.pdf,.docx
+    """
     search = request.args.get('q', '')
-    files = db.get_files(limit=50, search_name=search)
+    ext_param = request.args.get('ext', '')
+    category = request.args.get('category', '')
+
+    extensions = None
+    if ext_param:
+        extensions = [e.strip() for e in ext_param.split(',') if e.strip()]
+
+    doc_category = category if category and category != 'all' else None
+    doc_category = "standard" if doc_category == "std" else doc_category
+
+    files = db.get_files(limit=50, search_name=search, extensions=extensions, doc_category=doc_category)
     return jsonify(files)
 
 

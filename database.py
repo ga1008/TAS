@@ -700,8 +700,15 @@ class Database:
 
         return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
-    def get_files(self, limit=50, search_name=None):
-        """获取所有文件，支持搜索"""
+    def get_files(self, limit=50, search_name=None, extensions=None, doc_category=None):
+        """获取所有文件，支持搜索和扩展名筛选
+
+        Args:
+            limit: 返回数量限制
+            search_name: 文件名搜索关键字
+            extensions: 扩展名列表，如 ['.pdf', '.docx']，为空则不筛选
+            doc_category: 文档类别筛选，如 'exam', 'course_material'，为空则不筛选
+        """
         conn = self.get_connection()
         sql = "SELECT * FROM file_assets WHERE 1=1 "
         params = []
@@ -709,6 +716,16 @@ class Database:
         if search_name:
             sql += " AND original_name LIKE ? "
             params.append(f"%{search_name}%")
+
+        if extensions:
+            # 使用 LOWER 确保大小写不敏感匹配
+            conditions = ' OR '.join([f"LOWER(original_name) LIKE ?" for _ in extensions])
+            sql += f" AND ({conditions}) "
+            for ext in extensions:
+                params.append(f"%{ext.lower()}")
+        if doc_category:
+            sql += " AND doc_category = ? "
+            params.append(doc_category)
 
         sql += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)

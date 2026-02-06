@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, g, session
 
 from extensions import db
+from grading_core.factory import GraderFactory
 
 bp = Blueprint('main', __name__)
 
@@ -26,6 +27,7 @@ def index():
 def tasks():
     """批改任务列表页面"""
     classes = db.get_classes(user_id=g.user['id'])
+    GraderFactory.load_graders()
 
     # 为每个班级添加统计信息
     for cls in classes:
@@ -43,6 +45,10 @@ def tasks():
             (cls['id'],)
         ).fetchone()
         cls['graded_count'] = graded_count_row['count'] if graded_count_row else 0
+
+        grader = GraderFactory.get_grader(cls['strategy'])
+        grader_name = grader.NAME if grader else "未知核心或核心已删除"
+        cls['grader_name'] = grader_name
 
     return render_template('tasks.html', classes=classes, user=g.user)
 
