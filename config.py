@@ -40,9 +40,10 @@ BASE_CREATOR_PROMPT = """
 ### 1. 代码架构要求 (Strict)
 - **输出**: 只输出一段完整的 Python 代码，包含在 ```python ... ``` 块中。
 - **继承**: 必须导入 `from grading_core.base import BaseGrader, GradingResult` 并继承 `BaseGrader`。
-- **类属性**: 
+- **类属性**:
   - `ID`: 必须唯一。
   - `NAME`: 核心显示的名称，请务必将"{strictness_label}"标记包含在名称中，例如 "Java期末(宽松模式)"。
+  - `COURSE`: 课程名称（必须设置），从试卷内容或提供的课程名称中提取，例如 "数据结构"、"Java程序设计"。
 - **核心方法**: 实现 `def grade(self, student_dir, student_info) -> GradingResult:`。
 - **结果对象**: 使用 `self.res.add_sub_score(name, score)` 记录分项，最后计算 `self.res.total_score`。
 - 请仔细分析评分细则，将试卷划分为若干逻辑块（如 Task1, Task2, Task3...）。
@@ -315,19 +316,19 @@ class ExamGrader(BaseGrader):
     def grade(self, student_dir, student_info) -> GradingResult:
         self.res = GradingResult()
         self.scan_files(student_dir) # 1. 扫描
-        
+
         # --- 批改第一题 ---
         t1_score = 0
         path, pen = self.smart_find("1.png")
         if path: t1_score += 10
         # ... 其他逻辑 ...
         self.res.add_sub_score("Task 1: 截图", t1_score) # 记录分项
-        
+
         # --- 批改第二题 ---
         t2_score = 0
         # ... 调用 verify_command ...
         self.res.add_sub_score("Task 2: 脚本编写", t2_score) # 记录分项
-        
+
         # --- 后续题目（如果有）---
         ... ...
 
@@ -336,4 +337,45 @@ class ExamGrader(BaseGrader):
         self.res.is_pass = self.res.total_score >= 60
         return self.res
 ```
+"""
+
+
+# === 元数据提取 Prompts (Feature 001: Core Creation Improvements) ===
+
+NAME_GENERATION_PROMPT = """
+你是一名教育系统专家。请根据以下文档信息，生成一个批改核心的名称。
+
+### 命名格式要求
+格式：[年份/季节]-[课程名称]-[作业类型]批改核心
+
+示例：
+- 2026春-数据结构-期末实验批改核心
+- 2025秋-Java程序设计-期中考试批改核心
+- 2026-操作系统-Linux实验批改核心
+
+### 文档信息
+- 试卷文件名：{exam_filename}
+- 评分标准文件名：{std_filename}
+- 课程名称：{course_name}
+- 当前时间：{current_time}
+
+### 输出要求
+1. 只返回生成的核心名称，不要其他内容
+2. 尽可能从文件名中提取年份/季节信息（如：2026春、2025秋、2026等）
+3. 如果文件名中没有明确信息，使用当前时间推断年份
+4. 课程名称使用提供的 {course_name}
+5. 作业类型可以从文件名推断（如：期末实验、期中考试、作业一、大作业等）
+"""
+
+COURSE_EXTRACTION_PROMPT = """
+你是一名教育系统专家。请从以下文档内容中提取课程名称。
+
+### 文档内容摘要
+{exam_content}
+
+### 输出要求
+1. 只返回课程名称，不要其他内容
+2. 课程名称通常是文档标题或开头的主要内容
+3. 如果文档中没有明确的课程名称，返回空字符串
+4. 课程名称应该是中文，如"数据结构与算法"、"Java程序设计"等
 """

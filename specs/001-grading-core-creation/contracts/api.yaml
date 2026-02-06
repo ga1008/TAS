@@ -1,0 +1,271 @@
+openapi: 3.0.3
+info:
+  title: Grading Core Creation API
+  description: API endpoints for the grading core creation and task selection improvements feature
+  version: 1.0.0
+  contact:
+    name: AI Grading System
+
+servers:
+  - url: http://127.0.0.1:5010
+    description: Local development server
+
+tags:
+  - name: AI Metadata
+    description: AI-powered metadata extraction for grading cores
+  - name: Strategies
+    description: Grading core/strategy enumeration
+
+paths:
+  /api/ai/generate_name:
+    post:
+      tags:
+        - AI Metadata
+      summary: Generate core name from documents
+      description: |
+        Analyzes the selected exam and grading criteria documents to generate
+        a meaningful core name following the format:
+        [Year/Season]-[CourseName]-[AssignmentType]批改核心
+
+        Example: "2026春-数据结构-期末实验批改核心"
+      operationId: generateCoreName
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - exam_file_id
+                - standard_file_id
+              properties:
+                exam_file_id:
+                  type: string
+                  description: The file hash or ID of the exam document
+                  example: "abc123def456"
+                standard_file_id:
+                  type: string
+                  description: The file hash or ID of the grading criteria document
+                  example: "def456ghi789"
+                course_name:
+                  type: string
+                  description: Optional pre-extracted course name for better accuracy
+                  example: "数据结构与算法"
+      responses:
+        '200':
+          description: Name generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  name:
+                    type: string
+                    description: Generated core name
+                    example: "2026春-数据结构-期末实验批改核心"
+                  confidence:
+                    type: number
+                    format: float
+                    minimum: 0
+                    maximum: 1
+                    description: Confidence score of the generation
+                    example: 0.95
+        '400':
+          description: Bad request - missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: AI service unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [error]
+                  message:
+                    type: string
+                    example: "AI service unavailable"
+                  fallback_allowed:
+                    type: boolean
+                    description: Whether user can proceed with manual entry
+                    example: true
+
+  /api/ai/extract_course:
+    post:
+      tags:
+        - AI Metadata
+      summary: Extract course name from documents
+      description: |
+        Extracts the course name from the selected documents.
+        First checks file_assets.course_name, then parses meta_info JSON,
+        falls back to AI content analysis.
+
+        Triggered automatically when both exam and grading criteria files are selected.
+      operationId: extractCourseName
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - exam_file_id
+                - standard_file_id
+              properties:
+                exam_file_id:
+                  type: string
+                  description: The file hash or ID of the exam document
+                  example: "abc123def456"
+                standard_file_id:
+                  type: string
+                  description: The file hash or ID of the grading criteria document
+                  example: "def456ghi789"
+      responses:
+        '200':
+          description: Course name extracted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  course_name:
+                    type: string
+                    description: Extracted course name
+                    example: "数据结构与算法"
+                  source:
+                    type: string
+                    enum: [metadata, ai_analysis, manual]
+                    description: How the course name was obtained
+                    example: "metadata"
+        '400':
+          description: Bad request - missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: AI service unavailable (manual entry allowed)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [error]
+                  message:
+                    type: string
+                    example: "Unable to extract course name"
+                  fallback_allowed:
+                    type: boolean
+                    example: true
+
+  /api/strategies:
+    get:
+      tags:
+        - Strategies
+      summary: Get all available grading cores
+      description: |
+        Returns a list of all available grading cores (strategies).
+        Each entry includes the core ID, display name, and associated course name.
+
+        **Enhanced**: Now returns proper course names with "未分类" fallback
+        for cores with missing course information.
+      operationId: getStrategies
+      responses:
+        '200':
+          description: List of grading cores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+                  items:
+                    oneOf:
+                      - type: string
+                      - type: string
+                      - type: string
+                  minItems: 3
+                  maxItems: 3
+                  example:
+                    - "linux_final_2026_std"
+                    - "Linux期末批改核心"
+                    - "Linux系统编程"
+              examples:
+                complete:
+                  summary: Cores with complete information
+                  value:
+                    - ["linux_final_2026_std", "Linux期末批改核心", "Linux系统编程"]
+                    - ["java_experiment_01", "Java实验一-基础语法", "Java程序设计"]
+                with_fallback:
+                  summary: Cores with fallback course names
+                  value:
+                    - ["direct_9fa38898", "视频作业批改核心", "未分类"]
+                    - ["legacy_core", "通用批改核心", "未分类"]
+
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          enum: [error]
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error details (optional)
+          additionalProperties: true
+
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Session-based authentication (Flask sessions)
+
+security:
+  - sessionAuth: []
+
+# Example Request/Response Pairs
+x-examples:
+  generateName:
+    request:
+      exam_file_id: "abc123def456"
+      standard_file_id: "def456ghi789"
+      course_name: "数据结构与算法"
+    response:
+      status: "success"
+      name: "2026春-数据结构-期末实验批改核心"
+      confidence: 0.95
+
+  extractCourse:
+    request:
+      exam_file_id: "abc123def456"
+      standard_file_id: "def456ghi789"
+    response:
+      status: "success"
+      course_name: "数据结构与算法"
+      source: "metadata"
+
+  getStrategies:
+    response:
+      - ["linux_final_2026_std", "Linux期末批改核心", "Linux系统编程"]
+      - ["java_experiment_01", "Java实验一-基础语法", "Java程序设计"]
+      - ["direct_9fa38898", "视频作业批改核心", "未分类"]

@@ -122,7 +122,13 @@ def create_task():
     f_exam = request.files.get('exam_file')
     f_std = request.files.get('standard_file')
 
-    course_name = request.files.get('course_name')
+    course_name = request.form.get('course_name', '').strip()
+
+    # 验证必填字段 (T027)
+    if not name or not name.strip():
+        return jsonify({"msg": "核心名称不能为空"}), 400
+    if not course_name:
+        return jsonify({"msg": "课程名称不能为空"}), 400
 
     # 使用 FileService 处理上传
     exam_path, _ = FileService.handle_file_upload_or_reuse(f_exam, request.form.get('exam_file_id'), g.user['id'])
@@ -267,7 +273,13 @@ def create_direct_grader():
     f_exam = request.files.get('exam_file')
     f_std = request.files.get('standard_file')
 
-    course_name = request.files.get('course_name')
+    course_name = request.form.get('course_name', '').strip()
+
+    # 验证必填字段 (T027)
+    if not name or not name.strip():
+        return jsonify({"msg": "核心名称不能为空"}), 400
+    if not course_name:
+        return jsonify({"msg": "课程名称不能为空"}), 400
 
     # 复用 FileService
     exam_path, _ = FileService.handle_file_upload_or_reuse(f_exam, request.form.get('exam_file_id'), g.user['id'])
@@ -315,3 +327,105 @@ def create_direct_grader():
         print(f"[AI Welcome] Cache refresh failed: {e}")
 
     return jsonify({"status": "success"})
+
+
+@bp.route('/api/ai/generate_name', methods=['POST'])
+def generate_core_name():
+    """
+    API: 根据上传的文档生成批改核心名称
+    Feature 001: AI Auto-Generation of Core Names
+
+    Request:
+        {
+            "exam_file_id": "file_hash_or_id",
+            "standard_file_id": "file_hash_or_id",
+            "course_name": "optional_course_name"
+        }
+
+    Response:
+        {
+            "status": "success" | "error",
+            "name": "generated_name",
+            "confidence": 0.9,
+            "message": "error_message_if_any"
+        }
+    """
+    if not g.user:
+        return jsonify({"status": "error", "name": None, "confidence": 0, "message": "Unauthorized"}), 401
+
+    try:
+        data = request.get_json()
+        exam_file_id = data.get('exam_file_id')
+        standard_file_id = data.get('standard_file_id')
+        course_name = data.get('course_name', '')
+
+        if not exam_file_id or not standard_file_id:
+            return jsonify({
+                "status": "error",
+                "name": None,
+                "confidence": 0,
+                "message": "文件ID不能为空"
+            }), 400
+
+        result = AiService.generate_core_name(exam_file_id, standard_file_id, course_name)
+        return jsonify(result)
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"generate_core_name error: {e}")
+        return jsonify({
+            "status": "error",
+            "name": None,
+            "confidence": 0,
+            "message": f"生成失败: {str(e)}"
+        }), 500
+
+
+@bp.route('/api/ai/extract_course', methods=['POST'])
+def extract_course_name():
+    """
+    API: 从上传的文档中提取课程名称
+    Feature 001: Course Name Auto-Fill
+
+    Request:
+        {
+            "exam_file_id": "file_hash_or_id",
+            "standard_file_id": "file_hash_or_id"
+        }
+
+    Response:
+        {
+            "status": "success" | "error",
+            "course_name": "extracted_course_name",
+            "source": "metadata" | "ai_analysis" | "manual",
+            "message": "error_message_if_any"
+        }
+    """
+    if not g.user:
+        return jsonify({"status": "error", "course_name": None, "source": "manual", "message": "Unauthorized"}), 401
+
+    try:
+        data = request.get_json()
+        exam_file_id = data.get('exam_file_id')
+        standard_file_id = data.get('standard_file_id')
+
+        if not exam_file_id or not standard_file_id:
+            return jsonify({
+                "status": "error",
+                "course_name": None,
+                "source": "manual",
+                "message": "文件ID不能为空"
+            }), 400
+
+        result = AiService.extract_course_name(exam_file_id, standard_file_id)
+        return jsonify(result)
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"extract_course_name error: {e}")
+        return jsonify({
+            "status": "error",
+            "course_name": None,
+            "source": "manual",
+            "message": f"提取失败: {str(e)}"
+        }), 500

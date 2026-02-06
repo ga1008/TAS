@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>爷爷奶奶的健康饮食指南</title>
+    <style>
+        /* 基础设置：大字体，高对比度 */
+        body {
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            background-color: #fcfcfc;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            line-height: 1.8;
+        }
+
+        /* 容器限制，模拟手机/iPad阅读体验 */
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        /* 头部设计 */
+        header {
+            background-color: #66bb6a; /* 护眼绿 */
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            border-bottom-left-radius: 30px;
+            border-bottom-right-radius: 30px;
+        }
+
+        h1 {
+            font-size: 2.5rem; /* 标题特大 */
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            margin-top: 10px;
+            opacity: 0.9;
+        }
+
+        /* 核心原则卡片 */
+        .principle-box {
+            background-color: #fff8e1; /* 暖黄色背景 */
+            margin: 20px;
+            padding: 20px;
+            border-radius: 15px;
+            border-left: 8px solid #ffca28;
+            font-size: 1.3rem;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2rem;
+            color: #2e7d32;
+            margin: 40px 0 20px;
+            font-weight: bold;
+        }
+
+        /* 食物卡片布局 */
+        .food-grid {
+            display: grid;
+            grid-template-columns: 1fr; /* 手机端单列 */
+            gap: 20px;
+            padding: 0 20px;
+        }
+
+        @media (min-width: 600px) {
+            .food-grid {
+                grid-template-columns: 1fr 1fr; /* 平板端双列 */
+            }
+        }
+
+        .card {
+            border-radius: 20px;
+            overflow: hidden;
+            background: white;
+            border: 1px solid #eee;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+
+        .card:active {
+            transform: scale(0.98);
+        }
+
+        .card-img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background-color: #ddd;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 1.6rem;
+            color: #333;
+            margin: 0 0 10px 0;
+            font-weight: bold;
+        }
+
+        .card-desc {
+            font-size: 1.1rem; /* 正文大字体 */
+            color: #666;
+            margin: 0;
+        }
+
+        /* 推荐与禁忌标签 */
+        .tag {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 50px;
+            color: white;
+            font-weight: bold;
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+        .tag-good { background-color: #66bb6a; }
+        .tag-bad { background-color: #e57373; }
+
+        /* 菜单部分 */
+        .menu-section {
+            background-color: #e8f5e9;
+            margin: 20px;
+            padding: 30px;
+            border-radius: 20px;
+        }
+
+        .menu-item {
+            margin-bottom: 20px;
+            border-bottom: 1px dashed #a5d6a7;
+            padding-bottom: 15px;
+        }
+
+        .menu-time {
+            font-size: 1.5rem;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+
+        .menu-food {
+            font-size: 1.3rem;
+            margin-top: 5px;
+        }
+
+        /* 底部 */
+        footer {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            font-size: 1rem;
+        }
+
+        /* 重点提示 */
+        .alert {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>👴 爷爷奶奶的健康餐桌 👵</h1>
+        <div class="subtitle">低脂 · 低盐 · 控糖 · 易消化</div>
+    </header>
+
+    <div class="principle-box">
+        <strong>❤️ 记住这三点：</strong>
+        <ul style="margin-bottom: 0;">
+            <li>做法要清淡：<strong>多蒸煮，少油炸。</strong></li>
+            <li>吃肉去皮：<strong>鱼肉鸡肉最好，肥肉内脏不要。</strong></li>
+            <li>蔬菜焯水：<strong>绿叶菜先焯水，去草酸，防结石。</strong></li>
+        </ul>
+    </div>
+
+    <div class="section-title">🥦 放心吃的蔬菜</div>
+    <div class="food-grid">
+        <div class="card">
+            <img src="https://images.unsplash.com/photo-1506801310323-534be5e7bb77?q=80&w=600&auto=format&fit=crop"
+                 alt="西兰花" class="card-img">
+            <div class="card-body">
+                <span class="tag tag-good">强力推荐</span>
+                <h3 class="card-title">西兰花 & 花菜</h3>
+                <p class="card-desc">保护血管，营养丰富。<br><strong>记得：</strong>切小块，开水烫熟再吃。</p>
+            </div>
+        </div>
+        <div class="card">
+            <img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop" alt="大白菜" class="card-img">
+            <div class="card-body">
+                <span class="tag tag-good">最安全</span>
+                <h3 class="card-title">大白菜 & 娃娃菜</h3>
+                <p class="card-desc">软烂好嚼，不伤胃。<br><strong>做法：</strong>煮汤或醋溜，清淡又开胃。</p>
+            </div>
+        </div>
+        <div class="card">
+            <img src="https://images.unsplash.com/photo-1570138980186-e7d6928e75e1?q=80&w=600&auto=format&fit=crop" alt="冬瓜" class="card-img">
+            <div class="card-body">
+                <span class="tag tag-good">消肿利尿</span>
+                <h3 class="card-title">冬瓜 & 西葫芦</h3>
+                <p class="card-desc">接近零脂肪，对肾脏好。<br><strong>做法：</strong>炖得软软的，爷爷奶奶都能吃。</p>
+            </div>
+        </div>
+        <div class="card">
+            <img src="https://images.unsplash.com/photo-1596450637826-6b225c52c231?q=80&w=600&auto=format&fit=crop" alt="苦瓜" class="card-img">
+            <div class="card-body">
+                <span class="tag tag-good">天然降糖</span>
+                <h3 class="card-title">苦瓜 (如果不怕苦)</h3>
+                <p class="card-desc">对爷爷的血糖特别好。<br><strong>注意：</strong>炒鸡蛋或凉拌，不要放糖。</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-title">🐟 优质的肉类</div>
+    <div class="food-grid">
+        <div class="card">
+            <img src="https://images.unsplash.com/photo-1593006437340-98337a71f76f?q=80&w=600&auto=format&fit=crop" alt="清蒸鱼" class="card-img">
+            <div class="card-body">
+                <span class="tag tag-good">首选</span>
+                <h3 class="card-title">清蒸鲈鱼/草鱼</h3>
+                <p class="card-desc">肉嫩刺少，好消化。<br><strong>绝对禁止：</strong>红烧鱼、烤鱼。</p>
+            </div>
+        </div>
+        <div class="card">
+            <img src="https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?q=80&w=600&auto=format&fit=crop" alt="鸡胸肉" class="card-img">
+            <div class="card-body">
+                <span class="tag tag-good">性价比高</span>
+                <h3 class="card-title">鸡胸肉 / 鸡腿肉</h3>
+                <p class="card-desc">补充体力，又不长胖。<br><strong>关键：</strong>一定要<span class="alert">去掉鸡皮</span>再煮！</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-title" style="color: #c62828;">❌ 尽量少吃</div>
+    <div style="padding: 0 20px;">
+        <div class="principle-box" style="background-color: #ffebee; border-left-color: #ef5350;">
+            <p>🚫 <strong>菠菜：</strong> 草酸太高，对肾结石不好。</p>
+            <p>🚫 <strong>动物内脏/浓肉汤：</strong> 胆固醇太高，伤心脏、伤胆囊。</p>
+            <p>🚫 <strong>肥肉/红烧肉：</strong> 油太大，血管容易堵。</p>
+            <p>🚫 <strong>咸菜/榨菜：</strong> 盐太多，血压容易高。</p>
+        </div>
+    </div>
+
+    <div class="section-title">📝 一日三餐参考</div>
+    <div class="menu-section">
+        <div class="menu-item">
+            <div class="menu-time">🌅 早餐</div>
+            <div class="menu-food">燕麦粥 + 煮鸡蛋(只吃蛋白) + 蒸南瓜</div>
+        </div>
+        <div class="menu-item">
+            <div class="menu-time">☀️ 午餐</div>
+            <div class="menu-food">主菜：清蒸鲈鱼<br>配菜：蒜蓉蒸西葫芦<br>主食：软烂的杂粮饭</div>
+        </div>
+        <div class="menu-item" style="border:none;">
+            <div class="menu-time">🌙 晚餐</div>
+            <div class="menu-food">主菜：冬瓜瘦肉丸子汤(不油炸)<br>配菜：清炒大白菜</div>
+        </div>
+    </div>
+
+    <footer>
+        <p>祝爷爷奶奶身体健康，吃得开心！❤️</p>
+    </footer>
+</div>
+
+</body>
+</html>

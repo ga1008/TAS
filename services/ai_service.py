@@ -10,6 +10,7 @@ import pandas as pd
 from ai_utils.ai_helper import call_ai_platform_chat
 from ai_utils.volc_file_manager import VolcFileManager
 from config import BASE_CREATOR_PROMPT, STRICT_MODE_PROMPT, LOOSE_MODE_PROMPT, EXAMPLE_PROMPT
+from config import NAME_GENERATION_PROMPT, COURSE_EXTRACTION_PROMPT
 from export_core.doc_config import DocumentTypeConfig
 from extensions import db
 from grading_core.factory import GraderFactory
@@ -795,4 +796,248 @@ class AiService:
             # AI 提取失败，使用默认值
 
         return meta
+
+    @staticmethod
+    def generate_core_name(exam_file_id, standard_file_id, course_name=""):
+        """
+        根据上传的文档生成批改核心名称
+        格式: [年份/季节]-[课程名称]-[作业类型]批改核心
+
+        Args:
+            exam_file_id: 试卷文档ID
+            standard_file_id: 评分标准文档ID
+            course_name: 课程名称（可选）
+
+        Returns:
+            dict: {
+                "status": "success" | "error",
+                "name": str | None,
+                "confidence": float,
+                "message": str | None
+            }
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            # 获取文件信息
+            exam_record = db.get_file_by_id(exam_file_id)
+            std_record = db.get_file_by_id(standard_file_id)
+
+            if not exam_record or not std_record:
+                return {
+                    "status": "error",
+                    "name": None,
+                    "confidence": 0,
+                    "message": "文件记录不存在"
+                }
+
+            # 获取文件名用于分析
+            exam_filename = exam_record.get('original_name', '')
+            std_filename = std_record.get('original_name', '')
+
+            # 获取当前时间
+            from datetime import datetime
+            current_time = datetime.now().strftime("%Y年%m月")
+
+            # 检查文件名是否过于通用，如果是则分析文档内容
+            generic_filenames = ['exam', 'test', '标准', '答案', 'answer', '试卷', '实验', '作业', 'homework', 'assignment']
+            is_generic_filename = any(
+                fn.lower().replace('.pdf', '').replace('.docx', '').replace('.doc', '').replace('.txt', '') in generic_filenames
+                for fn in [exam_filename, std_filename]
+            )
+
+            # 如果文件名通用或没有课程名，尝试从文档内容中提取更多信息
+            content_hint = ""
+            if is_generic_filename and not course_name:
+                try:
+                    _, exam_content, _ = AiService.smart_parse_content(exam_file_id)
+                    if exam_content and len(exam_content) > 50:
+                        # 取前500字符作为提示
+                        content_hint = f"\n- 试卷内容摘要：{exam_content[:500]}..."
+                except Exception as e:
+                    logger.warning(f"Failed to parse exam content for name generation: {e}")
+
+            # 构建prompt
+            prompt = NAME_GENERATION_PROMPT.format(
+                exam_filename=exam_filename,
+                std_filename=std_filename,
+                course_name=course_name or "未知课程",
+                current_time=current_time
+            )
+
+            # 如果有内容提示，添加到prompt中
+            if content_hint:
+                prompt += f"\n{content_hint}"
+
+            # 调用AI生成名称
+            standard_config = db.get_best_ai_config("standard")
+            if not standard_config:
+                return {
+                    "status": "error",
+                    "name": None,
+                    "confidence": 0,
+                    "message": "AI服务不可用"
+                }
+
+            response = asyncio.run(call_ai_platform_chat(
+                system_prompt="你是教育系统命名专家。",
+                messages=[{"role": "user", "content": prompt}],
+                platform_config=standard_config
+            ))
+
+            if not response:
+                return {
+                    "status": "error",
+                    "name": None,
+                    "confidence": 0,
+                    "message": "AI服务无响应"
+                }
+
+            # 清理AI响应
+            generated_name = response.strip().strip('"').strip("'").strip()
+
+            # 验证名称格式
+            if '批改核心' not in generated_name:
+                generated_name += "批改核心"
+
+            # 计算置信度（基于数据质量）
+            confidence = 0.9
+            if is_generic_filename and not course_name:
+                confidence = 0.7  # 文件名通用且无课程名，置信度较低
+            elif not course_name:
+                confidence = 0.8  # 无课程名但文件名较好
+            elif is_generic_filename:
+                confidence = 0.85  # 文件名通用但有课程名
+
+            # 如果使用了内容分析，略微提高置信度
+            if content_hint:
+                confidence = min(0.95, confidence + 0.1)
+
+            # 记录日志
+            logger.info(f"Core name generated: {generated_name} from {exam_filename}, {std_filename} (confidence: {confidence})")
+
+            return {
+                "status": "success",
+                "name": generated_name,
+                "confidence": confidence,
+                "message": None
+            }
+
+        except Exception as e:
+            import traceback
+            logger.error(f"generate_core_name error: {traceback.format_exc()}")
+            return {
+                "status": "error",
+                "name": None,
+                "confidence": 0,
+                "message": f"生成失败: {str(e)}"
+            }
+
+    @staticmethod
+    def extract_course_name(exam_file_id, standard_file_id):
+        """
+        从上传的文档中提取课程名称
+
+        Args:
+            exam_file_id: 试卷文档ID
+            standard_file_id: 评分标准文档ID
+
+        Returns:
+            dict: {
+                "status": "success" | "error",
+                "course_name": str | None,
+                "source": "metadata" | "ai_analysis" | "manual",
+                "message": str | None
+            }
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            # 1. 首先从 file_assets.course_name 字段获取
+            exam_record = db.get_file_by_id(exam_file_id)
+            std_record = db.get_file_by_id(standard_file_id)
+
+            if exam_record and exam_record.get('course_name'):
+                logger.info(f"Course name from metadata: {exam_record['course_name']}")
+                return {
+                    "status": "success",
+                    "course_name": exam_record['course_name'],
+                    "source": "metadata",
+                    "message": None
+                }
+
+            if std_record and std_record.get('course_name'):
+                logger.info(f"Course name from metadata: {std_record['course_name']}")
+                return {
+                    "status": "success",
+                    "course_name": std_record['course_name'],
+                    "source": "metadata",
+                    "message": None
+                }
+
+            # 2. 尝试从 meta_info JSON 中获取
+            if exam_record and exam_record.get('meta_info'):
+                try:
+                    meta = json.loads(exam_record['meta_info'])
+                    if meta.get('course_name'):
+                        logger.info(f"Course name from meta_info: {meta['course_name']}")
+                        return {
+                            "status": "success",
+                            "course_name": meta['course_name'],
+                            "source": "metadata",
+                            "message": None
+                        }
+                except:
+                    pass
+
+            # 3. 使用AI分析文档内容提取课程名称
+            exam_content = exam_record.get('parsed_content', '') if exam_record else ''
+            if not exam_content:
+                # 如果没有解析内容，尝试获取
+                if exam_file_id:
+                    success, content, _ = AiService.smart_parse_content(exam_file_id, "exam")
+                    if success:
+                        exam_content = content[:2000]  # 限制长度
+
+            if exam_content:
+                prompt = COURSE_EXTRACTION_PROMPT.format(exam_content=exam_content[:2000])
+
+                standard_config = db.get_best_ai_config("standard")
+                if standard_config:
+                    response = asyncio.run(call_ai_platform_chat(
+                        system_prompt="你是教育系统专家。",
+                        messages=[{"role": "user", "content": prompt}],
+                        platform_config=standard_config
+                    ))
+
+                    if response:
+                        course_name = response.strip().strip('"').strip("'").strip()
+                        if course_name and course_name not in ['空字符串', 'None']:
+                            logger.info(f"Course name from AI: {course_name}")
+                            return {
+                                "status": "success",
+                                "course_name": course_name,
+                                "source": "ai_analysis",
+                                "message": None
+                            }
+
+            # 无法提取课程名称
+            return {
+                "status": "error",
+                "course_name": None,
+                "source": "manual",
+                "message": "无法从文档中提取课程名称，请手动输入"
+            }
+
+        except Exception as e:
+            import traceback
+            logger.error(f"extract_course_name error: {traceback.format_exc()}")
+            return {
+                "status": "error",
+                "course_name": None,
+                "source": "manual",
+                "message": f"提取失败: {str(e)}"
+            }
 

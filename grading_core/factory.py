@@ -57,6 +57,15 @@ class GraderFactory:
 
     @classmethod
     def get_all_strategies(cls):
-        """返回所有可用策略的列表 (id, name)，用于前端下拉框"""
+        """
+        返回所有可用策略的列表 (id, name, course)，用于前端下拉框
+
+        Returns:
+            list of tuples: [(grader_id, grader_name, course_name)]
+            course_name: 使用 grader 的 COURSE 属性，如果不存在则返回 "未分类"
+        """
         cls.load_graders()
-        return [(k, v.NAME, v.COURSE) for k, v in cls._graders.items()]
+        return [
+            (k, v.NAME, getattr(v, 'COURSE', None) or '未分类')
+            for k, v in cls._graders.items()
+        ]

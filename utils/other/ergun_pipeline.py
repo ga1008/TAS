@@ -15,6 +15,7 @@ Dependencies:
 import os
 import re
 import json
+import sys
 import time
 import math
 import hashlib
@@ -23,6 +24,7 @@ from typing import List, Dict, Any, Optional, Tuple
 
 import fitz  # PyMuPDF
 import pandas as pd
+import requests
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -39,11 +41,14 @@ if not os.path.isfile(PDF_PATH):
     raise FileNotFoundError(f"PDF文件未找到：{PDF_PATH}")
 OUT_DIR = os.path.dirname(PDF_PATH)   # 输出目录
 
-# BASE_URL = "https://xiaoai.plus/v1/"
-BASE_URL = "http://127.0.0.1:23333/v1/"
-# API_KEY = input("请输入OpenAI API Key：").strip()  # 输入API Key
-API_KEY = "cs-sk-f0fd0228-4540-470f-8237-789684ac5f7e"
-MODEL = input("输入模型ID（如 gpt-4-turbo-0613）：").strip() or "gpt-4o"
+BASE_URL = "https://xiaoai.plus/v1/"
+# BASE_URL = "http://127.0.0.1:23333/v1/"
+# BASE_URL = "https://api.mttieeo.com/v1/"
+API_KEY = input("请输入OpenAI API Key：").strip()  # 输入API Key
+# API_KEY = "cs-sk-f0fd0228-4540-470f-8237-789684ac5f7e"
+# MODEL = input("输入模型ID（如 gpt-4-turbo-0613）：").strip() or "gpt-4o"
+# MODEL = "[满血]gemini-3.0-pro-preview"
+MODEL = "gemini-2.5-pro-thinking"
 
 # Narrative anchors
 START_SENT = "我是雨和雪的老熟人了，我有九十岁了。"
@@ -428,45 +433,30 @@ def extract_visible_text_from_choice_message(msg) -> str:
         return ""
 
 
-def check_ai_connectivity_or_exit(client: OpenAI):
+def check_ai_connectivity_or_exit():
     """
-    Fast connectivity/auth/endpoint sanity check.
-    Supports both normal and reasoning models:
-      - normal: message.content non-empty
-      - reasoning: message.content empty but message.reasoning_content non-empty
+    使用原生 requests 检查连接
     """
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": MODEL,
+        "messages": [{"role": "user", "content": "say ok"}],
+        "max_tokens": 5
+    }
     try:
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": "Connectivity check. Reply with exactly: OK"},
-                {"role": "user", "content": "OK"},
-            ],
-            temperature=0.0,
-            max_tokens=64,  # give some room so models don't return empty content due to length
-        )
-        choice = resp.choices[0]
-        msg = choice.message
-        text = extract_visible_text_from_choice_message(msg)
-
-        # Some gateways return finish_reason='length' with empty content.
-        # If we got anything at all in content/reasoning_content, consider it reachable.
-        if not text:
-            raise RuntimeError("Empty response content AND empty reasoning_content.")
-
+        # 使用较短的 timeout 进行测试
+        response = requests.post(f"{BASE_URL.rstrip('/')}/chat/completions",
+                                 headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        print("  [Connect] API 连接成功")
     except Exception as e:
-        msg = str(e)
-        print("\n[ERROR] 无法正常访问 AI 接口，程序已退出。")
-        print(f"原因：{msg}\n")
-        print("请检查：")
-        print("1) BASE_URL 是否正确")
-        print("2) API_KEY 是否有效/是否有额度")
-        print("3) MODEL 名称是否在该服务端可用")
-        print("4) 网络是否可达、是否被代理/防火墙拦截")
-        print("5) 若出现 Cloudflare 524/timeout，多为服务端过载，可稍后重试或减小 chunk")
+        print(f"\n[ERROR] 接口访问失败: {e}")
+        if response := getattr(e, 'response', None):
+            print(f"状态码: {response.status_code}, 返回内容: {response.text}")
         raise SystemExit(1)
-
-
 
 
 ALLOWED_PROCESS_TYPES = {"Material", "Behavioural", "Mental", "Verbal", "Relational", "Existential"}
@@ -553,137 +543,184 @@ def split_marked_text_by_lines(marked_text: str, sub_max_chars: int = 1800) -> L
     return parts
 
 
-def call_ai_for_chunk(client: OpenAI, chunk: Chunk, cache_dir: str) -> Dict[str, Any]:
+def call_ai_for_chunk(chunk: Chunk, cache_dir: str) -> Dict[str, Any]:
     """
-    Call AI for a chunk. Use cache if exists.
-    Resilient to Cloudflare 524/timeouts by auto-splitting marked text into smaller subparts.
+    改进版：
+    1. 修复 list index out of range (增加流式解析的健壮性)
+    2. 增加控制台实时进度反馈 (打印 . )
+    3. 保持 requests 流式调用以规避 524 超时
     """
     ensure_dir(cache_dir)
     cache_path = os.path.join(cache_dir, f"chunk_{chunk.chunk_id:03d}_{chunk.sha1}.json")
 
+    # 缓存命中检查
     if USE_CACHE and os.path.exists(cache_path):
         with open(cache_path, "r", encoding="utf-8") as f:
+            print(f"  [chunk {chunk.chunk_id}] 读取缓存: {os.path.basename(cache_path)}")
             return json.load(f)
 
-    system_msg = (
-        "You are a rigorous SFL transitivity annotator. "
-        "Follow the coding manual exactly. Output ONLY valid JSON."
-    )
+    def _one_call(marked_text: str, current_chunk_id: int, sub_idx: int = 0) -> Dict[str, Any]:
+        # 模拟浏览器 Header
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/event-stream",
+        }
 
-    def _one_call(marked_text: str) -> Dict[str, Any]:
-        """
-        Single API call for one (sub)text block with the SAME chunk_id.
-        Includes retries + JSON validation + JSON repair.
-        """
-        user_msg = (
+        system_prompt = "You are a rigorous SFL transitivity annotator. Follow the coding manual exactly. Output ONLY valid JSON."
+        user_content = (
             f"{CODING_MANUAL}\n\n"
-            f"【本次任务 chunk_id={chunk.chunk_id}】\n"
-            f"请对下列文本进行标注，文本已带句子编号标记：\n"
-            f"{marked_text}\n"
-            f"\n仅输出JSON。"
+            f"【Task Info: chunk_id={current_chunk_id}】\n"
+            f"Please annotate the following text:\n{marked_text}\n\n"
+            f"Output ONLY JSON."
         )
 
+        payload = {
+            "model": MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ],
+            "temperature": 0,
+            "stream": True,  # 必须开启流式
+            "response_format": {"type": "json_object"}
+        }
+
         last_err = None
+
+        # 打印开始提示（不换行）
+        sub_mark = f" (分片-{sub_idx})" if sub_idx > 0 else ""
+        print(f"    处理 chunk {current_chunk_id}{sub_mark} ", end="", flush=True)
+
         for attempt in range(1, MAX_RETRIES + 1):
+            full_content = []
             try:
-                resp = client.chat.completions.create(
-                    model=MODEL,
-                    messages=[
-                        {"role": "system", "content": system_msg},
-                        {"role": "user", "content": user_msg},
-                    ],
-                    temperature=0.0,
-                    timeout=600.0,
-                    # 可选：限制输出，避免超大响应拖慢（视模型/平台支持情况）
-                    # max_tokens=12000,
+                if attempt > 1:
+                    print(f"\n    重试 {attempt}/{MAX_RETRIES}... ", end="", flush=True)
+
+                response = requests.post(
+                    f"{BASE_URL.rstrip('/')}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=(15, 600),  # (连接超时, 读取超时)
+                    stream=True
                 )
-                msg = resp.choices[0].message
-                content = extract_visible_text_from_choice_message(msg)
-                if not content:
-                    # include finish_reason for debugging
-                    fr = getattr(resp.choices[0], "finish_reason", None)
-                    raise RuntimeError(f"Empty output (content+reasoning_content). finish_reason={fr}")
 
-                content = re.sub(r"^```json\s*", "", content.strip())
-                content = re.sub(r"\s*```$", "", content)
+                if response.status_code != 200:
+                    try:
+                        err_msg = response.text[:100]
+                    except:
+                        err_msg = "Unknown"
+                    raise RuntimeError(f"HTTP {response.status_code}: {err_msg}")
 
-                payload = json.loads(content)
-                ok, errs = basic_validate_payload(payload)
+                # --- 核心修复：流式解析与进度条 ---
+                char_counter = 0
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+
+                    line_text = line.decode("utf-8")
+                    if line_text.startswith("data: "):
+                        data_str = line_text[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+
+                        try:
+                            data_json = json.loads(data_str)
+
+                            # 1. 安全检查：防止 list index out of range
+                            if not data_json.get("choices"):
+                                continue
+
+                            choice = data_json["choices"][0]
+                            delta = choice.get("delta", {})
+
+                            # 2. 获取内容
+                            content_piece = delta.get("content", "")
+
+                            if content_piece:
+                                full_content.append(content_piece)
+                                # 3. 交互改进：打印进度点
+                                char_counter += len(content_piece)
+                                if char_counter > 20:  # 每接收约20个字符打印一个点
+                                    sys.stdout.write(".")
+                                    sys.stdout.flush()
+                                    char_counter = 0
+
+                        except (json.JSONDecodeError, IndexError, AttributeError):
+                            # 忽略单行解析错误，保证整体不崩溃
+                            continue
+
+                print(" 完成")  # 进度条结束换行
+
+                raw_content = "".join(full_content).strip()
+                if not raw_content:
+                    raise RuntimeError("流式响应内容为空")
+
+                # JSON 清洗
+                clean_content = re.sub(r"^```json\s*", "", raw_content)
+                clean_content = re.sub(r"\s*```$", "", clean_content)
+                # 掐头去尾修复（防止首尾字符丢失）
+                s = clean_content.find('{')
+                e = clean_content.rfind('}')
+                if s != -1 and e != -1:
+                    clean_content = clean_content[s: e + 1]
+
+                # 解析与验证
+                try:
+                    parsed = json.loads(clean_content)
+                except json.JSONDecodeError as je:
+                    raise ValueError(f"JSON解析失败: {str(je)[:50]}")
+
+                ok, errs = basic_validate_payload(parsed)
                 if not ok:
-                    payload = repair_json_via_ai(client, content, errs)
-                    ok2, errs2 = basic_validate_payload(payload)
-                    if not ok2:
-                        raise ValueError(f"json_validation_failed: {errs2[:10]}")
-                return payload
+                    raise ValueError(f"Schema校验失败: {errs[:3]}")
+
+                return parsed
 
             except Exception as e:
                 last_err = e
-                # 如果是超时错误，打印更明显的消息
-                err_msg = str(e).lower()
-                if "timeout" in err_msg or "timed out" in err_msg:
-                    print(f"    ! 触发请求超时，这通常是由于中转站响应慢或提示词过长导致。")
-                sleep_sec = RETRY_BACKOFF_SEC * (2 ** (attempt - 1))
-                print(f"    [chunk {chunk.chunk_id}] 尝试 {attempt} 失败: {e}. {sleep_sec}秒后重试...")
-                time.sleep(sleep_sec)
+                print(f" [错误: {str(e)[:50]}]", end="", flush=True)
+                time.sleep(RETRY_BACKOFF_SEC * attempt)
 
-        raise RuntimeError(last_err)
+        print("")  # 彻底失败后换行
+        raise RuntimeError(f"重试耗尽，最后错误: {last_err}")
 
-    # 先尝试整块一次性跑
+    # 主逻辑：先尝试整体，失败则拆分
     try:
-        payload = _one_call(chunk.text_with_markers)
+        result = _one_call(chunk.text_with_markers, chunk.chunk_id)
         with open(cache_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        return payload
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        return result
 
     except Exception as e:
-        # 若是 524/timeout，则自动拆分为更小子块逐个跑并合并
-        if is_cloudflare_524_or_timeout(e):
-            print(f"[chunk {chunk.chunk_id}] 整体调用失败或超时，强制拆分为细小片段重试...")
-            sub_texts = split_marked_text_by_lines(chunk.text_with_markers, sub_max_chars=1000)
+        print(f"\n    [chunk {chunk.chunk_id}] 整体失败，切换为子分片模式...")
+        # 失败后切分重试（使用更小的粒度）
+        sub_texts = split_marked_text_by_lines(chunk.text_with_markers, sub_max_chars=600)
+        all_records = []
+        all_unparsed = []
 
-            all_records = []
-            all_unparsed = []
-            sub_failures = []
+        for i, sub_text in enumerate(sub_texts, start=1):
+            try:
+                sub_res = _one_call(sub_text, chunk.chunk_id, sub_idx=i)
+                all_records.extend(sub_res.get("records", []))
+                all_unparsed.extend(sub_res.get("unparsed", []))
+            except Exception as sub_e:
+                print(f"\n    [分片 {i} 失败] {sub_e}")
+                # 记录失败但不中断整个流程
+                all_unparsed.append({"sent_id": -1, "text": "SUB_CHUNK_FAILED", "reason": str(sub_e)})
 
-            for idx, sub in enumerate(sub_texts, start=1):
-                try:
-                    sub_payload = _one_call(sub)
-                    # 合并（chunk_id 保持原 chunk.chunk_id）
-                    all_records.extend(sub_payload.get("records", []))
-                    all_unparsed.extend(sub_payload.get("unparsed", []))
-                    print(f"  subpart {idx}/{len(sub_texts)} ok: records={len(sub_payload.get('records',[]))}")
-                except Exception as sub_e:
-                    sub_failures.append({"subpart": idx, "error": str(sub_e)})
-                    print(f"  subpart {idx}/{len(sub_texts)} FAILED: {sub_e}")
+        merged = {
+            "chunk_id": chunk.chunk_id,
+            "records": all_records,
+            "unparsed": all_unparsed
+        }
 
-            merged = {
-                "chunk_id": chunk.chunk_id,
-                "records": all_records,
-                "unparsed": all_unparsed,
-            }
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(merged, f, ensure_ascii=False, indent=2)
 
-            # 基础校验：如果完全没有 records，直接报错（方便你定位）
-            ok, errs = basic_validate_payload(merged)
-            if not ok:
-                # 允许 records 为空但 schema 必须正确；若 errs 主要来自 records 缺字段，说明 subcall 输出质量问题
-                # 这里给出更明确的错误，便于你排查
-                raise RuntimeError(f"merged_payload_invalid: {errs[:20]} | sub_failures={sub_failures[:3]}")
-
-            # 缓存合并结果（即使有部分 subpart 失败，你也能看到 unparsed/sub_failures 并补跑）
-            with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump(merged, f, ensure_ascii=False, indent=2)
-
-            # 如果存在 sub_failures，额外写一个报告文件，便于你后续补跑
-            if sub_failures:
-                report_path = os.path.join(cache_dir, f"chunk_{chunk.chunk_id:03d}_subfailures.json")
-                with open(report_path, "w", encoding="utf-8") as f:
-                    json.dump(sub_failures, f, ensure_ascii=False, indent=2)
-                print(f"[chunk {chunk.chunk_id}] some subparts failed; report saved: {report_path}")
-
-            return merged
-
-        # 其他异常仍然抛出
-        raise
+        return merged
 
 
 
@@ -1060,6 +1097,30 @@ def write_final_excel(
         tables: Dict[str, pd.DataFrame],
         final_ai: Optional[Dict[str, Any]] = None
 ):
+    print("正在写入 Excel，并在写入前将复杂对象转换为字符串...")
+
+    # === 核心修复开始：创建副本并将 List/Dict 转换为 JSON 字符串 ===
+    # 防止影响后续分析，操作副本
+    export_records = records_df.copy()
+    export_unparsed = unparsed_df.copy()
+
+    def serialize_complex_columns(df: pd.DataFrame):
+        if df.empty:
+            return df
+        for col in df.columns:
+            # 检查第一行非空值，或者直接转换特定列
+            # 为了保险，检查每一列，如果是 list 或 dict 就转 json
+            # 这里使用 apply 逐个检查最稳妥
+            df[col] = df[col].apply(
+                lambda x: json.dumps(x, ensure_ascii=False) if isinstance(x, (list, dict)) else x
+            )
+        return df
+
+    # 对主要的数据表进行清洗
+    export_records = serialize_complex_columns(export_records)
+    export_unparsed = serialize_complex_columns(export_unparsed)
+    # === 核心修复结束 ===
+
     wb = Workbook()
     wb.remove(wb.active)
 
@@ -1091,18 +1152,18 @@ def write_final_excel(
 
     # Records
     # Ensure not exceed Excel limit; if exceed, split sheets
-    if len(records_df) <= EXCEL_MAX_ROWS:
-        add_sheet_from_df(wb, "Annotations_All", records_df)
+    if len(export_records) <= EXCEL_MAX_ROWS:
+        add_sheet_from_df(wb, "Annotations_All", export_records)
     else:
         # split into multiple sheets
-        n_parts = math.ceil(len(records_df) / EXCEL_MAX_ROWS)
+        n_parts = math.ceil(len(export_records) / EXCEL_MAX_ROWS)
         for i in range(n_parts):
-            sub = records_df.iloc[i * EXCEL_MAX_ROWS:(i + 1) * EXCEL_MAX_ROWS].copy()
+            sub = export_records.iloc[i * EXCEL_MAX_ROWS:(i + 1) * EXCEL_MAX_ROWS].copy()
             add_sheet_from_df(wb, f"Annotations_{i + 1}", sub)
 
     # Unparsed (optional)
-    if not unparsed_df.empty:
-        add_sheet_from_df(wb, "Unparsed_Unknown", unparsed_df)
+    if not export_unparsed.empty:
+        add_sheet_from_df(wb, "Unparsed_Unknown", export_unparsed)
 
     # Summary tables
     percent_map = {
@@ -1113,7 +1174,11 @@ def write_final_excel(
         "NatureActive_ProcessDist": ["pct_of_nature_active"],
         "Top10_FloraFaunaActive": ["pct_of_flora_fauna_active"],
     }
+    # Summary tables 通常是聚合后的数字，不需要序列化，但为了保险起见也可以检查
     for name, df in tables.items():
+        # 大部分 summary table 是纯数字或字符串，直接写入即可
+        # 如果 summary table 里有复杂对象（比如 FloraFauna_ByRole 如果有未展开项），也可以清洗一下
+        # 但根据代码逻辑，tables 应该都是扁平的，直接写入：
         add_sheet_from_df(wb, name, df, percent_cols=percent_map.get(name))
 
     # Final AI synthesis (text)
@@ -1178,14 +1243,14 @@ def main():
     chunk_map = {c.chunk_id: c for c in chunks}
 
     print("[5] Call AI per chunk (with cache/resume)...")
-    client = make_client()
-    check_ai_connectivity_or_exit(client)
+    # client = make_client()
+    check_ai_connectivity_or_exit()
 
     payloads = []
     failed_chunks = []
     for ch in chunks:
         try:
-            payload = call_ai_for_chunk(client, ch, cache_dir)
+            payload = call_ai_for_chunk(ch, cache_dir)
             payloads.append(payload)
             print(
                 f"  chunk {ch.chunk_id}: ok, records={len(payload.get('records', []))}, unparsed={len(payload.get('unparsed', []))}")
@@ -1220,11 +1285,11 @@ def main():
 
     print("[7] Final AI synthesis (optional but requested)...")
     final_ai = None
-    try:
-        final_ai = call_ai_for_final_synthesis(client, tables, OUT_DIR)
-        print("  final synthesis: ok")
-    except Exception as e:
-        print(f"WARN: final synthesis failed: {e}")
+    # try:
+    #     final_ai = call_ai_for_final_synthesis(client, tables, OUT_DIR)
+    #     print("  final synthesis: ok")
+    # except Exception as e:
+    #     print(f"WARN: final synthesis failed: {e}")
 
     print("[8] Write Excel...")
     out_xlsx = os.path.join(OUT_DIR, "Ergun_FullNovel_SFL_Transitivity.xlsx")

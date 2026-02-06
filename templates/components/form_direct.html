@@ -1,25 +1,6 @@
-<form id="createDirectForm" class="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 hidden animate-fade-in-up">
+<form id="createDirectForm" class="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 bg-white relative animate-fade-in-up hidden">
 
-    <div class="md:col-span-2 space-y-2">
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
-            <i class="fas fa-robot mr-1 text-sky-500"></i> Direct AI 核心名称
-        </label>
-        <div class="relative group">
-            <input type="text" name="grader_name" required placeholder="例如：期末大作业-视频展示批改"
-                   class="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3.5 pl-4 focus:outline-none focus:bg-white focus:border-sky-400 focus:ring-4 focus:ring-sky-500/10 transition-all shadow-sm font-medium">
-        </div>
-    </div>
-
-    <div class="md:col-span-2 space-y-2">
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
-            <i class="fas fa-book mr-1 text-sky-500"></i> 课程名称
-        </label>
-        <div class="relative group">
-            <input type="text" name="course_name" required placeholder="例如：数据结构与算法"
-                   class="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3.5 pl-4 focus:outline-none focus:bg-white focus:border-sky-400 focus:ring-4 focus:ring-sky-500/10 transition-all shadow-sm font-medium">
-        </div>
-    </div>
-
+    <!-- File Uploads - Moved to Top -->
     <div class="md:col-span-1 flex flex-col space-y-3">
         <div class="flex justify-between items-center px-1">
             <label class="text-xs font-bold text-slate-500 uppercase tracking-wider">上传试卷文档</label>
@@ -31,7 +12,7 @@
         <div id="drop-direct_exam" onclick="openFileModal('direct_exam')"
              class="border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50 hover:bg-white hover:border-sky-300 transition-all cursor-pointer relative group flex flex-col items-center justify-center min-h-[140px]">
 
-            <input type="hidden" name="exam_file_id" id="direct_exam_file_id">
+            <input type="hidden" name="exam_file_id" id="direct_exam_file_id" onchange="checkDirectFilesSelected()">
 
             <div id="direct_exam-display" class="flex flex-col items-center pointer-events-none transition-transform group-hover:scale-105 duration-300">
                 <div class="w-12 h-12 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center mb-3 group-hover:shadow-md transition-all">
@@ -58,7 +39,7 @@
         <div id="drop-direct_std" onclick="openFileModal('direct_std')"
              class="border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50 hover:bg-white hover:border-sky-300 transition-all cursor-pointer relative group flex flex-col items-center justify-center min-h-[140px]">
 
-            <input type="hidden" name="standard_file_id" id="direct_std_file_id">
+            <input type="hidden" name="standard_file_id" id="direct_std_file_id" onchange="checkDirectFilesSelected()">
 
             <div id="direct_std-display" class="flex flex-col items-center pointer-events-none transition-transform group-hover:scale-105 duration-300">
                 <div class="w-12 h-12 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center mb-3 group-hover:shadow-md transition-all">
@@ -67,10 +48,15 @@
                 <p class="text-xs font-bold text-slate-600 mb-1">点击选择评分标准</p>
                 <p class="text-[10px] text-slate-400">AI 自动提取关键得分点</p>
             </div>
+
+            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span class="text-[10px] bg-sky-100 text-sky-600 px-2 py-0.5 rounded font-bold">更改</span>
+            </div>
         </div>
     </div>
 
-    <div class="md:col-span-2 space-y-2 mt-2">
+    <!-- Extra Instructions -->
+    <div class="md:col-span-2 space-y-2">
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
             <i class="fas fa-magic mr-1 text-sky-500"></i> 额外批改指令 <span class="text-slate-400 font-normal normal-case opacity-70">(可选)</span>
         </label>
@@ -81,6 +67,40 @@
                 <i class="fas fa-keyboard"></i>
             </div>
         </div>
+    </div>
+
+    <!-- Core Name - Moved Down with Auto-Generate Button -->
+    <div class="md:col-span-2 space-y-2">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+            <i class="fas fa-robot mr-1 text-sky-500"></i> Direct AI 核心名称
+        </label>
+        <div class="flex gap-2">
+            <div class="flex-1 relative">
+                <input type="text" name="grader_name" id="direct_grader_name" required placeholder="例如：2026春-数据结构-视频作业批改核心"
+                       class="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3.5 focus:outline-none focus:bg-white focus:border-sky-400 focus:ring-4 focus:ring-sky-500/10 transition-all shadow-sm font-medium">
+            </div>
+            <button type="button" onclick="autoGenerateDirectCoreName()" id="btnGenerateDirectName"
+                    class="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white text-xs font-bold rounded-xl hover:from-sky-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2 whitespace-nowrap">
+                <i class="fas fa-sparkles"></i>
+                <span>AI生成</span>
+            </button>
+        </div>
+        <p id="directNameGenerateStatus" class="text-[10px] text-slate-400 ml-1"></p>
+    </div>
+
+    <!-- Course Name - Moved Down with Auto-Fill -->
+    <div class="md:col-span-2 space-y-2">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+            <i class="fas fa-book mr-1 text-sky-500"></i> 课程名称
+        </label>
+        <div class="relative">
+            <input type="text" name="course_name" id="direct_course_name" required placeholder="例如：数据结构与算法"
+                   class="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-3.5 focus:outline-none focus:bg-white focus:border-sky-400 focus:ring-4 focus:ring-sky-500/10 transition-all shadow-sm font-medium">
+            <div id="directCourseLoading" class="hidden absolute right-3 top-3.5">
+                <i class="fas fa-spinner fa-spin text-sky-500"></i>
+            </div>
+        </div>
+        <p id="directCourseExtractStatus" class="text-[10px] text-slate-400 ml-1"></p>
     </div>
 
     <div class="md:col-span-2 mt-6 pt-4 border-t border-slate-100">
@@ -94,3 +114,138 @@
         </button>
     </div>
 </form>
+
+<script>
+// Feature 001: Auto-generate Direct AI core name
+function autoGenerateDirectCoreName() {
+    const examFileId = document.getElementById('direct_exam_file_id').value;
+    const standardFileId = document.getElementById('direct_std_file_id').value;
+    const courseName = document.getElementById('direct_course_name').value;
+    const btn = document.getElementById('btnGenerateDirectName');
+    const statusEl = document.getElementById('directNameGenerateStatus');
+
+    if (!examFileId || !standardFileId) {
+        statusEl.textContent = '⚠️ 请先上传试卷和评分标准';
+        statusEl.className = 'text-[10px] text-amber-600 ml-1';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>生成中...</span>';
+    statusEl.textContent = '正在生成核心名称...';
+    statusEl.className = 'text-[10px] text-sky-500 ml-1';
+
+    fetch('/api/ai/generate_name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            exam_file_id: examFileId,
+            standard_file_id: standardFileId,
+            course_name: courseName
+        })
+    })
+    .then(resp => resp.json())
+    .then(data => {
+        if (data.status === 'success' && data.name) {
+            document.getElementById('direct_grader_name').value = data.name;
+
+            // 显示置信度
+            let confidenceText = '';
+            let confidenceColor = 'text-emerald-600';
+            if (data.confidence >= 0.9) {
+                confidenceText = ' (置信度: 高)';
+                confidenceColor = 'text-emerald-600';
+            } else if (data.confidence >= 0.7) {
+                confidenceText = ' (置信度: 中)';
+                confidenceColor = 'text-amber-600';
+            } else {
+                confidenceText = ' (置信度: 低)';
+                confidenceColor = 'text-rose-600';
+            }
+
+            // 格式验证
+            const formatValid = validateDirectCoreNameFormat(data.name);
+            if (!formatValid) {
+                confidenceText += ' <span class="text-amber-500">(⚠️ 格式建议: 年份-课程-作业类型)</span>';
+            }
+
+            statusEl.innerHTML = `✅ 生成成功${confidenceText} <button type="button" onclick="autoGenerateDirectCoreName()" class="ml-2 text-[9px] underline hover:no-underline text-slate-500 hover:text-sky-600">重新生成</button>`;
+            statusEl.className = `text-[10px] ${confidenceColor} ml-1`;
+        } else {
+            statusEl.textContent = '⚠️ ' + (data.message || '生成失败，请手动输入');
+            statusEl.className = 'text-[10px] text-amber-600 ml-1';
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        statusEl.textContent = '⚠️ 生成失败，请手动输入';
+        statusEl.className = 'text-[10px] text-amber-600 ml-1';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sparkles"></i><span>AI生成</span>';
+    });
+}
+
+// Feature 001: Validate Direct AI core name format
+// Expected format: [年份/季节]-[课程名称]-[作业类型]批改核心
+function validateDirectCoreNameFormat(name) {
+    // 检查是否包含"批改核心"
+    if (!name.includes('批改核心')) return false;
+
+    // 检查是否包含年份（2020-2099）或季节标识
+    const hasYear = /\b(20[2-9][0-9])\b/.test(name);
+    const hasSeason = /春|夏|秋|冬/.test(name);
+
+    // 检查分隔符（至少一个-或——）
+    const hasSeparator = /[-—]/.test(name);
+
+    return hasYear || hasSeason;
+}
+
+// Feature 001: Auto-fill course name when both files selected
+function checkDirectFilesSelected() {
+    const examFileId = document.getElementById('direct_exam_file_id').value;
+    const standardFileId = document.getElementById('direct_std_file_id').value;
+    const statusEl = document.getElementById('directCourseExtractStatus');
+    const loadingEl = document.getElementById('directCourseLoading');
+
+    if (examFileId && standardFileId) {
+        // Only auto-fill if course name is empty
+        if (!document.getElementById('direct_course_name').value) {
+            loadingEl.classList.remove('hidden');
+            statusEl.textContent = '正在提取课程名称...';
+            statusEl.className = 'text-[10px] text-sky-500 ml-1';
+
+            fetch('/api/ai/extract_course', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    exam_file_id: examFileId,
+                    standard_file_id: standardFileId
+                })
+            })
+            .then(resp => resp.json())
+            .then(data => {
+                if (data.status === 'success' && data.course_name) {
+                    document.getElementById('direct_course_name').value = data.course_name;
+                    const sourceText = data.source === 'metadata' ? '从元数据' : 'AI分析';
+                    statusEl.textContent = '✅ 已提取: ' + data.course_name + ' (' + sourceText + ')';
+                    statusEl.className = 'text-[10px] text-emerald-600 ml-1';
+                } else {
+                    statusEl.textContent = '💡 请手动输入课程名称';
+                    statusEl.className = 'text-[10px] text-slate-400 ml-1';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                statusEl.textContent = '💡 请手动输入课程名称';
+                statusEl.className = 'text-[10px] text-slate-400 ml-1';
+            })
+            .finally(() => {
+                loadingEl.classList.add('hidden');
+            });
+        }
+    }
+}
+</script>

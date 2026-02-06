@@ -71,7 +71,8 @@
                         <div class="max-h-60 overflow-y-auto custom-scroll p-1" id="strategy-list">
                             {% for sid, sname, course in strategies %}
                             <div class="strategy-option px-3 py-2.5 hover:bg-indigo-50 rounded-lg cursor-pointer transition-colors group flex items-center justify-between"
-                                 onclick="selectStrategy('{{ sid }}', '{{ course }}')">
+                                 onclick="selectStrategy('{{ sid }}', '{{ sname }}', '{{ course or '未分类' }}')"
+                                 data-sname="{{ sname }}" data-course="{{ course or '未分类' }}">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center text-sm font-bold border border-indigo-100">AI</div>
                                     <span class="text-sm text-slate-700 font-medium group-hover:text-indigo-700">{{ sname }}</span>
@@ -190,11 +191,15 @@
         query = query.toLowerCase();
         options.forEach(opt => {
             const text = opt.innerText.toLowerCase();
-            opt.style.display = text.includes(query) ? 'flex' : 'none';
+            const sname = (opt.dataset.sname || '').toLowerCase();
+            const course = (opt.dataset.course || '').toLowerCase();
+            // Search in display text, core name, and course name
+            const matches = text.includes(query) || sname.includes(query) || course.includes(query);
+            opt.style.display = matches ? 'flex' : 'none';
         });
     }
 
-    function selectStrategy(sid, sname) {
+    function selectStrategy(sid, sname, course) {
         document.getElementById('strategy-input').value = sid;
         const display = document.getElementById('strategy-display');
         display.innerText = sname;
@@ -202,9 +207,15 @@
         display.classList.add('text-indigo-600', 'font-bold');
         document.getElementById('strategy-menu').classList.add('hidden');
 
-        let courseName = sname.replace(/\(.*\)/, '').replace(/（.*）/, '').trim();
+        // Auto-fill course name using the course parameter from grader
         const courseInput = document.getElementById('course_name');
-        courseInput.value = courseName;
+        if (course && course !== '未分类') {
+            courseInput.value = course;
+        } else {
+            // Fallback to extracting from sname if course is 未分类
+            let courseName = sname.replace(/\(.*\)/, '').replace(/（.*）/, '').trim();
+            courseInput.value = courseName;
+        }
         courseInput.parentElement.classList.add('animate-pulse');
         setTimeout(() => courseInput.parentElement.classList.remove('animate-pulse'), 500);
     }

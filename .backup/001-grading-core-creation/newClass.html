@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}新建批改任务 - AI 教学辅助系统{% endblock %}
+
+{% block header_title %}新建批改任务{% endblock %}
+
+{% block content %}
+<style>
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+    .glass-input {
+        background: rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(10px);
+    }
+    .glass-input:focus {
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        border-color: #818cf8;
+    }
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+</style>
+
+<div class="max-w-5xl mx-auto animate-slide-up">
+    <form id="createClassForm" action="/new_class" method="POST" class="relative">
+
+        <div class="text-center mb-10">
+            <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-200 transform hover:scale-105 transition-all">
+                <i class="fas fa-plus text-2xl text-white"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800">配置新的实验批改任务</h2>
+            <p class="text-slate-500 text-sm mt-2">需要先有 "批改核心" 以及对应班级的 "学生名单" 才能进行批改</p>
+        </div>
+
+        <div class="relative z-20 grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+            <div class="glass-panel p-6 rounded-2xl shadow-sm hover:shadow-lg transition-all transform relative group">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-indigo-300 opacity-50 rounded-t-2xl"></div>
+
+                <div class="flex justify-between items-center mb-4">
+                    <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">1</span>
+                        选择评分标准 (AI核心)
+                    </label>
+                    <a href="/ai_generator" target="_blank" class="text-xs text-indigo-500 hover:text-indigo-700 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-plus-circle"></i> 新建
+                    </a>
+                </div>
+
+                <div class="relative" id="strategy-dropdown-container">
+                    <input type="hidden" name="strategy" id="strategy-input" required>
+
+                    <div class="glass-input w-full px-4 py-3 rounded-xl cursor-pointer flex items-center justify-between transition-all"
+                         onclick="toggleDropdown('strategy-menu')">
+                        <span id="strategy-display" class="text-slate-500 font-medium truncate">请选择 AI 评分核心...</span>
+                        <i class="fas fa-chevron-down text-slate-400 text-xs"></i>
+                    </div>
+
+                    <div id="strategy-menu" class="hidden absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in">
+                        <div class="p-2 border-b border-slate-50">
+                            <input type="text" placeholder="搜索核心名称..."
+                                   class="w-full bg-slate-50 text-xs px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-indigo-100"
+                                   oninput="filterStrategies(this.value)">
+                        </div>
+                        <div class="max-h-60 overflow-y-auto custom-scroll p-1" id="strategy-list">
+                            {% for sid, sname, course in strategies %}
+                            <div class="strategy-option px-3 py-2.5 hover:bg-indigo-50 rounded-lg cursor-pointer transition-colors group flex items-center justify-between"
+                                 onclick="selectStrategy('{{ sid }}', '{{ course }}')">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center text-sm font-bold border border-indigo-100">AI</div>
+                                    <span class="text-sm text-slate-700 font-medium group-hover:text-indigo-700">{{ sname }}</span>
+                                </div>
+                                {% if 'Standard' in sid or 'default' in sid %}
+                                <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">默认</span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <div class="p-4 text-center text-slate-400 text-xs">暂无可用核心</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-400 mt-2 ml-1">选中后将自动填充课程名称</p>
+            </div>
+
+            <div class="glass-panel p-6 rounded-2xl shadow-sm hover:shadow-lg transition-all transform relative group">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 to-sky-300 opacity-50 rounded-t-2xl"></div>
+
+                <div class="flex justify-between items-center mb-4">
+                    <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center text-xs">2</span>
+                        选择学生名单
+                    </label>
+                    <a href="/student" target="_blank" class="text-xs text-sky-500 hover:text-sky-700 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-cloud-upload-alt"></i> 上传
+                    </a>
+                </div>
+
+                <div class="relative" id="student-dropdown-container">
+                    <input type="hidden" name="student_list_id" id="student-input" required>
+
+                    <div class="glass-input w-full px-4 py-3 rounded-xl cursor-pointer flex items-center justify-between transition-all"
+                         onclick="toggleDropdown('student-menu'); focusStudentSearch()">
+                        <span id="student-display" class="text-slate-500 font-medium truncate">请选择班级名单...</span>
+                        <i class="fas fa-chevron-down text-slate-400 text-xs"></i>
+                    </div>
+
+                    <div id="student-menu" class="hidden absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-fade-in">
+                        <div class="p-2 border-b border-slate-50">
+                            <input type="text" id="student-search-input" placeholder="输入班级名称搜索..."
+                                   class="w-full bg-slate-50 text-xs px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-sky-100"
+                                   oninput="searchStudentLists(this.value)">
+                        </div>
+                        <div class="max-h-60 overflow-y-auto custom-scroll p-1" id="student-list-container">
+                            <div class="p-4 text-center text-slate-400 text-xs">请输入关键词搜索或加载中...</div>
+                        </div>
+                    </div>
+                </div>
+                 <p class="text-[10px] text-slate-400 mt-2 ml-1">选中后将自动填充班级名称</p>
+            </div>
+        </div>
+
+        <div class="relative z-10 glass-panel p-8 rounded-2xl shadow-sm hover:shadow-lg transition-all transform border-t border-white/60">
+            <div class="flex items-center gap-2 mb-6 text-slate-800">
+                <i class="fas fa-clipboard-check text-emerald-500"></i>
+                <h3 class="font-bold text-sm uppercase tracking-wider">任务信息确认</h3>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-2">
+                    <label class="text-xs text-slate-500 ml-1">课程名称</label>
+                    <div class="relative">
+                        <input type="text" name="course_name" id="course_name" required
+                               class="w-full bg-slate-50/50 border border-slate-200 text-slate-800 font-bold rounded-xl px-4 py-3 focus:outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:font-normal placeholder:text-slate-300"
+                               placeholder="等待选择核心...">
+                        <div class="absolute right-3 top-3.5 text-slate-300 pointer-events-none">
+                            <i class="fas fa-pen text-xs"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <label class="text-xs text-slate-500 ml-1">班级名称</label>
+                    <div class="relative">
+                        <input type="text" name="class_name" id="class_name" required
+                               class="w-full bg-slate-50/50 border border-slate-200 text-slate-800 font-bold rounded-xl px-4 py-3 focus:outline-none focus:bg-white focus:border-sky-400 focus:ring-4 focus:ring-sky-500/10 transition-all placeholder:font-normal placeholder:text-slate-300"
+                               placeholder="等待选择名单...">
+                        <div class="absolute right-3 top-3.5 text-slate-300 pointer-events-none">
+                            <i class="fas fa-pen text-xs"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 pt-6 border-t border-slate-100 flex justify-end items-center gap-4">
+                <a href="/" class="text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">取消</a>
+                <button type="submit" class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-indigo-300/50 hover:shadow-indigo-400/60 hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2">
+                    <i class="fas fa-rocket"></i>
+                    <span>立即创建任务</span>
+                </button>
+            </div>
+        </div>
+
+    </form>
+</div>
+
+<script>
+    function toggleDropdown(menuId) {
+        const menu = document.getElementById(menuId);
+        const isHidden = menu.classList.contains('hidden');
+        document.querySelectorAll('[id$="-menu"]').forEach(el => el.classList.add('hidden'));
+        if (isHidden) menu.classList.remove('hidden');
+        else menu.classList.add('hidden');
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#strategy-dropdown-container') && !e.target.closest('#student-dropdown-container')) {
+            document.querySelectorAll('[id$="-menu"]').forEach(el => el.classList.add('hidden'));
+        }
+    });
+
+    function filterStrategies(query) {
+        const options = document.querySelectorAll('.strategy-option');
+        query = query.toLowerCase();
+        options.forEach(opt => {
+            const text = opt.innerText.toLowerCase();
+            opt.style.display = text.includes(query) ? 'flex' : 'none';
+        });
+    }
+
+    function selectStrategy(sid, sname) {
+        document.getElementById('strategy-input').value = sid;
+        const display = document.getElementById('strategy-display');
+        display.innerText = sname;
+        display.classList.remove('text-slate-500');
+        display.classList.add('text-indigo-600', 'font-bold');
+        document.getElementById('strategy-menu').classList.add('hidden');
+
+        let courseName = sname.replace(/\(.*\)/, '').replace(/（.*）/, '').trim();
+        const courseInput = document.getElementById('course_name');
+        courseInput.value = courseName;
+        courseInput.parentElement.classList.add('animate-pulse');
+        setTimeout(() => courseInput.parentElement.classList.remove('animate-pulse'), 500);
+    }
+
+    let studentListCache = [];
+
+    function focusStudentSearch() {
+        setTimeout(() => {
+            document.getElementById('student-search-input').focus();
+            if(studentListCache.length === 0) searchStudentLists('');
+        }, 100);
+    }
+
+    async function searchStudentLists(query) {
+        const container = document.getElementById('student-list-container');
+
+        try {
+            const response = await fetch(`/api/grading/student_lists?search=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            studentListCache = data;
+            renderStudentLists(data);
+        } catch (err) {
+            container.innerHTML = `<div class="p-4 text-center text-rose-400 text-xs">加载失败</div>`;
+        }
+    }
+
+    function renderStudentLists(data) {
+        const container = document.getElementById('student-list-container');
+        if (!data || data.length === 0) {
+            container.innerHTML = `
+                <div class="p-4 text-center text-slate-400 text-xs">
+                    <i class="fas fa-inbox mr-1"></i> 未找到名单 (所有公开数据)
+                    <a href="/student" target="_blank" class="block mt-1 text-sky-600 hover:underline">去上传?</a>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = data.map(list => `
+            <div class="px-3 py-2.5 hover:bg-sky-50 rounded-lg cursor-pointer transition-colors group flex items-center justify-between border-b border-slate-50 last:border-0"
+                 onclick="selectStudentList('${list.id}', '${list.class_name || '未命名'}', '${list.student_count}')">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-500 flex items-center justify-center text-sm border border-sky-100 flex-shrink-0">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="flex flex-col overflow-hidden">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-slate-700 font-medium group-hover:text-sky-700 truncate">${list.class_name || '未命名班级'}</span>
+                            ${list.uploader_name ? `<span class="text-[9px] px-1 bg-slate-100 rounded text-slate-400">@${list.uploader_name}</span>` : ''}
+                        </div>
+                        <span class="text-[10px] text-slate-400 truncate">
+                            ${list.enrollment_year || ''} ${list.education_type || ''} · ${list.college || ''}
+                        </span>
+                    </div>
+                </div>
+                <span class="text-xs font-bold text-slate-400 group-hover:text-sky-600 whitespace-nowrap">${list.student_count || 0}人</span>
+            </div>
+        `).join('');
+    }
+
+    function selectStudentList(id, className, count) {
+        document.getElementById('student-input').value = id;
+
+        const display = document.getElementById('student-display');
+        display.innerHTML = `<span class="flex items-center gap-2">${className} <span class="text-[10px] bg-sky-100 text-sky-600 px-1.5 rounded-full">${count}人</span></span>`;
+        display.classList.remove('text-slate-500');
+        display.classList.add('text-sky-600', 'font-bold');
+
+        document.getElementById('student-menu').classList.add('hidden');
+
+        const classInput = document.getElementById('class_name');
+        classInput.value = className;
+        classInput.parentElement.classList.add('animate-pulse');
+        setTimeout(() => classInput.parentElement.classList.remove('animate-pulse'), 500);
+    }
+</script>
+
+{% endblock %}
