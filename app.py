@@ -18,6 +18,7 @@ from blueprints.student import bp as student_bp
 from blueprints.jwxt import bp as jwxt_bp
 from blueprints.stats import bp as stats_bp
 from config import Config
+from database import Database
 
 
 def create_app():
@@ -41,6 +42,19 @@ def create_app():
             return json.loads(s)
         except:
             return []
+
+    # 初始化全局数据库对象
+    db = Database()
+
+    # 优化 5: 注册请求销毁钩子
+    @app.teardown_appcontext
+    def close_db_connection(exception=None):
+        """
+        每个请求处理完成后执行。
+        确保线程局部的 sqlite 连接被 close()，
+        这样 SQLite 才能正确合并并删除 -shm 和 -wal 文件。
+        """
+        db.close()
 
     # 将函数注册到 Jinja2 模板环境
     app.add_template_filter(split_filter, 'split')

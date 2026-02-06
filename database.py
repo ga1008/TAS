@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import threading
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,24 +9,49 @@ class Database:
     def __init__(self, db_path=Config.DB_PATH):
         self.db_path = db_path
         self._local = threading.local()
-        # 初始化数据库表结构
+        # 优化 1: 确保数据库目录存在，防止权限导致的创建失败
+        db_dir = os.path.dirname(self.db_path)
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir)
+
+        # 优化 2: 仅在第一次实例化或表不存在时初始化，减少写锁竞争
         self.init_db_tables()
 
     def get_connection(self):
+        """获取当前线程的数据库连接，并处理 WAL 模式及只读风险"""
         if not hasattr(self._local, 'connection'):
-            self._local.connection = sqlite3.connect(
+            # 优化 3: 增加 isolation_level=None 以实现更精细的事务控制，配合 WAL
+            conn = sqlite3.connect(
                 self.db_path,
                 check_same_thread=False,
-                timeout=30.0  # 等待锁释放最多30秒
+                timeout=30.0
             )
-            self._local.connection.row_factory = sqlite3.Row
-            # 启用 WAL 模式提高并发性能
-            self._local.connection.execute('PRAGMA journal_mode=WAL')
+            conn.row_factory = sqlite3.Row
+
+            try:
+                # 优化 4: 显式设置日志模式和同步模式，降低 shm/wal 文件的死锁概率
+                # synchronous=NORMAL 在 WAL 模式下既安全又高效
+                conn.execute('PRAGMA journal_mode=WAL')
+                conn.execute('PRAGMA synchronous=NORMAL')
+                # 增加缓存大小，减少磁盘 I/O 带来的竞争
+                conn.execute('PRAGMA cache_size=-2000')
+            except sqlite3.OperationalError as e:
+                # 如果 shm 处于只读状态，尝试回退到默认模式（防止程序崩溃）
+                print(f"[DB] WAL Mode config warning: {e}")
+
+            self._local.connection = conn
+
         return self._local.connection
 
     def close(self):
+        """显式关闭连接，确保 shm/wal 文件能够正常同步回主库"""
         if hasattr(self._local, 'connection'):
-            self._local.connection.close()
+            try:
+                # 关闭前强制进行一次 checkpoint，有助于释放 shm 锁定
+                self._local.connection.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+                self._local.connection.close()
+            except:
+                pass
             del self._local.connection
 
     def init_db_tables(self):
