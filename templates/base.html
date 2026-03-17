@@ -376,6 +376,26 @@
                 </div>
             </div>
 
+{#            课堂辅助#}
+            <div class="nav-box">
+                <div class="nav-category">课堂辅助</div>
+                <div class="nav-item">
+                    <a href="{{ url_for('classroom.course_manage') }}" class="nav-link {% if request.path.startswith('/classroom/course') %}active{% endif %}">
+                        <i class="fas fa-book-open fa-fw"></i> 课程管理
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('classroom.files') }}" class="nav-link {% if request.path.startswith('/classroom/files') %}active{% endif %}">
+                        <i class="fas fa-folder-tree fa-fw"></i> 文件资源
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('classroom.seminar') }}" class="nav-link {% if request.path.startswith('/classroom/seminar') %}active{% endif %}">
+                        <i class="fas fa-comments fa-fw"></i> 在线研讨
+                    </a>
+                </div>
+            </div>
+
             {# 系统 #}
             <div class="nav-box">
                 <div class="nav-category">系统</div>

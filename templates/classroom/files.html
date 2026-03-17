@@ -1,0 +1,509 @@
+{% extends "base.html" %}
+
+{% block title %}文件资源 - 课堂辅助{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-3">
+            <span class="bg-gradient-to-br from-brand-500 to-indigo-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-brand-200">
+                <i class="fas fa-folder-tree text-lg"></i>
+            </span>
+            <div>
+                <h1 class="text-lg font-bold text-slate-800">课程资源管理</h1>
+                <p class="text-xs text-slate-400">管理课程资料 · 支持大文件高速分块上传 · 自动同步至所有开设的课堂</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col md:flex-row min-h-[600px]">
+        <div class="w-full md:w-64 bg-slate-50 border-r border-slate-100 p-4 flex flex-col h-full shrink-0">
+            <h2 class="text-sm font-bold text-slate-700 mb-3 px-2">选择教学课程</h2>
+            <div class="space-y-1 overflow-y-auto custom-scrollbar flex-1" id="course-list">
+                {% for course in courses %}
+                <button onclick="loadCourseFiles({{ course.id }}, '{{ course.name }}')" 
+                        class="w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {% if loop.first %}bg-brand-100 text-brand-700 shadow-sm{% else %}text-slate-600 hover:bg-slate-200{% endif %}"
+                        id="course-btn-{{ course.id }}">
+                    <i class="fas fa-book mr-2 {% if loop.first %}text-brand-500{% else %}text-slate-400{% endif %}"></i>{{ course.name }}
+                </button>
+                {% else %}
+                <div class="text-center py-6 text-slate-400">
+                    <i class="fas fa-box-open text-2xl mb-2 opacity-50"></i>
+                    <p class="text-xs px-2">暂无课程，请先在“课程管理”中创建</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col bg-white">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-white z-10">
+                <h3 class="text-base font-bold text-slate-800" id="current-course-title">
+                    <i class="fas fa-folder-open text-brand-500 mr-2"></i>请在左侧选择课程
+                </h3>
+                
+                <div class="flex items-center gap-2">
+                    <button onclick="openUploadModal()" id="btn-upload-trigger" disabled class="bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold px-4 py-2.5 rounded-lg transition shadow-sm flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-cloud-upload-alt mr-1.5"></i> 上传资源
+                    </button>
+                    <button onclick="refreshFiles()" id="btn-refresh" disabled class="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 text-sm font-bold px-3 py-2.5 rounded-lg transition shadow-sm disabled:opacity-50">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 p-6 overflow-y-auto custom-scrollbar bg-slate-50/30">
+                <div id="file-list-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div class="col-span-full text-center py-20 text-slate-400 hidden" id="empty-state">
+                        <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-folder-open text-3xl text-slate-300"></i>
+                        </div>
+                        <p class="text-sm font-bold text-slate-500">该课程下暂无文件资源</p>
+                        <p class="text-xs mt-1">点击右上角按钮上传您的第一份资料</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="upload-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center transition-opacity opacity-0">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl mx-4 overflow-hidden transform scale-95 transition-transform duration-300" id="upload-modal-content">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
+            <h3 class="font-bold text-slate-800 text-lg"><i class="fas fa-cloud-upload-alt text-brand-500 mr-2"></i>上传课程资源</h3>
+            <button onclick="closeUploadModal()" class="text-slate-400 hover:text-slate-600 transition"><i class="fas fa-times text-lg"></i></button>
+        </div>
+        
+        <div class="p-6 space-y-5">
+            <div class="space-y-2">
+                <label class="text-sm font-bold text-slate-700">资源描述 (可选)</label>
+                <input type="text" id="upload-desc" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200" placeholder="例如：第一章PPT课件 / 期中复习提纲...">
+            </div>
+            
+            <div class="flex items-center gap-6 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <input type="checkbox" id="upload-is-public" checked class="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+                    <span class="text-slate-700 text-sm font-medium group-hover:text-brand-600 transition">对学生公开可见</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer group" title="勾选后学生端将无法看到此文件">
+                    <input type="checkbox" id="upload-is-teacher-res" class="w-4 h-4 rounded border-slate-300 text-rose-500 focus:ring-rose-500">
+                    <span class="text-slate-700 text-sm font-medium group-hover:text-rose-600 transition">设为教师私有资源(教案/答案)</span>
+                </label>
+            </div>
+
+            <label class="block w-full border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 hover:bg-brand-50 hover:border-brand-400 transition-colors p-8 text-center cursor-pointer group" id="drop-zone">
+                <input type="file" id="file-input" class="hidden">
+                <div class="w-16 h-16 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto text-brand-500 mb-3 group-hover:scale-110 group-hover:shadow transition-all duration-300">
+                    <i class="fas fa-file-import text-2xl"></i>
+                </div>
+                <p class="text-sm font-bold text-slate-700 mb-1">点击选择 或 将文件拖拽至此处</p>
+                <p class="text-xs text-slate-400">支持任意文件类型，自带大文件切片及极速秒传引擎</p>
+                
+                <div id="selected-file-badge" class="mt-4 hidden inline-flex items-center bg-white border border-brand-200 text-brand-700 px-3 py-1.5 rounded-full shadow-sm">
+                    <i class="fas fa-file-check mr-2"></i>
+                    <span id="selected-file-name" class="text-sm font-bold max-w-[250px] truncate"></span>
+                    <span id="selected-file-size" class="text-xs ml-2 text-slate-400"></span>
+                </div>
+            </label>
+
+            <div id="upload-progress-container" class="hidden space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div class="flex justify-between text-xs font-bold">
+                    <span id="upload-status-text" class="text-brand-600">准备上传...</span>
+                    <span id="upload-percentage" class="text-slate-700">0%</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden shadow-inner">
+                    <div id="upload-progress-bar" class="bg-gradient-to-r from-brand-500 to-indigo-500 h-2.5 rounded-full transition-all duration-300 w-0"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/80">
+            <button onclick="closeUploadModal()" class="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition">取消</button>
+            <button onclick="startUpload()" id="btn-confirm-upload" class="px-6 py-2 rounded-lg text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-sm shadow-brand-200 transition flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-rocket mr-1.5"></i> 开始极速上传
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 全局状态
+    let currentCourseId = null;
+    // 使用与后端严格匹配的 Chunk Size: 5MB
+    const CHUNK_SIZE = 5 * 1024 * 1024; 
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // 如果有课程列表，自动触发点击第一个激活
+        const firstCourseBtn = document.querySelector('[id^="course-btn-"]');
+        if (firstCourseBtn) {
+            firstCourseBtn.click();
+        }
+
+        // 绑定拖拽高亮交互
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        
+        ['dragover', 'dragenter'].forEach(e => {
+            dropZone.addEventListener(e, (ev) => {
+                ev.preventDefault();
+                dropZone.classList.add('border-brand-400', 'bg-brand-50');
+            });
+        });
+        
+        ['dragleave', 'dragend', 'drop'].forEach(e => {
+            dropZone.addEventListener(e, (ev) => {
+                ev.preventDefault();
+                dropZone.classList.remove('border-brand-400', 'bg-brand-50');
+            });
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                updateSelectedFileName();
+            }
+        });
+        fileInput.addEventListener('change', updateSelectedFileName);
+    });
+
+    // 选中文件后的 UI 反馈
+    function updateSelectedFileName() {
+        const fileInput = document.getElementById('file-input');
+        const badge = document.getElementById('selected-file-badge');
+        
+        if (fileInput.files.length > 0) {
+            document.getElementById('selected-file-name').textContent = fileInput.files[0].name;
+            document.getElementById('selected-file-size').textContent = formatSize(fileInput.files[0].size);
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    // 左侧切换课程逻辑
+    function loadCourseFiles(courseId, courseName) {
+        currentCourseId = courseId;
+        document.getElementById('current-course-title').innerHTML = `<i class="fas fa-folder-open text-brand-500 mr-2"></i>[${courseName}] 资料库`;
+        
+        // 激活右侧按钮组
+        document.getElementById('btn-upload-trigger').disabled = false;
+        document.getElementById('btn-refresh').disabled = false;
+        
+        // 更新左侧列表状态的 Tailwind 样式
+        document.querySelectorAll('[id^="course-btn-"]').forEach(btn => {
+            btn.classList.remove('bg-brand-100', 'text-brand-700', 'shadow-sm');
+            btn.classList.add('text-slate-600');
+            btn.querySelector('i').classList.remove('text-brand-500');
+            btn.querySelector('i').classList.add('text-slate-400');
+        });
+        const activeBtn = document.getElementById(`course-btn-${courseId}`);
+        if(activeBtn) {
+            activeBtn.classList.add('bg-brand-100', 'text-brand-700', 'shadow-sm');
+            activeBtn.classList.remove('text-slate-600');
+            activeBtn.querySelector('i').classList.add('text-brand-500');
+            activeBtn.querySelector('i').classList.remove('text-slate-400');
+        }
+
+        refreshFiles();
+    }
+
+    // 获取并渲染文件卡片
+    async function refreshFiles() {
+        if (!currentCourseId) return;
+        
+        const container = document.getElementById('file-list-container');
+        const emptyState = document.getElementById('empty-state');
+        
+        // 骨架屏视觉反馈
+        container.innerHTML = '<div class="col-span-full flex justify-center py-10"><i class="fas fa-spinner fa-spin text-brand-500 text-2xl"></i></div>';
+
+        try {
+            // 注: 原 classshare 可能是提供 class_offering_id 作为参数，
+            // 整合入 TAS 后，统一在 blueprint 内扩展此接口按 course_id 拉取
+            const res = await fetch(`/api/courses/${currentCourseId}/files`);
+            if(!res.ok) throw new Error();
+            const data = await res.json();
+            
+            container.innerHTML = '';
+            container.appendChild(emptyState);
+            
+            if (!data.files || data.files.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            data.files.forEach(file => {
+                const card = document.createElement('div');
+                card.className = "bg-white border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md hover:border-brand-300 transition-all group";
+                
+                const isTeacherRes = file.is_teacher_resource ? '<span class="px-2 py-0.5 bg-rose-100 text-rose-600 text-[10px] rounded font-bold ml-2 shrink-0"><i class="fas fa-lock mr-1"></i>私有</span>' : '';
+                const isPublicRes = file.is_public ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-600 text-[10px] rounded font-bold ml-2 shrink-0"><i class="fas fa-eye mr-1"></i>公开</span>' : '';
+                const desc = file.description ? `<p class="text-xs text-slate-500 mt-2 line-clamp-2 bg-slate-50 p-2 rounded-md">${file.description}</p>` : '';
+
+                card.innerHTML = `
+                    <div class="flex items-start gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0 group-hover:bg-brand-50 group-hover:text-brand-500 transition-colors">
+                            <i class="${getFileIcon(file.file_name)} text-2xl text-slate-400 group-hover:text-brand-500"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between mb-1">
+                                <h4 class="text-sm font-bold text-slate-800 truncate pr-2" title="${file.file_name}">${file.file_name}</h4>
+                            </div>
+                            <div class="flex items-center text-[11px] text-slate-400">
+                                <span>${formatSize(file.file_size)}</span>
+                                <span class="mx-1.5 text-slate-300">|</span>
+                                <span>${file.uploaded_at ? file.uploaded_at.substring(0,16).replace('T',' ') : '近期'}</span>
+                                ${isTeacherRes || isPublicRes}
+                            </div>
+                            ${desc}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <a href="/download/course_file/${file.id}" target="_blank" class="text-brand-600 hover:text-white border border-brand-200 text-xs font-bold px-3 py-1.5 rounded bg-brand-50 hover:bg-brand-600 transition flex items-center shadow-sm">
+                            <i class="fas fa-cloud-download-alt mr-1"></i>下载
+                        </a>
+                        <button onclick="deleteFile(${file.id}, '${file.file_name}')" class="text-rose-500 hover:text-white text-xs font-bold px-3 py-1.5 rounded border border-rose-200 bg-rose-50 hover:bg-rose-500 transition shadow-sm">
+                            <i class="fas fa-trash-alt mr-1"></i>删除
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            
+        } catch (err) {
+            emptyState.classList.remove('hidden');
+            window.showToast?.('获取文件列表失败，请重试', 'error');
+        }
+    }
+
+    // ================= 上传模态框控制 =================
+    function openUploadModal() {
+        document.getElementById('upload-modal').classList.remove('hidden');
+        // 触发重绘以执行动画
+        void document.getElementById('upload-modal').offsetWidth;
+        document.getElementById('upload-modal').classList.add('opacity-100');
+        document.getElementById('upload-modal-content').classList.remove('scale-95');
+        document.getElementById('upload-modal-content').classList.add('scale-100');
+        
+        // 重置状态
+        document.getElementById('file-input').value = '';
+        document.getElementById('selected-file-badge').classList.add('hidden');
+        document.getElementById('upload-desc').value = '';
+        document.getElementById('upload-progress-container').classList.add('hidden');
+        document.getElementById('btn-confirm-upload').disabled = false;
+    }
+
+    function closeUploadModal() {
+        document.getElementById('upload-modal').classList.remove('opacity-100');
+        document.getElementById('upload-modal-content').classList.remove('scale-100');
+        document.getElementById('upload-modal-content').classList.add('scale-95');
+        setTimeout(() => {
+            document.getElementById('upload-modal').classList.add('hidden');
+        }, 300);
+    }
+
+    // ================= 核心：分块上传机制 (对齐 Backend) =================
+    async function startUpload() {
+        const fileInput = document.getElementById('file-input');
+        if (!fileInput.files.length) {
+            window.showToast?.('请先选择要上传的文件！', 'warning');
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const desc = document.getElementById('upload-desc').value;
+        const isPublic = document.getElementById('upload-is-public').checked;
+        const isTeacherRes = document.getElementById('upload-is-teacher-res').checked;
+
+        // UI 切为上传状态
+        const btn = document.getElementById('btn-confirm-upload');
+        btn.disabled = true;
+        const pContainer = document.getElementById('upload-progress-container');
+        const pBar = document.getElementById('upload-progress-bar');
+        const pText = document.getElementById('upload-percentage');
+        const sText = document.getElementById('upload-status-text');
+        
+        pContainer.classList.remove('hidden');
+        sText.textContent = "正在进行上传前预检(查重)...";
+        sText.className = "text-brand-600";
+        pBar.className = "bg-gradient-to-r from-brand-500 to-indigo-500 h-2.5 rounded-full transition-all duration-300 w-[5%]";
+        pText.textContent = "5%";
+
+        try {
+            // 步骤 1：查重及秒传判定
+            const checkRes = await fetch('/api/files/check', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    file_name: file.name,
+                    file_size: file.size,
+                    course_id: currentCourseId
+                })
+            });
+            const checkData = await checkRes.json();
+            
+            if (checkData.exists) {
+                if (checkData.in_current_course) {
+                    throw new Error("当前课程已经存在同名且同大小的文件！");
+                }
+                // 后端触发秒传关联
+                sText.textContent = "触发全站极速秒传！";
+                pBar.style.width = "100%";
+                pText.textContent = "100%";
+                setTimeout(() => {
+                    closeUploadModal();
+                    refreshFiles();
+                    window.showToast?.('极速秒传成功！', 'success');
+                }, 1000);
+                return;
+            }
+
+            // 步骤 2：向后端注册分块上传会话
+            sText.textContent = "向服务器申请上传通道...";
+            const initRes = await fetch('/api/files/upload/init', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    file_name: file.name,
+                    file_size: file.size,
+                    course_id: currentCourseId,
+                    description: desc,
+                    is_public: isPublic,
+                    is_teacher_resource: isTeacherRes
+                })
+            });
+            const initData = await initRes.json();
+            if (!initRes.ok) throw new Error(initData.detail || "通道建立失败");
+
+            const { upload_id, chunk_size, total_chunks } = initData;
+
+            // 步骤 3：并发切片传输 (防限流：最大并发为3)
+            sText.textContent = "正在疾速传输数据...";
+            let uploadedChunks = 0;
+            const CONCURRENCY_LIMIT = 3;
+            let activeUploads = 0;
+            let currentIndex = 0;
+            let hasError = false;
+
+            await new Promise((resolve, reject) => {
+                const uploadNext = async () => {
+                    if (hasError) return;
+                    if (currentIndex >= total_chunks && activeUploads === 0) {
+                        resolve();
+                        return;
+                    }
+                    
+                    while (activeUploads < CONCURRENCY_LIMIT && currentIndex < total_chunks) {
+                        const chunkIndex = currentIndex++;
+                        activeUploads++;
+                        
+                        const start = chunkIndex * chunk_size;
+                        const end = Math.min(file.size, start + chunk_size);
+                        const chunkBlob = file.slice(start, end);
+                        
+                        const formData = new FormData();
+                        formData.append('upload_id', upload_id);
+                        formData.append('chunk_index', chunkIndex);
+                        formData.append('chunk', chunkBlob, file.name);
+
+                        fetch('/api/files/upload/chunk', {
+                            method: 'POST',
+                            body: formData
+                        }).then(res => {
+                            if(!res.ok) throw new Error("某一切片上传中断");
+                            uploadedChunks++;
+                            // 进度条公式: init(10%) + chunks(80%) + complete(10%)
+                            const percent = 10 + Math.floor((uploadedChunks / total_chunks) * 80);
+                            pBar.style.width = percent + "%";
+                            pText.textContent = percent + "%";
+                            
+                            activeUploads--;
+                            uploadNext();
+                        }).catch(err => {
+                            hasError = true;
+                            reject(err);
+                        });
+                    }
+                };
+                uploadNext();
+            });
+
+            // 步骤 4：通知后端重组文件与计算 Hash
+            sText.textContent = "数据传输完毕，云端校验并重组中...";
+            const completeRes = await fetch('/api/files/upload/complete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ upload_id })
+            });
+            const completeData = await completeRes.json();
+            
+            if(!completeRes.ok) throw new Error(completeData.detail || "重组文件失败");
+            
+            pBar.style.width = "100%";
+            pText.textContent = "100%";
+            sText.textContent = "上传成功！";
+            
+            setTimeout(() => {
+                closeUploadModal();
+                refreshFiles();
+                window.showToast?.('上传成功！', 'success');
+            }, 800);
+
+        } catch (err) {
+            console.error(err);
+            sText.textContent = "上传阻断: " + err.message;
+            sText.className = "text-rose-500";
+            pBar.className = "bg-rose-500 h-2.5 rounded-full transition-all duration-300 w-full";
+            btn.disabled = false;
+        }
+    }
+
+    async function deleteFile(fileId, fileName) {
+        if (!confirm(`【严重警告】确定要永久删除 "${fileName}" 吗？`)) return;
+
+        try {
+            const res = await fetch(`/api/courses/${currentCourseId}/files/${fileId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (res.ok) {
+                window.showToast?.('资源已清除', 'success');
+                refreshFiles();
+            } else {
+                throw new Error(data.detail || data.message || "删除失败");
+            }
+        } catch(err) {
+            window.showToast?.(err.message, 'error') || alert(err.message);
+        }
+    }
+
+    // ================= 辅助工具包 =================
+    function formatSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // 智能返回对应文件类型 icon
+    function getFileIcon(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        if (['pdf'].includes(ext)) return 'fas fa-file-pdf text-rose-500';
+        if (['doc', 'docx'].includes(ext)) return 'fas fa-file-word text-blue-600';
+        if (['xls', 'xlsx', 'csv'].includes(ext)) return 'fas fa-file-excel text-emerald-600';
+        if (['ppt', 'pptx'].includes(ext)) return 'fas fa-file-powerpoint text-amber-500';
+        if (['zip', 'rar', '7z', 'tar'].includes(ext)) return 'fas fa-file-archive text-slate-500';
+        if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return 'fas fa-file-image text-purple-500';
+        if (['mp4', 'avi', 'mov', 'mkv'].includes(ext)) return 'fas fa-file-video text-sky-500';
+        if (['mp3', 'wav', 'flac'].includes(ext)) return 'fas fa-file-audio text-yellow-500';
+        if (['txt', 'md'].includes(ext)) return 'fas fa-file-alt text-slate-400';
+        if (['py', 'js', 'html', 'css', 'json', 'java', 'cpp'].includes(ext)) return 'fas fa-file-code text-teal-600';
+        return 'fas fa-file text-brand-400';
+    }
+</script>
+{% endblock %}

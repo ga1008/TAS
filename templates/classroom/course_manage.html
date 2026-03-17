@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}课程管理 - 课堂辅助{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <div class="flex space-x-1 border-b border-slate-200">
+        <button onclick="switchTab('manage')" id="tab-manage" class="px-6 py-3 text-sm font-medium text-brand-600 border-b-2 border-brand-600 transition-colors">
+            <i class="fas fa-book mr-2"></i>课程管理
+        </button>
+        <button onclick="switchTab('open')" id="tab-open" class="px-6 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">
+            <i class="fas fa-chalkboard-teacher mr-2"></i>开设课堂
+        </button>
+        <button onclick="switchTab('ai')" id="tab-ai" class="px-6 py-3 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">
+            <i class="fas fa-robot mr-2"></i>课堂AI配置
+        </button>
+    </div>
+
+    <div id="pane-manage" class="block bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold mb-4">1. 基础课程配置</h2>
+        <p class="text-slate-500 mb-4">建立您的教学课程库。此步骤独立于学生数据。</p>
+        </div>
+
+    <div id="pane-open" class="hidden bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold mb-4">2. 为班级开设课堂</h2>
+        <p class="text-slate-500 mb-4">选择前置导入的班级名单，将其实体化为一个互动课堂。</p>
+        <select class="form-select border rounded p-2 w-full max-w-md">
+            <option value="">请选择前置导入的班级...</option>
+            {% for cls in classes %}
+                <option value="{{ cls.id }}">{{ cls.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div id="pane-ai" class="hidden bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+        <h2 class="text-xl font-bold mb-4">3. 专属 AI 助手设定</h2>
+        <p class="text-slate-500 mb-4">为当前已开设的课堂定义 Prompt 与能力边界。</p>
+        </div>
+</div>
+
+<script>
+function switchTab(target) {
+    const tabs = ['manage', 'open', 'ai'];
+    tabs.forEach(tab => {
+        // 控制下划线及高亮样式
+        const tabBtn = document.getElementById('tab-' + tab);
+        const pane = document.getElementById('pane-' + tab);
+        if (tab === target) {
+            tabBtn.classList.replace('text-slate-500', 'text-brand-600');
+            tabBtn.classList.add('border-b-2', 'border-brand-600');
+            pane.classList.replace('hidden', 'block');
+        } else {
+            tabBtn.classList.replace('text-brand-600', 'text-slate-500');
+            tabBtn.classList.remove('border-b-2', 'border-brand-600');
+            pane.classList.replace('block', 'hidden');
+        }
+    });
+}
+</script>
+{% endblock %}

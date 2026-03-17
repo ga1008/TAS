@@ -646,6 +646,20 @@ class Database:
             user_id = cursor.lastrowid
             return {"id": user_id, "username": username, "is_admin": 0}
 
+    def login_student(self, student_id, name):
+        """学生登录：根据学号和姓名登录，如果不存在则自动注册"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # 查询学生用户
+        cursor.execute('SELECT * FROM students WHERE student_id = ? and name = ?', (student_id, name))
+        user = cursor.fetchone()
+        if user:
+            return dict(user)
+        else:
+            return None  # 学生登录不自动注册，必须预先在 students 表中添加记录
+
+
     # ================= 管理员相关 =================
     def verify_admin_login(self, username, password):
         conn = self.get_connection()

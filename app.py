@@ -2,12 +2,14 @@ import os
 import json  # <---【1】记得添加 json 导入
 
 from flask import Flask
+from flask_socketio import SocketIO
 
 from blueprints.admin import bp as admin_bp
 from blueprints.ai_assistant import bp as ai_assistant_bp
 from blueprints.ai_generator import bp as ai_gen_bp
 from blueprints.ai_welcome import bp as ai_welcome_bp
 from blueprints.auth import bp as auth_bp
+from blueprints.classroom import classroom_bp
 from blueprints.export import bp as export_bp
 from blueprints.grading import bp as grading_bp
 from blueprints.library import bp as library_bp
@@ -17,8 +19,11 @@ from blueprints.signatures import bp as signatures_bp
 from blueprints.student import bp as student_bp
 from blueprints.jwxt import bp as jwxt_bp
 from blueprints.stats import bp as stats_bp
+from blueprints.student_portal import student_portal_bp
 from config import Config
 from database import Database
+
+socketio = SocketIO()
 
 
 def create_app():
@@ -114,8 +119,11 @@ def create_app():
     app.register_blueprint(jwxt_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(stats_bp)
+    app.register_blueprint(student_portal_bp)
+    app.register_blueprint(classroom_bp)
 
-    return app
+    socketio.init_app(app, cors_allowed_origins="*", async_mode='gevent')
+    return app, socketio
 
 
 app = create_app()

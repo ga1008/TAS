@@ -20,3 +20,5 @@ pycryptodome
 beautifulsoup4
 lxml
 requests
+gevent
+Flask-SocketIO    # 用于替代 classshare 原本的 WebSocket 在线研讨功能
