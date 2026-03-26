@@ -195,3 +195,24 @@ def api_update_course(class_id):
         return jsonify({"status": "error", "msg": str(e)}), 500
 
 
+@classroom_bp.route('/api/delete_course/<int:class_id>', methods=['POST', 'DELETE'])
+def api_delete_course(class_id):
+    """教师端：删除课程，同时清除级联的课堂学生和成绩记录"""
+    if not g.user:
+        return jsonify({"msg": "Unauthorized"}), 401
+
+    cls_record = db.get_class_by_id(class_id)
+    if not cls_record:
+        return jsonify({"status": "error", "msg": "课程不存在"}), 404
+
+    # 鉴权：只能由创建者或超级管理员删除
+    is_admin = g.user.get('is_admin')
+    is_owner = int(cls_record['created_by']) == int(g.user['id'])
+    if not (is_admin or is_owner):
+        return jsonify({"status": "error", "msg": "权限不足，无法删除此课程"}), 403
+
+    try:
+        db.delete_class(class_id)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)}), 500

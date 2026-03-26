@@ -15,315 +15,92 @@
         </button>
     </div>
 
-    <div id="pane-manage" class="block bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+    <div id="pane-manage" class="block">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <!-- Left: classes list -->
-            <div class="md:col-span-1 bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-bold">我的课程</h3>
-                    <button id="newCourseBtn" class="text-xs text-slate-500">新建</button>
+
+            <div class="md:col-span-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-[75vh]">
+                <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 rounded-t-xl">
+                    <h3 class="font-bold text-slate-800">我的课程</h3>
+                    <button id="newCourseBtn" class="text-sm px-3 py-1.5 bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-100 transition-colors flex items-center shadow-sm">
+                        <i class="fas fa-plus mr-1"></i> 新建
+                    </button>
                 </div>
-                <div id="classList" class="space-y-2 max-h-[60vh] overflow-y-auto">
-                    <!-- class items injected here -->
-                </div>
+                <div id="classList" class="flex-1 overflow-y-auto p-3 space-y-3">
+                    </div>
             </div>
 
-            <!-- Right: course form occupies 3 cols -->
-            <div class="md:col-span-3 bg-white/50 p-4 rounded-md border border-slate-50">
-                <h2 class="text-xl font-bold mb-4">1. 基础课程配置</h2>
-                <p class="text-slate-500 mb-4">建立您的教学课程库。此步骤独立于学生数据。</p>
+            <div class="md:col-span-3 bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
+                <div class="mb-6 border-b border-slate-100 pb-4">
+                    <h2 id="formTitle" class="text-xl font-bold text-slate-800">新建课程</h2>
+                    <p class="text-sm text-slate-500 mt-1">配置课程的基础信息与关联教材。建立您的教学课程库，此步骤独立于学生数据。</p>
+                </div>
 
-                <form id="courseForm" class="space-y-4">
+                <form id="courseForm" class="space-y-5">
                     <input type="hidden" id="class_id" value="" />
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                            <label for="semester" class="text-sm font-medium text-slate-600">开课学期</label>
-                            <input type="text" id="semester" name="semester" class="mt-1 block w-full rounded-xl border border-slate-200 px-3 py-2" readonly />
+                            <label for="name" class="block text-sm font-medium text-slate-700 mb-1">课程名称 <span class="text-red-500">*</span></label>
+                            <input type="text" id="name" name="name" class="w-full rounded-xl border border-slate-200 px-4 py-2.5 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-shadow" placeholder="例如：高级软件工程" required />
                         </div>
 
                         <div>
-                            <label for="name" class="text-sm font-medium text-slate-600">课程名称</label>
-                            <input type="text" id="name" name="name" class="mt-1 block w-full rounded-xl border border-slate-200 px-3 py-2" required />
+                            <label for="semester" class="block text-sm font-medium text-slate-700 mb-1">开课学期</label>
+                            <input type="text" id="semester" name="semester" class="w-full rounded-xl border border-slate-200 px-4 py-2.5 bg-slate-50 text-slate-600 focus:outline-none" readonly />
                         </div>
 
                         <div>
-                            <label for="hours" class="text-sm font-medium text-slate-600">学时 (小时)</label>
-                            <input type="number" id="hours" name="hours" min="1" value="16" class="mt-1 block w-full rounded-xl border border-slate-200 px-3 py-2" required />
+                            <label for="hours" class="block text-sm font-medium text-slate-700 mb-1">学时 (小时) <span class="text-red-500">*</span></label>
+                            <input type="number" id="hours" name="hours" min="1" value="16" class="w-full rounded-xl border border-slate-200 px-4 py-2.5 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-shadow" required />
                         </div>
 
                         <div>
-                            <label for="credits" class="text-sm font-medium text-slate-600">学分</label>
-                            <input type="text" id="credits" name="credits" class="mt-1 block w-full rounded-xl border border-slate-200 px-3 py-2" required />
+                            <label for="credits" class="block text-sm font-medium text-slate-700 mb-1">学分</label>
+                            <input type="text" id="credits" name="credits" class="w-full rounded-xl border border-slate-200 px-4 py-2.5 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-shadow" required />
                         </div>
                     </div>
 
                     <div>
-                        <label for="description" class="text-sm font-medium text-slate-600">课程简介</label>
-                        <textarea id="description" name="description" rows="3" class="mt-1 block w-full rounded-xl border border-slate-200 px-3 py-2"></textarea>
+                        <label for="description" class="block text-sm font-medium text-slate-700 mb-1">课程简介</label>
+                        <textarea id="description" name="description" rows="3" class="w-full rounded-xl border border-slate-200 px-4 py-2.5 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-shadow placeholder-slate-400" placeholder="简要描述课程目标与内容..."></textarea>
                     </div>
 
-                    <div>
-                        <label for="textbooks" class="text-sm font-medium text-slate-600">使用教材 (可多选)</label>
-                                <div class="mt-2 flex gap-2 items-start">
-                                            <div class="flex-1">
-                                                <select id="textbooks" name="textbooks" multiple class="w-full rounded-xl border border-slate-200 p-2 h-28"></select>
-                                                <!-- Preview list shows same items as select but with hover/click preview -->
-                                                <div id="textbookPreviewList" class="mt-2 grid grid-cols-2 gap-2 text-sm"></div>
-                                            </div>
-                                            <div class="flex-shrink-0">
-                                                <button type="button" id="addTextbookBtn" class="ml-2 px-3 py-2 bg-brand-600 text-white rounded-xl">新增教材</button>
-                                            </div>
-                                        </div>
+                    <div class="pt-2">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">使用教材 (支持模糊搜索与多选)</label>
+
+                        <div class="flex gap-3 mb-4">
+                            <div class="relative flex-1">
+                                <i class="fas fa-search absolute left-4 top-3.5 text-slate-400"></i>
+                                <input type="text" id="textbookSearchInput" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-shadow outline-none" placeholder="搜索书名、作者或出版社，点击下方列表选择..." autocomplete="off">
+
+                                <div id="textbookDropdown" class="hidden absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto">
+                                    </div>
+                            </div>
+                            <button type="button" id="addTextbookBtn" class="px-5 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-medium transition-colors whitespace-nowrap">
+                                <i class="fas fa-book-medical mr-1"></i> 去教材库新增
+                            </button>
+                        </div>
+
+                        <div id="selectedTextbooksContainer" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            </div>
                     </div>
 
-                    <!-- 教材目录已迁移至资源管理 -> 教材库（在新增/编辑教材时维护） -->
-
-                    <div class="flex justify-end">
-                        <button type="button" id="saveCourse" class="px-6 py-2 bg-emerald-600 text-white rounded-xl">保存课程</button>
+                    <div class="flex justify-between items-center pt-6 mt-6 border-t border-slate-100">
+                        <button type="button" id="deleteCourseBtn" class="hidden px-5 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 font-medium rounded-xl transition-colors">
+                            <i class="fas fa-trash-alt mr-1"></i> 删除课程
+                        </button>
+                        <div class="flex gap-3 ml-auto">
+                            <button type="button" id="cancelCourseBtn" class="px-6 py-2.5 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium rounded-xl transition-colors">
+                                清空
+                            </button>
+                            <button type="button" id="saveCourseBtn" class="px-6 py-2.5 bg-brand-600 text-white hover:bg-brand-700 font-medium shadow-sm rounded-xl transition-all">
+                                保存课程配置
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
         </div>
-
-        <!-- Textbook management moved to Library (resource management). Add button navigates to library pages. -->
-
-        <script>
-            let currentClassId = null; // null => create new
-            function renderClassList(items) {
-                const root = document.getElementById('classList');
-                root.innerHTML = '';
-                if (!items || items.length === 0) {
-                    root.innerHTML = '<div class="text-sm text-slate-400">暂无课程</div>';
-                    return;
-                }
-                items.forEach(c => {
-                    const el = document.createElement('div');
-                    el.className = 'p-3 rounded-md border border-slate-100 hover:bg-slate-50 flex justify-between items-center';
-                    el.innerHTML = `
-                        <div>
-                            <div class="text-sm font-medium text-slate-800">${c.name}</div>
-                            <div class="text-[11px] text-slate-500 mt-0.5">${c.course} · ${c.semester || ''}</div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="editBtn text-xs px-3 py-1 bg-slate-100 rounded-md" data-id="${c.id}">编辑</button>
-                        </div>`;
-                    root.appendChild(el);
-                });
-
-                // bind edit buttons
-                document.querySelectorAll('.editBtn').forEach(b => b.addEventListener('click', (ev) => {
-                    const id = ev.currentTarget.getAttribute('data-id');
-                    loadClassIntoForm(parseInt(id));
-                }));
-            }
-
-            function fetchClasses() {
-                fetch('/classroom/api/list_classes').then(r=>r.json()).then(j=>{
-                    if (j.status === 'success') renderClassList(j.data);
-                })
-            }
-
-            function loadClassIntoForm(id) {
-                fetch(`/classroom/api/get_class/${id}`).then(r=>r.json()).then(j=>{
-                    if (j.status === 'success') {
-                        const c = j.data;
-                        currentClassId = c.id;
-                        document.getElementById('class_id').value = c.id;
-                        document.getElementById('semester').value = c.semester || '';
-                        document.getElementById('name').value = c.name || '';
-                        document.getElementById('hours').value = c.hours || 16;
-                        document.getElementById('credits').value = (c.credits!=null? c.credits: calcCredits(c.hours||16));
-                        document.getElementById('description').value = c.description || '';
-                        // select textbooks
-                        const sel = document.getElementById('textbooks');
-                        // clear selection
-                        Array.from(sel.options).forEach(opt=>opt.selected=false);
-                        if (c.textbooks && c.textbooks.length>0) {
-                            c.textbooks.forEach(t=>{ const o = sel.querySelector(`option[value="${t.id}"]`); if (o) o.selected = true; });
-                        }
-                        // update preview highlights if available
-                        if (typeof updateSelectedHighlights === 'function') updateSelectedHighlights();
-                        // focus on form
-                        document.getElementById('name').focus();
-                    }
-                })
-            }
-
-            // reuse existing JS for semester/credits and textbooks creation
-            function genSemester() {
-                const d = new Date();
-                const y = d.getFullYear();
-                const m = d.getMonth() + 1;
-                let startYear, nextYear, term;
-                if (m >= 8) {
-                    startYear = y; nextYear = y+1; term = 1;
-                } else {
-                    startYear = y-1; nextYear = y; term = (m >=2 && m<=7) ? 2 : 2;
-                }
-                return `${startYear}-${nextYear}-${term}`;
-            }
-
-            function calcCredits(hours) { return (Math.round((hours/16)*10)/10).toFixed(1); }
-
-            document.addEventListener('DOMContentLoaded', () => {
-                // initial
-                document.getElementById('semester').value = genSemester();
-                const hoursEl = document.getElementById('hours');
-                const creditsEl = document.getElementById('credits');
-                creditsEl.value = calcCredits(parseInt(hoursEl.value || 16));
-                hoursEl.addEventListener('input', ()=>{ const h=Math.max(1,parseInt(hoursEl.value||1)); creditsEl.value = calcCredits(h); });
-
-                // Textbook search + load via library API
-                const tbSearch = document.createElement('input');
-                tbSearch.id = 'textbook_search';
-                tbSearch.placeholder = '搜索教材（按书名或作者）';
-                tbSearch.className = 'w-full rounded-md border p-2 mb-2';
-                const tbContainer = document.getElementById('textbooks').parentNode;
-                tbContainer.insertBefore(tbSearch, tbContainer.firstChild);
-
-                function loadTextbooks(q=''){
-                    fetch('/library/api/textbooks?q=' + encodeURIComponent(q)).then(r=>r.json()).then(js=>{
-                        if (js.status==='success'){
-                            const sel=document.getElementById('textbooks'); sel.innerHTML='';
-                            js.data.forEach(t=>{ const opt=document.createElement('option'); opt.value=t.id; opt.textContent = `${t.title}${t.author? ' - '+t.author: ''}`; sel.appendChild(opt); });
-                            // populate preview list alongside select
-                            if (typeof renderPreviewList === 'function') renderPreviewList(js.data);
-                        }
-                    })
-                }
-
-                tbSearch.addEventListener('input', ()=>{ loadTextbooks(tbSearch.value); });
-                loadTextbooks();
-
-                // when user toggles selection in the select element directly, update preview highlights
-                document.getElementById('textbooks').addEventListener('change', ()=>{ if (typeof updateSelectedHighlights === 'function') updateSelectedHighlights(); });
-
-                // Quick preview tooltip and modal elements
-                const tooltip = document.createElement('div');
-                tooltip.id = 'tbTooltip';
-                tooltip.className = 'hidden fixed z-50 p-3 bg-white rounded-xl shadow-md border border-slate-100 text-sm w-72';
-                document.body.appendChild(tooltip);
-
-                const modalMarkup = `
-<div id="tbPreviewModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center">
-  <div class="bg-white rounded-xl p-6 w-full max-w-lg">
-    <div class="flex justify-between items-start">
-      <h3 id="pm_title" class="text-xl font-bold">教材详情</h3>
-      <button id="pm_close" class="text-slate-500">✕</button>
-    </div>
-    <div class="mt-3 space-y-2 text-sm text-slate-700">
-      <div><strong>作者:</strong> <span id="pm_author"></span></div>
-      <div><strong>出版社:</strong> <span id="pm_publisher"></span></div>
-      <div><strong>ISBN:</strong> <span id="pm_isbn"></span></div>
-      <div><strong>简介:</strong><div id="pm_summary" class="mt-1 text-slate-600"></div></div>
-    </div>
-    <div class="flex justify-end mt-4">
-      <button id="pm_toggle_select" class="px-4 py-2 rounded-xl border mr-2">切换选中</button>
-      <button id="pm_close2" class="px-4 py-2 rounded-xl bg-brand-600 text-white">关闭</button>
-    </div>
-  </div>
-</div>`;
-                document.body.insertAdjacentHTML('beforeend', modalMarkup);
-
-                // helper: render preview list and bind interactions
-                function renderPreviewList(items){
-                    const root = document.getElementById('textbookPreviewList');
-                    root.innerHTML = '';
-                    if(!items || items.length === 0) { root.innerHTML = '<div class="text-slate-400">暂无教材预览</div>'; return; }
-                    items.forEach(t=>{
-                        const el = document.createElement('div');
-                        el.className = 'tb-item p-2 rounded-md border border-slate-100 hover:bg-slate-50 flex justify-between items-center';
-                        el.innerHTML = `<div class="truncate mr-2"><span class="tb-title font-medium">${t.title}</span><div class="text-xs text-slate-500">${t.author? t.author : ''}</div></div><div class="flex items-center gap-2"><button class="tb-info text-xs px-2 py-1 rounded-md border" data-id="${t.id}">查看</button><button class="tb-toggle text-xs px-2 py-1 rounded-md" data-id="${t.id}">选中</button></div>`;
-                        // store full data on element for tooltip
-                        el.dataset.tb = JSON.stringify(t);
-                        root.appendChild(el);
-                    });
-                    updateSelectedHighlights();
-                }
-
-                function updateSelectedHighlights(){
-                    const sel = document.getElementById('textbooks');
-                    const selected = Array.from(sel.selectedOptions).map(o=>o.value);
-                    document.querySelectorAll('#textbookPreviewList .tb-item').forEach(it=>{
-                        const tb = JSON.parse(it.dataset.tb || '{}');
-                        if(selected.indexOf(String(tb.id)) !== -1) it.classList.add('bg-emerald-50','border-emerald-200'); else { it.classList.remove('bg-emerald-50','border-emerald-200'); }
-                    });
-                }
-
-                // expose helpers so outer functions (e.g. loadClassIntoForm) can trigger updates
-                window.updateSelectedHighlights = updateSelectedHighlights;
-                window.renderPreviewList = renderPreviewList;
-
-                // global listeners for preview interactions
-                document.getElementById('textbookPreviewList').addEventListener('click', (ev)=>{
-                    const btn = ev.target.closest('button');
-                    if(!btn) return;
-                    const id = btn.dataset.id;
-                    const sel = document.getElementById('textbooks');
-                    if(btn.classList.contains('tb-toggle')){
-                        // toggle selection in the select element
-                        const opt = sel.querySelector(`option[value="${id}"]`);
-                        if(opt) { opt.selected = !opt.selected; updateSelectedHighlights(); }
-                    } else if(btn.classList.contains('tb-info')){
-                        // open modal
-                        const dataEl = btn.closest('.tb-item');
-                        const tb = JSON.parse(dataEl.dataset.tb || '{}');
-                        document.getElementById('pm_title').textContent = tb.title || '教材详情';
-                        document.getElementById('pm_author').textContent = tb.author || '—';
-                        document.getElementById('pm_publisher').textContent = tb.publisher || '—';
-                        document.getElementById('pm_isbn').textContent = tb.isbn || '—';
-                        document.getElementById('pm_summary').textContent = tb.summary || tb.description || '无';
-                        document.getElementById('tbPreviewModal').classList.remove('hidden');
-                        // attach toggle button dataset
-                        document.getElementById('pm_toggle_select').dataset.id = id;
-                    }
-                });
-
-                // tooltip behavior on hover
-                document.getElementById('textbookPreviewList').addEventListener('mouseover', (ev)=>{
-                    const item = ev.target.closest('.tb-item');
-                    if(!item) return;
-                    const tb = JSON.parse(item.dataset.tb || '{}');
-                    tooltip.innerHTML = `<div class="font-medium">${tb.title || ''}</div><div class="text-xs text-slate-500 mt-1">${tb.author || ''}${tb.publisher? ' · '+tb.publisher : ''}</div><div class="text-xs text-slate-400 mt-2">ISBN: ${tb.isbn||'—'}</div>`;
-                    tooltip.classList.remove('hidden');
-                    // position near mouse
-                    const rect = item.getBoundingClientRect();
-                    const top = rect.top + window.scrollY - 10;
-                    const left = rect.right + 8 + window.scrollX;
-                    tooltip.style.top = `${top}px`;
-                    tooltip.style.left = `${left}px`;
-                });
-                document.getElementById('textbookPreviewList').addEventListener('mouseleave', (ev)=>{
-                    // hide tooltip when leaving container
-                    tooltip.classList.add('hidden');
-                });
-
-                // modal close buttons
-                document.getElementById('pm_close').addEventListener('click', ()=>{ document.getElementById('tbPreviewModal').classList.add('hidden'); });
-                document.getElementById('pm_close2').addEventListener('click', ()=>{ document.getElementById('tbPreviewModal').classList.add('hidden'); });
-                document.getElementById('pm_toggle_select').addEventListener('click', (ev)=>{
-                    const id = ev.currentTarget.dataset.id; const sel = document.getElementById('textbooks'); const opt = sel.querySelector(`option[value="${id}"]`);
-                    if(opt){ opt.selected = !opt.selected; updateSelectedHighlights(); }
-                });
-
-                // Navigate to library textbook creation page
-                document.getElementById('addTextbookBtn').addEventListener('click', ()=>{ window.location.href = '/library/textbooks/new'; });
-
-                document.getElementById('newCourseBtn').addEventListener('click', ()=>{ currentClassId=null; document.getElementById('class_id').value=''; document.getElementById('semester').value=genSemester(); document.getElementById('name').value=''; document.getElementById('hours').value=16; document.getElementById('credits').value=calcCredits(16); document.getElementById('description').value=''; Array.from(document.getElementById('textbooks').options).forEach(o=>o.selected=false); });
-
-                document.getElementById('saveCourse').addEventListener('click', ()=>{
-                    const payload = { semester: document.getElementById('semester').value, name: document.getElementById('name').value, hours: parseInt(document.getElementById('hours').value||1), credits: parseFloat(document.getElementById('credits').value||0), description: document.getElementById('description').value, textbook_ids: Array.from(document.getElementById('textbooks').selectedOptions).map(o=>parseInt(o.value)) };
-                    if (currentClassId) {
-                        fetch(`/classroom/api/update_course/${currentClassId}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}).then(r=>r.json()).then(j=>{ if (j.status==='success'){ alert('更新成功'); fetchClasses(); } else alert('更新失败:'+ (j.msg||'')); });
-                    } else {
-                        fetch('/classroom/api/create_course',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).then(j=>{ if (j.status==='success'){ alert('创建成功'); fetchClasses(); } else alert('创建失败:'+ (j.msg||'')); });
-                    }
-                });
-
-                // load initial class list
-                fetchClasses();
-            });
-        </script>
     </div>
 
     <div id="pane-open" class="hidden bg-white p-6 rounded-xl shadow-sm border border-slate-100">
@@ -341,14 +118,14 @@
     <div id="pane-ai" class="hidden bg-white p-6 rounded-xl shadow-sm border border-slate-100">
         <h2 class="text-xl font-bold mb-4">3. 专属 AI 助手设定</h2>
         <p class="text-slate-500 mb-4">为当前已开设的课堂定义 Prompt 与能力边界。</p>
-        </div>
+    </div>
 </div>
 
 <script>
+// Tab 切换逻辑
 function switchTab(target) {
     const tabs = ['manage', 'open', 'ai'];
     tabs.forEach(tab => {
-        // 控制下划线及高亮样式
         const tabBtn = document.getElementById('tab-' + tab);
         const pane = document.getElementById('pane-' + tab);
         if (tab === target) {
@@ -362,5 +139,311 @@ function switchTab(target) {
         }
     });
 }
+
+// 页面级状态与交互逻辑
+document.addEventListener('DOMContentLoaded', () => {
+    let currentClassId = null;
+    let windowClassesData = [];
+    let allTextbooks = [];
+    let selectedTextbooks = []; // 存储已被选中的教材对象集
+
+    // ======== 基础辅助函数 ========
+    function genSemester() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        let startYear, nextYear, term;
+        if (m >= 8) {
+            startYear = y; nextYear = y + 1; term = 1;
+        } else {
+            startYear = y - 1; nextYear = y; term = 2;
+        }
+        return `${startYear}-${nextYear}-${term}`;
+    }
+
+    function calcCredits(hours) {
+        return (Math.round((hours / 16) * 10) / 10).toFixed(1);
+    }
+
+    // 表单状态更新器
+    function setFormMode(mode) {
+        const title = document.getElementById('formTitle');
+        const delBtn = document.getElementById('deleteCourseBtn');
+        const cancelBtn = document.getElementById('cancelCourseBtn');
+
+        if (mode === 'create') {
+            title.textContent = '新建课程';
+            delBtn.classList.add('hidden');
+            cancelBtn.textContent = '清空';
+        } else {
+            title.textContent = '编辑课程配置';
+            delBtn.classList.remove('hidden');
+            cancelBtn.textContent = '取消编辑';
+        }
+    }
+
+    // ======== 左侧课程列表渲染 ========
+    function renderClassList(items) {
+        const root = document.getElementById('classList');
+        root.innerHTML = '';
+        if (!items || items.length === 0) {
+            root.innerHTML = '<div class="p-4 text-sm text-slate-400 text-center bg-slate-50 rounded-lg">您暂未创建任何课程</div>';
+            return;
+        }
+
+        items.forEach(c => {
+            const isActive = currentClassId === c.id;
+            // 美化列表卡片和选中态
+            const activeClasses = isActive
+                ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
+                : 'border-slate-200 bg-white hover:border-brand-300 hover:bg-slate-50 hover:shadow-sm';
+
+            const el = document.createElement('div');
+            el.className = `cursor-pointer p-4 rounded-xl border transition-all duration-200 ${activeClasses}`;
+            el.onclick = () => loadClassIntoForm(c.id);
+            el.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div class="font-bold text-slate-800 text-base leading-tight">${c.name}</div>
+                    <span class="px-2 py-0.5 rounded border border-slate-200 bg-white text-[11px] text-slate-500 shadow-sm whitespace-nowrap ml-2">${c.semester || '无学期'}</span>
+                </div>
+                <div class="mt-2.5 flex items-center gap-4 text-xs font-medium text-slate-500">
+                    <span class="flex items-center"><i class="far fa-clock mr-1.5 text-slate-400"></i>${c.hours} 学时</span>
+                    <span class="flex items-center"><i class="fas fa-award mr-1.5 text-slate-400"></i>${c.credits} 学分</span>
+                </div>
+            `;
+            root.appendChild(el);
+        });
+    }
+
+    function fetchClasses() {
+        fetch('/classroom/api/list_classes')
+            .then(r => r.json())
+            .then(j => {
+                if (j.status === 'success') {
+                    windowClassesData = j.data;
+                    renderClassList(windowClassesData);
+                }
+            });
+    }
+
+    // 加载单个课程信息并填入表单
+    function loadClassIntoForm(id) {
+        fetch(`/classroom/api/get_class/${id}`)
+            .then(r => r.json())
+            .then(j => {
+                if (j.status === 'success') {
+                    const c = j.data;
+                    currentClassId = c.id;
+                    document.getElementById('class_id').value = c.id;
+                    document.getElementById('semester').value = c.semester || '';
+                    document.getElementById('name').value = c.name || '';
+                    document.getElementById('hours').value = c.hours || 16;
+                    document.getElementById('credits').value = (c.credits != null ? c.credits : calcCredits(c.hours || 16));
+                    document.getElementById('description').value = c.description || '';
+
+                    selectedTextbooks = c.textbooks || [];
+                    renderSelectedTextbooks();
+
+                    setFormMode('edit');
+                    renderClassList(windowClassesData); // 刷新左侧选中态
+                }
+            });
+    }
+
+    // ======== 自定义教材下拉选择核心逻辑 ========
+    const tbInput = document.getElementById('textbookSearchInput');
+    const tbDropdown = document.getElementById('textbookDropdown');
+    const tbContainer = document.getElementById('selectedTextbooksContainer');
+
+    // 提前加载全量教材用于前端秒搜
+    function fetchAllTextbooks() {
+        fetch('/classroom/api/get_textbooks')
+            .then(r => r.json())
+            .then(j => {
+                if (j.status === 'success') allTextbooks = j.data;
+            });
+    }
+
+    function renderSelectedTextbooks() {
+        tbContainer.innerHTML = '';
+        if (selectedTextbooks.length === 0) {
+            tbContainer.innerHTML = '<div class="col-span-full py-3 text-sm text-slate-400 text-center border border-dashed border-slate-300 rounded-xl bg-slate-50">暂未关联教材，请在上方搜索添加</div>';
+            return;
+        }
+
+        selectedTextbooks.forEach(tb => {
+            const el = document.createElement('div');
+            el.className = 'flex justify-between items-center p-3 rounded-xl border border-brand-200 bg-brand-50 shadow-sm';
+            el.innerHTML = `
+                <div class="flex-1 min-w-0 pr-3">
+                    <div class="font-medium text-brand-900 text-sm truncate" title="${tb.title}">${tb.title}</div>
+                    <div class="text-xs text-brand-600/80 mt-1 truncate">${tb.author || '未知作者'} · ${tb.publisher || '未知出版社'}</div>
+                </div>
+                <button type="button" class="text-brand-400 hover:text-red-500 hover:bg-white rounded-full p-1.5 transition-colors" onclick="removeTextbook(${tb.id})" title="移除该教材">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            tbContainer.appendChild(el);
+        });
+    }
+
+    // 暴露在window以便 onclick 调用
+    window.removeTextbook = function(id) {
+        selectedTextbooks = selectedTextbooks.filter(t => t.id !== id);
+        renderSelectedTextbooks();
+    };
+
+    function renderDropdown(query = '') {
+        tbDropdown.innerHTML = '';
+        const q = query.toLowerCase().trim();
+
+        // 过滤：排除已被选中的，支持全字段模糊搜索
+        const filtered = allTextbooks.filter(t =>
+            !selectedTextbooks.some(st => st.id === t.id) &&
+            ((t.title || '').toLowerCase().includes(q) ||
+             (t.author || '').toLowerCase().includes(q) ||
+             (t.publisher || '').toLowerCase().includes(q))
+        );
+
+        if (filtered.length === 0) {
+            tbDropdown.innerHTML = `<div class="p-4 text-sm text-slate-500 text-center">未找到与 "${query}" 相关的未选教材</div>`;
+            tbDropdown.classList.remove('hidden');
+            return;
+        }
+
+        filtered.forEach(t => {
+            const el = document.createElement('div');
+            el.className = 'p-3 hover:bg-brand-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors';
+            el.innerHTML = `
+                <div class="font-medium text-slate-800 text-sm">${t.title}</div>
+                <div class="text-xs text-slate-500 mt-1">${t.author || '无作者'} · ${t.publisher || '无出版社'} <span class="ml-2 opacity-60">ISBN: ${t.isbn || '-'}</span></div>
+            `;
+            el.onclick = () => {
+                selectedTextbooks.push(t);
+                renderSelectedTextbooks();
+                tbInput.value = '';
+                tbDropdown.classList.add('hidden');
+                tbInput.focus(); // 保持焦点，方便继续搜索添加
+            };
+            tbDropdown.appendChild(el);
+        });
+
+        tbDropdown.classList.remove('hidden');
+    }
+
+    // 绑定下拉框触发事件
+    tbInput.addEventListener('input', (e) => renderDropdown(e.target.value));
+    tbInput.addEventListener('focus', (e) => renderDropdown(e.target.value));
+
+    // 点击外部隐藏下拉框
+    document.addEventListener('click', (e) => {
+        if (!tbInput.contains(e.target) && !tbDropdown.contains(e.target)) {
+            tbDropdown.classList.add('hidden');
+        }
+    });
+
+    // ======== 基础表单绑定器 ========
+    document.getElementById('semester').value = genSemester();
+    const hoursEl = document.getElementById('hours');
+    const creditsEl = document.getElementById('credits');
+    creditsEl.value = calcCredits(parseInt(hoursEl.value || 16));
+    hoursEl.addEventListener('input', () => {
+        const h = Math.max(1, parseInt(hoursEl.value || 1));
+        creditsEl.value = calcCredits(h);
+    });
+
+    // ======== 按钮交互操作 ========
+    // 1. 新建课程入口
+    document.getElementById('newCourseBtn').addEventListener('click', () => {
+        document.getElementById('cancelCourseBtn').click(); // 借用清空逻辑
+    });
+
+    // 2. 清空/取消编辑
+    document.getElementById('cancelCourseBtn').addEventListener('click', () => {
+        currentClassId = null;
+        document.getElementById('class_id').value = '';
+        document.getElementById('semester').value = genSemester();
+        document.getElementById('name').value = '';
+        document.getElementById('hours').value = 16;
+        document.getElementById('credits').value = calcCredits(16);
+        document.getElementById('description').value = '';
+        selectedTextbooks = [];
+        renderSelectedTextbooks();
+        setFormMode('create');
+        renderClassList(windowClassesData); // 清除左侧选中态
+        document.getElementById('name').focus();
+    });
+
+    // 3. 提交保存
+    document.getElementById('saveCourseBtn').addEventListener('click', () => {
+        const nameInput = document.getElementById('name');
+        if (!nameInput.value.trim()) {
+            alert('课程名称不能为空！');
+            nameInput.focus();
+            return;
+        }
+
+        const payload = {
+            semester: document.getElementById('semester').value,
+            name: nameInput.value.trim(),
+            hours: parseInt(document.getElementById('hours').value || 16),
+            credits: parseFloat(document.getElementById('credits').value || 0),
+            description: document.getElementById('description').value,
+            textbook_ids: selectedTextbooks.map(t => t.id)
+        };
+
+        if (currentClassId) {
+            fetch(`/classroom/api/update_course/${currentClassId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(j => {
+                if (j.status === 'success') {
+                    // alert('更新成功'); // 优化UX：使用无感刷新或轻提示替代Alert
+                    fetchClasses();
+                } else alert('更新失败: ' + (j.msg || '未知错误'));
+            });
+        } else {
+            fetch('/classroom/api/create_course', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(j => {
+                if (j.status === 'success') {
+                    // 初始化为空白状态
+                    document.getElementById('cancelCourseBtn').click();
+                    fetchClasses();
+                } else alert('创建失败: ' + (j.msg || '未知错误'));
+            });
+        }
+    });
+
+    // 4. 删除课程
+    document.getElementById('deleteCourseBtn').addEventListener('click', () => {
+        if (!currentClassId) return;
+        if (confirm('⚠️ 警告：确认删除该课程吗？\n该课程下所有相关学生名单和成绩记录也将被永远移除，且不可恢复！')) {
+            fetch(`/classroom/api/delete_course/${currentClassId}`, {
+                method: 'POST'
+            }).then(r => r.json()).then(j => {
+                if (j.status === 'success') {
+                    document.getElementById('cancelCourseBtn').click(); // 恢复到新建状态
+                    fetchClasses();
+                } else {
+                    alert('删除失败: ' + (j.msg || ''));
+                }
+            });
+        }
+    });
+
+    // 5. 跳转独立教材库添加
+    document.getElementById('addTextbookBtn').addEventListener('click', () => {
+        window.location.href = '/library/textbooks/new';
+    });
+
+    // 初始化加载
+    fetchClasses();
+    fetchAllTextbooks();
+    renderSelectedTextbooks(); // 渲染空态
+});
 </script>
 {% endblock %}
