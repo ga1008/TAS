@@ -153,6 +153,77 @@ def all_files():
     return jsonify(files)
 
 
+@bp.route('/library/textbooks')
+def textbooks_page():
+    if not g.user: return render_template('auth/login.html')
+    return render_template('library/textbooks.html', user=g.user)
+
+
+@bp.route('/library/textbooks/new')
+def new_textbook_page():
+    if not g.user: return render_template('auth/login.html')
+    return render_template('library/new_textbook.html', user=g.user)
+
+
+@bp.route('/library/api/textbooks', methods=['GET', 'POST'])
+def api_textbooks():
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    if request.method == 'GET':
+        q = request.args.get('q','').strip()
+        # basic search
+        tbs = db.get_textbooks()
+        if q:
+            ql = q.lower()
+            tbs = [t for t in tbs if ql in (t.get('title') or '').lower() or ql in (t.get('author') or '').lower()]
+        # ensure meta_info is parsed
+        for t in tbs:
+            if t.get('meta_info'):
+                try:
+                    import json
+                    t['meta_info'] = json.loads(t['meta_info'])
+                except:
+                    pass
+        return jsonify({"status":"success","data": tbs})
+
+    # POST: create textbook
+    data = request.json or {}
+    title = data.get('title')
+    if not title: return jsonify({"status":"error","msg":"书名不能为空"}), 400
+    try:
+        meta = {}
+        if data.get('catalog'):
+            meta['catalog'] = data.get('catalog')
+        tid = db.create_textbook(title=title, author=data.get('author'), publisher=data.get('publisher'), isbn=data.get('isbn'), meta_info=(__import__('json').dumps(meta, ensure_ascii=False) if meta else None))
+        return jsonify({"status":"success","id": tid})
+    except Exception as e:
+        return jsonify({"status":"error","msg": str(e)}), 500
+
+
+@bp.route('/library/api/textbooks/<int:textbook_id>', methods=['PUT', 'DELETE'])
+def api_textbook_modify(textbook_id):
+    if not g.user: return jsonify({"msg": "Unauthorized"}), 401
+    if request.method == 'PUT':
+        data = request.json or {}
+        try:
+            meta = None
+            if 'catalog' in data:
+                import json
+                meta = json.dumps({'catalog': data.get('catalog')}, ensure_ascii=False)
+            ok = db.update_textbook(textbook_id, title=data.get('title'), author=data.get('author'), publisher=data.get('publisher'), isbn=data.get('isbn'), meta_info=meta)
+            if ok:
+                return jsonify({"status":"success"})
+            return jsonify({"status":"error","msg":"nothing to update"}), 400
+        except Exception as e:
+            return jsonify({"status":"error","msg": str(e)}), 500
+
+    # DELETE
+    try:
+        db.delete_textbook(textbook_id)
+        return jsonify({"status":"success"})
+    except Exception as e:
+        return jsonify({"status":"error","msg": str(e)}), 500
+
+
 @bp.route('/api/my_parsed_files')
 def my_parsed_files():
     """【补全】获取已解析的文件"""

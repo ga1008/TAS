@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}新增教材 - 资源管理{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <h2 class="text-2xl font-bold mb-4">新增教材</h2>
+    <div class="bg-white p-6 rounded-xl border border-slate-100">
+        <div class="space-y-4">
+            <div>
+                <label for="title" class="text-sm font-medium">书名</label>
+                <input id="title" class="w-full rounded-xl border p-2" />
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="author" class="text-sm font-medium">作者</label>
+                    <input id="author" class="w-full rounded-xl border p-2" />
+                </div>
+                <div>
+                    <label for="publisher" class="text-sm font-medium">出版社</label>
+                    <input id="publisher" class="w-full rounded-xl border p-2" />
+                </div>
+            </div>
+            <div>
+                <label for="isbn" class="text-sm font-medium">ISBN</label>
+                <input id="isbn" class="w-full rounded-xl border p-2" />
+            </div>
+            <div>
+                <label for="catalog" class="text-sm font-medium">教材目录（可选）</label>
+                <textarea id="catalog" class="w-full rounded-xl border p-2" rows="4" placeholder="章节 / 参考页码 等，可用于快速预览"></textarea>
+            </div>
+            <div class="flex justify-end">
+                <button id="saveTb" class="px-4 py-2 bg-brand-600 text-white rounded-xl">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('saveTb').addEventListener('click', ()=>{
+    const payload={ title: document.getElementById('title').value, author: document.getElementById('author').value, publisher: document.getElementById('publisher').value, isbn: document.getElementById('isbn').value, catalog: document.getElementById('catalog').value };
+    fetch('/library/api/textbooks', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}).then(r=>r.json()).then(j=>{ if (j.status==='success'){ alert('保存成功'); window.location.href='/library/textbooks'; } else alert('失败:'+ (j.msg||'')); });
+});
+</script>
+
+{% endblock %}
+

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}学生面板 - 课堂辅助{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <h2 class="text-2xl font-bold">我的课堂</h2>
+        <div class="text-sm text-slate-500">欢迎，学生</div>
+    </div>
+
+    {% if classes %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {% for c in classes %}
+        <a href="/grading/{{ c.id }}" class="block p-5 bg-white rounded-xl shadow-soft border border-slate-100 hover:shadow-md transition-all">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">{{ c.name }}</h3>
+                    <p class="text-xs text-slate-500 mt-1">课程：{{ c.course }}</p>
+                </div>
+                <div class="text-sm text-slate-400">进入课堂</div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white p-8 rounded-xl shadow-soft border border-slate-100 text-center">
+        <p class="text-sm text-slate-500">您当前没有可访问的课堂。请联系教师创建并分享课堂。</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

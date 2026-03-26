@@ -16,4 +16,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 5010
 EXPOSE 9011
-CMD ["gunicorn", "-k", "gevent", "-w", "1", "--threads", "100", "-b", "0.0.0.0:8000", "app:create_app()"]
+# Run the in-repo app runner which uses socketio.run to start both HTTP and websocket support
+CMD ["python", "app.py"]

@@ -370,6 +370,11 @@
                     </a>
                 </div>
                 <div class="nav-item">
+                    <a href="{{ url_for('library.textbooks_page') }}" class="nav-link {% if request.path.startswith('/library/textbooks') %}active{% endif %}" id="menu-textbooks" data-path="/library/textbooks">
+                        <i class="fas fa-book fa-fw"></i> 教材库
+                    </a>
+                </div>
+                <div class="nav-item">
                     <a href="{{ url_for('library.file_manager_page') }}" class="nav-link {% if request.path.startswith('/file_manager') %}active{% endif %}" id="menu-file-manager" data-path="/file_manager">
                         <i class="fas fa-file-export fa-fw"></i> 文档解析
                     </a>
@@ -448,11 +453,21 @@
 
             {# AI 欢迎语组件 (紧凑版) - 登录后且在非管理页面显示 #}
             {% if session.get('user') and request.path not in ['/admin', '/login', '/auth/login'] %}
-                {% set compact_page_context = 'dashboard' if request.path == '/' else
-                    'tasks' if request.path.startswith('/tasks') else
-                    'student_list' if request.path.startswith('/student') else
-                    'ai_generator' if request.path.startswith('/ai_generator') else
-                    'export' if request.path.startswith('/export') else 'dashboard' %}
+                {# compute compact_page_context in a clearer way to avoid complex inline ternary parsing issues #}
+                {% set compact_page_context = 'dashboard' %}
+                {% if request.path == '/' %}
+                    {% set compact_page_context = 'dashboard' %}
+                {% elif request.path.startswith('/tasks') %}
+                    {% set compact_page_context = 'tasks' %}
+                {% elif request.path.startswith('/student') %}
+                    {% set compact_page_context = 'student_list' %}
+                {% elif request.path.startswith('/ai_generator') %}
+                    {% set compact_page_context = 'ai_generator' %}
+                {% elif request.path.startswith('/export') %}
+                    {% set compact_page_context = 'export' %}
+                {% else %}
+                    {% set compact_page_context = 'dashboard' %}
+                {% endif %}
                 <div class="divider-vertical mx-2"></div>
             {% endif %}
 

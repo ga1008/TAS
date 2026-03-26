@@ -1,7 +1,7 @@
 import os
 import json  # <---【1】记得添加 json 导入
 
-from flask import Flask
+from flask import Flask, g
 from flask_socketio import SocketIO
 
 from blueprints.admin import bp as admin_bp
@@ -65,6 +65,25 @@ def create_app():
     app.add_template_filter(split_filter, 'split')
     app.add_template_filter(from_json_filter, 'from_json')
 
+    # 全局注入 user 到模板上下文，避免某些视图未传参导致模板报错
+    @app.context_processor
+    def inject_user():
+        try:
+            # Ensure templates can always call user.get(...) without crashing.
+            u = getattr(g, 'user', None)
+            if isinstance(u, dict):
+                return {'user': u}
+            elif u:
+                # if it's some other truthy object, wrap into dict-like
+                try:
+                    return {'user': dict(u)}
+                except Exception:
+                    return {'user': {}}
+            else:
+                return {'user': {}}
+        except Exception:
+            return {'user': {}}
+
     # ---------------------------------------------------------
 
     # 1. 确保目录存在
@@ -123,10 +142,12 @@ def create_app():
     app.register_blueprint(classroom_bp)
 
     socketio.init_app(app, cors_allowed_origins="*", async_mode='gevent')
-    return app, socketio
+    return app
 
 
 app = create_app()
 
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5010)
+    # Use SocketIO's runner so websocket/socket events are handled correctly in dev
+    socketio.run(app, debug=True, port=5010)

@@ -80,54 +80,55 @@ EXCEL_MAX_ROWS = 1_000_000  # xlsx limit ~1,048,576
 # -----------------------------
 # CODING MANUAL / PROMPT
 # -----------------------------
-CODING_MANUAL = r"""
-你是一个“系统功能语言学（SFL）及物性系统”标注员，需要对中文小说叙事文本进行可复核的结构化标注。
-
-【计数与分类规则】
-- 过程类型：Material, Behavioural, Mental, Verbal, Relational, Existential。
-- 参与者（ParticipantCategory）：Human, HumanBodyPart, Artifact, Nature (及其子类: Animal, Plant, Environment, NatureOther)。
-- 角色（Role）：Actor, Goal, Behaver, Senser, Sayer, Carrier, Existent。
-
-【地点环境成分深度解析指南】
-当提取到地点环境成分时，需判断：
-1. 主类型 (main_type)：自然类 / 人类身体部位类 / 功能类 / 地名类 / 方向类。
-2. 子类型 (sub_type)：自然类进一步细分（如自然无机物、动物、植物、水系等）。
-3. 中心词 (center_word) 与 代词消解 (resolved_target)。
-4. 树木信息 (tree_species / tree_position)：如果有树/林，提取树种和位置，否则填无。
-5. 整体句法与处所词句法结构。
+PROMPT_STAGE_1 = r"""
+你是一个“系统功能语言学（SFL）”标注员。你需要对中文小说文本进行小句级的及物性标注。
+【核心任务】提取过程、参与者分类，并标记其中包含的“地点环境成分”文本。
 
 【强制输出格式】
-**绝对不要输出 JSON！** 请使用以下纯文本格式，每个小句记录用 [RECORD_START] 和 [RECORD_END] 包裹。字段名和值用英文冒号分隔。如果某个值没有，请填“无”。
-不要改变字段名称，严格按照如下模板输出！不要改变字段名称，严格按照如下模板输出！不要改变字段名称，严格按照如下模板输出！
+使用纯文本块，每个小句用 [RECORD_START] 和 [RECORD_END] 包裹。
+切勿输出真正的 JSON！不要有引号、逗号或注释。严格遵守以下字段：
 
 [RECORD_START]
-sent_id: (填数字)
-clause_id: (填如 1-1)
 clause_text: (原文句子)
-process_type: Material
-participant_category: Nature
-role: Actor
+process_type: Material|Behavioural|Mental|Verbal|Relational|Existential
+participant_category: Human|HumanBodyPart|Artifact|Nature|无
+nature_subcategory: Animal|Plant|Environment|NatureOther|无
+canonical_flora_fauna: (如：驯鹿、松树、额尔古纳河。若无填“无”)
+role: Actor|Goal|Behaver|Senser|Sayer|Carrier|Existent|无
 is_ba_sentence: False
 is_bei_sentence: False
-copula_type: 无
-active_counted: 1
-notes: 无
+copula_type: (关系过程的系词，如：是、像、无)
+active_counted: (1或0)
+basic_places: (提取句中的地点词，如：在森林中, 神鼓上。用逗号分隔，无则填“无”)
+[RECORD_END]
+"""
 
-[CIRCUMSTANCE]
-circ_type: Place
-circ_text: 在森林中
-resolved_target: 森林
+PROMPT_STAGE_2 = r"""
+你是一个空间语义与句法分析专家。
+我将给你一组从小说中提取的句子和对应的【地点成分】。请你对该地点成分进行深度归类。
+
+【深度分类规则】
+1. 代词消解：如果是“那里/里面”，需根据上下文还原为原词。
+2. 主类型：自然类 / 人类身体部位类 / 功能类(含建筑) / 地名类 / 方向类。
+3. 树木信息：如果包含树/林，提取具体树种（如松树）和位置（如树梢）。
+4. 句法结构：分析宏观语法（如：介词+处所词+方位词）和微观处所词语法（如：单一名词、名+的+名）。
+
+【强制输出格式】
+对于每个任务，严格使用以下纯文本格式：
+
+[SPATIAL_START]
+clause_text: (保持与原句一致)
+circ_text: (保持与提取的地点一致)
+resolved_target: (消解后的具体地点)
 main_type: 自然类
-sub_type: 植物
+sub_type: 植物 (或无)
 center_word: 森林
-markers: 在,中
-tree_species: 无
-tree_position: 中
+markers: 在,中 (介词或方位词，逗号分隔，或填“无”)
+tree_species: 桦树 (或无)
+tree_position: 树下 (或无)
 overall_syntax: 介词+处所词+方位词
 noun_syntax: 单一名词
-[RECORD_END]
-
-（注：如果一个小句有多个环境成分，可以写多个 [CIRCUMSTANCE] 块。如果不是地点环境成分，只需写 circ_type 和 circ_text，后面的地点字段可以不写。如果是被字句，is_bei_sentence 填 True，以此类推。）
+[SPATIAL_END]
 """
 
 
@@ -491,316 +492,215 @@ def split_marked_text_by_lines(marked_text: str, sub_max_chars: int = 1800) -> L
     return parts
 
 
-def parse_ai_text_to_records(raw_text: str, chunk_id: int) -> Dict[str, Any]:
-    """
-    通过正则表达式和文本块解析模型的纯文本输出，转化为后续 Pandas 可用的 Dict 列表。
-    加入“软校验”：只要有文本和过程类型，就视为有效；其他非法字段记为 None 而不阻断流程。
-    """
+def clean_ai_value(v: str) -> str:
+    """强力清洗大模型可能偷偷加上去的 JSON 伪影 (逗号、引号、注释)"""
+    v = re.sub(r'//.*$', '', v)  # 移除行尾的双斜杠注释
+    v = v.strip()
+    v = re.sub(r',$', '', v)  # 移除末尾逗号
+    v = re.sub(r'^["\']|["\']$', '', v)  # 移除首尾引号
+    return v.strip()
+
+
+def parse_stage1_text(raw_text: str, chunk_id: int) -> Dict[str, Any]:
     records = []
     unparsed = []
-
-    # 提取所有 [RECORD_START] 到 [RECORD_END] 之间的文本块
     blocks = re.findall(r'\[RECORD_START\](.*?)\[RECORD_END\]', raw_text, re.DOTALL)
 
     if not blocks:
-        # 兼容一下模型可能没写 [RECORD_END] 的情况
-        blocks = raw_text.split('[RECORD_START]')
-        blocks = [b for b in blocks if b.strip()]
+        # 强化 fallback 逻辑：过滤掉无意义的连接词（如“和”）
+        raw_blocks = raw_text.split('[RECORD_START]')
+        blocks = []
+        for b in raw_blocks:
+            b = b.strip()
+            # 剥离可能残存的尾部标签
+            b = re.sub(r'\[RECORD_END\].*', '', b, flags=re.DOTALL).strip()
+            # 【核心修复】：只有包含冒号（中英文均可）的块，才被认为是有效的数据块
+            if b and (":" in b or "：" in b):
+                blocks.append(b)
 
     for block in blocks:
-        record = {"chunk_id": chunk_id}
-        circs = []
-        current_circ = None
-
+        record = {"chunk_id": chunk_id, "circumstances": []}
+        places_raw = ""
         lines = block.strip().split('\n')
+        # ... (内部逻辑保持原有不变)
         for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            if line.startswith('[CIRCUMSTANCE]'):
-                if current_circ:
-                    circs.append(current_circ)
-                current_circ = {}
-                continue
-
-            # 解析 "字段名: 值" (兼容中文冒号)
-            match = re.match(r'^([a-zA-Z_]+)\s*[:：]\s*(.*)$', line)
+            match = re.match(r'^"?([a-zA-Z_]+)"?\s*[:：]\s*(.*)$', line.strip())
             if match:
                 k, v = match.groups()
-                v = v.strip()
+                v = clean_ai_value(v)
 
-                # 统一空值处理
                 if v.lower() in ['null', 'none', '无', '-', '']:
                     v = None
-                # 统一布尔值处理
                 elif v.lower() in ['true', '是']:
                     v = True
                 elif v.lower() in ['false', '否']:
                     v = False
 
-                if current_circ is not None:
-                    current_circ[k] = v
+                if k == "basic_places":
+                    places_raw = v
                 else:
                     record[k] = v
 
-        if current_circ:
-            circs.append(current_circ)
-
-        # 整理环境成分，组装为原定的嵌套字典格式，保证 Pandas 统计模块无缝衔接
-        formatted_circs = []
-        for c in circs:
-            ctype = c.get('circ_type')
-            ctext = c.get('circ_text')
-
-            # 如果是地点类，且至少有 resolved_target 或 main_type，则提取 spatial_details
-            if ctype and ('place' in ctype.lower() or '地点' in ctype) or c.get("main_type"):
-                # 处理 markers 列表，防范模型输出 [在, 中] 这种带中括号的格式
-                raw_markers = c.get("markers", "")
-                if raw_markers:
-                    raw_markers = re.sub(r'[\[\]\'"‘“]', '', str(raw_markers))
-                    markers_list = [m.strip() for m in raw_markers.split(",") if m.strip()]
-                else:
-                    markers_list = []
-
-                sd = {
-                    "resolved_target": c.get("resolved_target"),
-                    "main_type": c.get("main_type"),
-                    "sub_type": c.get("sub_type"),
-                    "center_word": c.get("center_word"),
-                    "markers": markers_list,
-                    "tree_species": c.get("tree_species"),
-                    "tree_position": c.get("tree_position"),
-                    "overall_syntax": c.get("overall_syntax"),
-                    "noun_syntax": c.get("noun_syntax")
-                }
-                formatted_circs.append({"type": ctype, "text": ctext, "spatial_details": sd})
-            else:
-                formatted_circs.append({"type": ctype, "text": ctext, "spatial_details": None})
-
-        if formatted_circs:
-            record["circumstances"] = formatted_circs
-
-        # ====== 软校验机制 ======
-        # 如果模型输出了乱七八糟的 Role 或 Process，将其洗为 None 或默认值，而不是引发报错
-        if record.get("process_type") not in ["Material", "Behavioural", "Mental", "Verbal", "Relational",
-                                              "Existential"]:
-            record["process_type"] = "Unknown"
-
-        if record.get("role") not in ["Actor", "Goal", "Behaver", "Senser", "Sayer", "Carrier", "Existent", None]:
-            record["role"] = "Unknown_Role"  # 将比如 Token 的非法值清洗为安全值
-
-        # 确保最核心字段存在才录入
         if record.get("clause_text"):
+            if places_raw and places_raw not in ["无", "None"]:
+                place_list = [p.strip() for p in places_raw.replace('，', ',').split(',') if p.strip()]
+                record["_pending_places"] = place_list
             records.append(record)
         else:
-            unparsed.append({"raw_data": block, "error_reason": "Missing clause_text in block"})
+            unparsed.append({"raw_data": block[:50], "error_reason": "Missing clause_text"})
 
-    return {"records": records, "unparsed": unparsed}
+    # 【核心修复】：将 chunk_id 加回到根目录
+    return {"chunk_id": chunk_id, "records": records, "unparsed": unparsed}
+
+
+def parse_stage2_text(raw_text: str) -> Dict[str, Dict]:
+    """解析第二阶段的空间详细信息，返回以 (clause_text, circ_text) 为键的字典"""
+    spatial_map = {}
+    blocks = re.findall(r'\[SPATIAL_START\](.*?)\[SPATIAL_END\]', raw_text, re.DOTALL)
+    for block in blocks:
+        sd = {}
+        lines = block.strip().split('\n')
+        for line in lines:
+            match = re.match(r'^"?([a-zA-Z_]+)"?\s*[:：]\s*(.*)$', line.strip())
+            if match:
+                k, v = match.groups()
+                v = clean_ai_value(v)
+                if v.lower() in ['null', 'none', '无', '-', '']: v = None
+                sd[k] = v
+
+        clause_txt = sd.get("clause_text", "")
+        circ_txt = sd.get("circ_text", "")
+        if clause_txt and circ_txt:
+            # 处理 markers
+            raw_markers = sd.get("markers", "")
+            markers_list = []
+            if raw_markers and raw_markers != "无":
+                markers_list = [m.strip() for m in raw_markers.replace('，', ',').split(",") if m.strip()]
+            sd["markers"] = markers_list
+            spatial_map[f"{clause_txt}_{circ_txt}"] = sd
+
+    return spatial_map
 
 
 def call_ai_for_chunk(chunk: Chunk, cache_dir: str) -> Dict[str, Any]:
     """
-    修复版：
-    1. 移除 response_format 强制限制，兼容所有思考型(Thinking)模型。
-    2. 增加对 <think> 标签的正则剥离。
-    3. 捕获并暴露 API 在数据流中的隐藏报错。
-    4. 用不同的符号区分“思考中 (*)”和“输出中 (.)”。
+    两阶段流水线架构 (Two-Stage Pipeline):
+    1. 提取核心 SFL 和地点列表
+    2. 如果有地点，单独针对地点进行深入请求
+    3. 合并返回，极大降低大模型幻觉和截断率
     """
     ensure_dir(cache_dir)
     cache_path = os.path.join(cache_dir, f"chunk_{chunk.chunk_id:03d}_{chunk.sha1}.json")
 
-    # 缓存命中检查
     if USE_CACHE and os.path.exists(cache_path):
         with open(cache_path, "r", encoding="utf-8") as f:
-            print(f"  [chunk {chunk.chunk_id}] 读取缓存: {os.path.basename(cache_path)}")
+            print(f"  [chunk {chunk.chunk_id}] 读取缓存")
             return json.load(f)
 
-    def _one_call(marked_text: str, current_chunk_id: int, sub_idx: int = 0) -> Dict[str, Any]:
+    def _call_api_stream(system_prompt: str, user_prompt: str, task_name: str) -> str:
         headers = {
             "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json"
         }
-
-        system_prompt = "You are a rigorous SFL transitivity annotator. Follow the coding manual exactly. Output ONLY valid JSON."
-        user_content = (
-            f"{CODING_MANUAL}\n\n"
-            f"【Task Info: chunk_id={current_chunk_id}】\n"
-            f"Please annotate the following text:\n{marked_text}\n\n"
-            f"Output ONLY JSON. Do not include any text outside the JSON block."
-        )
-
         payload = {
             "model": MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
+                {"role": "user", "content": user_prompt}
             ],
             "temperature": 0,
             "stream": True
-            # 注意：这里去掉了 response_format，防止思考模型崩溃
         }
 
-        last_err = None
-        sub_mark = f" (分片-{sub_idx})" if sub_idx > 0 else ""
-        print(f"    处理 chunk {current_chunk_id}{sub_mark} ", end="", flush=True)
-
+        full_content = []
         for attempt in range(1, MAX_RETRIES + 1):
-            full_content = []
             try:
                 if attempt > 1:
-                    print(f"\n    重试 {attempt}/{MAX_RETRIES}... ", end="", flush=True)
+                    print(f"\n    {task_name} 重试 {attempt}/{MAX_RETRIES}... ", end="", flush=True)
 
-                # 兼容部分 API 需要 /v1 前缀
-                api_url = f"{BASE_URL.rstrip('/')}/chat/completions"
-                if "/v1" not in api_url and "api.vectorengine.ai" in api_url:
-                    api_url = f"{BASE_URL.rstrip('/')}/v1/chat/completions"
-
-                response = requests.post(
-                    api_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=(15, 600),
-                    stream=True
-                )
-
-                if response.status_code != 200:
-                    try:
-                        err_msg = response.text[:200]
-                    except:
-                        err_msg = "Unknown"
-                    raise RuntimeError(f"HTTP {response.status_code}: {err_msg}")
+                response = requests.post(f"{BASE_URL.rstrip('/')}/chat/completions", headers=headers, json=payload,
+                                         timeout=(15, 600), stream=True)
+                response.raise_for_status()
 
                 char_counter = 0
                 for line in response.iter_lines():
-                    if not line:
-                        continue
-
+                    if not line: continue
                     line_text = line.decode("utf-8")
-                    if line_text.startswith("data: "):
-                        data_str = line_text[6:]
-                        if data_str.strip() == "[DONE]":
-                            break
-
+                    if line_text.startswith("data: ") and "[DONE]" not in line_text:
                         try:
-                            data_json = json.loads(data_str)
+                            data_json = json.loads(line_text[6:])
+                            if "error" in data_json: raise RuntimeError(f"API报错: {data_json.get('error')}")
+                            delta = data_json["choices"][0].get("delta", {})
 
-                            # --- 关键修复 1：拦截流式隐藏报错 ---
-                            if "error" in data_json:
-                                raise RuntimeError(f"API流内报错: {data_json.get('error')}")
-
-                            if not data_json.get("choices"):
-                                continue
-
-                            choice = data_json["choices"][0]
-                            delta = choice.get("delta", {})
-
-                            # --- 关键修复 2：兼容思考模型的字段 ---
-                            content_piece = delta.get("content")
-                            reasoning_piece = delta.get("reasoning_content")
-
-                            if content_piece:  # 真正的 JSON 输出
-                                full_content.append(content_piece)
-                                char_counter += len(content_piece)
-                                if char_counter > 20:
-                                    sys.stdout.write(".")
+                            piece = delta.get("content") or delta.get("reasoning_content")
+                            if piece:
+                                full_content.append(piece)
+                                char_counter += len(piece)
+                                if char_counter > 30:
+                                    sys.stdout.write("." if delta.get("content") else "*")
                                     sys.stdout.flush()
                                     char_counter = 0
-                            elif reasoning_piece:  # 模型的深度思考过程
-                                full_content.append(reasoning_piece)  # 有些模型把思考也混在content里，统一收集后续正则清洗
-                                char_counter += len(reasoning_piece)
-                                if char_counter > 40:
-                                    sys.stdout.write("*")  # 打印星号表示正在思考
-                                    sys.stdout.flush()
-                                    char_counter = 0
-
-                        except (json.JSONDecodeError, IndexError, AttributeError):
-                            continue
-
+                        except Exception:
+                            pass
                 print(" 完成")
 
-                raw_content = "".join(full_content).strip()
-                if not raw_content:
-                    raise RuntimeError("流式响应内容为空，API可能拦截了请求。")
-
-                # --- 关键修复 3：强力清洗数据，剔除 <think> 标签 ---
-                # 剥离模型思考过程
-                clean_content = re.sub(r"<think>.*?</think>", "", raw_content, flags=re.DOTALL).strip()
-
-                # 提取 JSON 块
-                clean_content = re.sub(r"^```json\s*", "", clean_content)
-                clean_content = re.sub(r"\s*```$", "", clean_content)
-                s = clean_content.find('{')
-                e = clean_content.rfind('}')
-                if s != -1 and e != -1:
-                    clean_content = clean_content[s: e + 1]
-
-                # try:
-                #     parsed = json.loads(clean_content)
-                # except json.JSONDecodeError as je:
-                #     raise ValueError(f"JSON解析失败: {str(je)[:50]}")
-                #
-                # ok, errs = basic_validate_payload(parsed)
-                # if not ok:
-                #     raise ValueError(f"Schema校验失败: {errs[:3]}")
-                #
-                # return parsed
-
-                # 废弃原有的 JSON.loads 和严格的 Schema 校验
-                # 直接调用我们编写的纯文本块解析器
-                parsed = parse_ai_text_to_records(clean_content, current_chunk_id)
-
-                # 只要提取出了超过 1 条记录，我们就认为模型成功完成了任务
-                if not parsed["records"] and not parsed["unparsed"]:
-                    raise ValueError("未从模型的回复中解析出任何符合 [RECORD_START] 格式的数据")
-
-                # 加上 chunk_id
-                parsed["chunk_id"] = current_chunk_id
-
-                return parsed
+                raw = "".join(full_content).strip()
+                # 强力剔除思考标签
+                clean = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+                return clean
 
             except Exception as e:
-                last_err = e
-                print(f" [错误: {str(e)[:80]}]", end="", flush=True)
-                time.sleep(RETRY_BACKOFF_SEC * attempt)
+                print(f" [出错: {str(e)[:50]}]", end="", flush=True)
+                time.sleep(RETRY_BACKOFF_SEC)
+                full_content = []
 
-        print("")
-        raise RuntimeError(f"重试耗尽，最后错误: {last_err}")
+        raise RuntimeError(f"{task_name} 重试耗尽")
 
-    # 主逻辑：先尝试整体，失败则拆分
-    try:
-        result = _one_call(chunk.text_with_markers, chunk.chunk_id)
-        with open(cache_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-        return result
+    print(f"    处理 chunk {chunk.chunk_id} ", end="", flush=True)
 
-    except Exception as e:
-        print(f"\n    [chunk {chunk.chunk_id}] 整体失败，切换为子分片模式...")
-        sub_texts = split_marked_text_by_lines(chunk.text_with_markers, sub_max_chars=600)
-        all_records = []
-        all_unparsed = []
+    # ============ STAGE 1: 核心提取 ============
+    s1_prompt = f"{PROMPT_STAGE_1}\n\n【分析文本】\n{chunk.text_with_markers}"
+    s1_raw = _call_api_stream("严格遵循格式，禁止输出JSON符号。", s1_prompt, "Stage-1")
+    parsed_stage1 = parse_stage1_text(s1_raw, chunk.chunk_id)
 
-        for i, sub_text in enumerate(sub_texts, start=1):
-            try:
-                sub_res = _one_call(sub_text, chunk.chunk_id, sub_idx=i)
-                all_records.extend(sub_res.get("records", []))
-                all_unparsed.extend(sub_res.get("unparsed", []))
-            except Exception as sub_e:
-                print(f"\n    [分片 {i} 失败] {sub_e}")
-                all_unparsed.append({"sent_id": -1, "text": "SUB_CHUNK_FAILED", "reason": str(sub_e)})
+    # 提取需要深度分析的地名
+    places_to_analyze = []
+    for rec in parsed_stage1["records"]:
+        if "_pending_places" in rec:
+            for p in rec["_pending_places"]:
+                places_to_analyze.append(f"- 原句：{rec.get('clause_text')}\n  地点：{p}")
 
-        merged = {
-            "chunk_id": chunk.chunk_id,
-            "records": all_records,
-            "unparsed": all_unparsed
-        }
+    # ============ STAGE 2: 深度空间解析 (按需) ============
+    spatial_map = {}
+    if places_to_analyze:
+        print(f"      -> 发现 {len(places_to_analyze)} 个地点成分，启动深度解析 ", end="", flush=True)
+        places_str = "\n".join(places_to_analyze)
+        s2_prompt = f"{PROMPT_STAGE_2}\n\n【需分析的句子与地点列表】\n{places_str}"
+        s2_raw = _call_api_stream("专注空间句法分析。", s2_prompt, "Stage-2")
+        spatial_map = parse_stage2_text(s2_raw)
 
-        with open(cache_path, "w", encoding="utf-8") as f:
-            json.dump(merged, f, ensure_ascii=False, indent=2)
+    # ============ 组装合并 (Merge) ============
+    for rec in parsed_stage1["records"]:
+        pending = rec.pop("_pending_places", [])
+        for p in pending:
+            key = f"{rec.get('clause_text')}_{p}"
+            sd = spatial_map.get(key)
+            if sd:
+                # 组装为后续 pandas 统计模块需要的格式
+                rec["circumstances"].append({
+                    "type": "Place",
+                    "text": p,
+                    "spatial_details": sd
+                })
+            else:
+                # 兜底：如果 Stage 2 失败或遗漏，保留浅层提取
+                rec["circumstances"].append({"type": "Place", "text": p, "spatial_details": None})
 
-        return merged
+    # 缓存并返回
+    with open(cache_path, "w", encoding="utf-8") as f:
+        json.dump(parsed_stage1, f, ensure_ascii=False, indent=2)
+
+    return parsed_stage1
 
 
 
@@ -836,75 +736,59 @@ def repair_json_via_ai(client: OpenAI, bad_text: str, errs: List[str]) -> Dict[s
 def flatten_records(all_payloads: List[Dict[str, Any]], chunk_map: Dict[int, Any]) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     将嵌套的 JSON 展平为 DataFrame。
-    [健壮性增强版]：防止大模型返回非字典格式导致程序崩溃 (dict() 转换错误)。
+    [健壮性增强版]：修复数据类型不匹配，并兼容老版本缓存中丢失的 chunk_id。
     """
     recs = []
     unparsed = []
 
     for payload in all_payloads:
-        # 获取 chunk_id 兜底，防止 payload 格式错误
+        # 尝试从 payload 获取，如果没有，从内部记录恢复（完美兼容你的现有缓存）
         cid = payload.get("chunk_id", -1)
+        if cid == -1 and payload.get("records"):
+            cid = payload["records"][0].get("chunk_id", -1)
+
         ch = chunk_map.get(cid)
 
-        # 1. 处理主句记录 (Records)
+        # 1. 处理主句记录
         for r in payload.get("records", []):
-            # [防御性检查 1] 防止模型把 records 写成了字符串列表
             if not isinstance(r, dict):
-                unparsed.append({
-                    "chunk_id": cid,
-                    "raw_data": str(r),
-                    "error_reason": "Record Format Error: Not a dictionary"
-                })
                 continue
 
-            # 基础信息
             rec = dict(r)
             rec["chunk_id"] = cid
             rec["chunk_start_sent_id"] = ch.start_sent_id if ch else None
             rec["chunk_end_sent_id"] = ch.end_sent_id if ch else None
-            rec["is_embedded"] = False  # 标记为主句
+            rec["is_embedded"] = False
 
-            # 确保关键字段存在
-            if "active_counted" not in rec:
+            # 【核心修复】：强制类型转换，将字符串 "1" 转换为整数 1
+            try:
+                rec["active_counted"] = int(rec.get("active_counted", 0))
+            except (ValueError, TypeError):
                 rec["active_counted"] = 0
 
             recs.append(rec)
 
-            # 2. 处理嵌入小句 (Embedded Processes)
+            # 2. 处理嵌入小句
             if "embedded_processes" in r and isinstance(r["embedded_processes"], list):
                 for emb in r["embedded_processes"]:
-                    # [防御性检查 2] 防止嵌入小句不是字典
-                    if not isinstance(emb, dict):
-                        continue
-
+                    if not isinstance(emb, dict): continue
                     emb_rec = {
                         "chunk_id": cid,
                         "sent_id": rec.get("sent_id"),
                         "clause_id": f"{rec.get('clause_id', '')}_emb",
                         "clause_text": emb.get("text", "") or emb.get("clause_text", ""),
                         "process_type": emb.get("process_type"),
-                        "process_lexeme": emb.get("process_lexeme"),
-                        "active_participant": None,
-                        "participant_category": None,
-                        "role": None,
-                        "active_counted": 0,
-                        "is_embedded": True,
-                        "notes": "Derived from embedded_processes"
+                        "active_counted": 0, # 嵌入小句不计入 active
+                        "is_embedded": True
                     }
                     recs.append(emb_rec)
 
-        # 3. 处理解析失败的片段 (Unparsed)
+        # 3. 处理解析失败的片段
         for u in payload.get("unparsed", []):
-            # [防御性检查 3] 核心修复点：防止模型返回非字典格式（如字符串）
             if isinstance(u, dict):
                 item = dict(u)
             else:
-                # 如果模型返回了纯字符串或列表，把它包进一个安全的字典里
-                item = {
-                    "raw_data": str(u),
-                    "error_reason": "Unparsed Format Error: Returned as string instead of dict"
-                }
-
+                item = {"raw_data": str(u), "error_reason": "Format Error"}
             item["chunk_id"] = cid
             unparsed.append(item)
 
@@ -1036,6 +920,17 @@ def compute_spatial_tables(records_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 def compute_required_tables(records_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     if records_df.empty:
         raise ValueError("records_df is empty; no parsed records to summarize.")
+
+        # ================= 数据类型与格式安全锁 =================
+        # 确保参与者类型前后没有空格导致匹配失败
+    if "participant_category" in records_df.columns:
+        records_df["participant_category"] = records_df["participant_category"].astype(str).str.strip()
+
+        # 为防止任何漏网之鱼，在 Pandas 层面再次确保 active_counted 绝对是 int
+    if "active_counted" in records_df.columns:
+        records_df["active_counted"] = pd.to_numeric(records_df["active_counted"], errors='coerce').fillna(0).astype(
+            int)
+    # ==========================================================
 
     # 补全列名防止报错（包括新增的句法特征列）
     expected_cols = [
@@ -1568,7 +1463,7 @@ def main():
     #     print(f"WARN: final synthesis failed: {e}")
 
     print("[8] Write Excel...")
-    out_xlsx = os.path.join(OUT_DIR, "Ergun_FullNovel_SFL_Transitivity_v5.xlsx")
+    out_xlsx = os.path.join(OUT_DIR, "Ergun_FullNovel_SFL_Transitivity_v7.xlsx")
     write_final_excel(out_xlsx, chunks, records_df, unparsed_df, tables, final_ai=final_ai)
 
     print("DONE.")

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}教材库 - 资源管理{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-2xl font-bold">教材库</h2>
+                <div class="flex items-center gap-3">
+                    <input id="tbSearch" placeholder="搜索书名或作者" class="rounded-md border p-2" />
+                    <a href="/library/textbooks/new" class="px-4 py-2 bg-brand-600 text-white rounded-xl">新增教材</a>
+                </div>
+            </div>
+
+            <div id="tbGrid" class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                <!-- textbook cards injected by JS -->
+            </div>
+</div>
+
+<script>
+function renderCards(items){
+    const root=document.getElementById('tbGrid'); root.innerHTML='';
+    if(!items || items.length === 0){ root.innerHTML='<div class="text-slate-400">暂无教材</div>'; return; }
+    items.forEach(t=>{
+        const card=document.createElement('div');
+        card.className='bg-white rounded-xl shadow-soft border border-slate-100 overflow-hidden';
+        card.innerHTML = `
+            <div style="aspect-ratio: 1 / 1.414; display:flex; flex-direction:column;">
+                <div class="p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="text-lg font-bold">${t.title}</div>
+                        <div class="text-sm text-slate-500 mt-1">${t.author || ''}${t.publisher? ' · '+t.publisher:''}</div>
+                        <div class="text-sm text-slate-500 mt-2">${(t.meta_info && t.meta_info.catalog) ? (t.meta_info.catalog.substring(0,120)+'...') : ''}</div>
+                    </div>
+                    <div class="mt-4 text-xs text-slate-400">ISBN: ${t.isbn||'—'}</div>
+                </div>
+                <div class="p-3 border-t bg-slate-50 flex justify-end gap-2">
+                    <button class="tb-edit px-3 py-1 rounded-md text-sm" data-id="${t.id}">编辑</button>
+                    <button class="tb-delete px-3 py-1 rounded-md text-sm text-rose-600" data-id="${t.id}">删除</button>
+                </div>
+            </div>`;
+        root.appendChild(card);
+    });
+
+    // bind edit/delete
+    document.querySelectorAll('.tb-edit').forEach(b=>b.addEventListener('click',(ev)=>{
+        const id = ev.currentTarget.getAttribute('data-id');
+        const tx = items.find(x=>x.id==id);
+        if(!tx) return;
+        // open modal
+        document.getElementById('tbModal').classList.remove('hidden');
+        document.getElementById('modal_tb_id').value = tx.id;
+        document.getElementById('modal_tb_title').value = tx.title || '';
+        document.getElementById('modal_tb_author').value = tx.author || '';
+        document.getElementById('modal_tb_publisher').value = tx.publisher || '';
+        document.getElementById('modal_tb_isbn').value = tx.isbn || '';
+        try{ document.getElementById('modal_tb_catalog').value = (tx.meta_info && tx.meta_info.catalog) ? tx.meta_info.catalog : ''; }catch(e){}
+    }));
+
+    document.querySelectorAll('.tb-delete').forEach(b=>b.addEventListener('click',(ev)=>{
+        const id = ev.currentTarget.getAttribute('data-id');
+        if(!confirm('确认删除此教材？该操作会解除与课堂的所有关联')) return;
+        fetch('/library/api/textbooks/'+id, {method:'DELETE'}).then(r=>r.json()).then(j=>{ if(j.status==='success'){ alert('删除成功'); loadAndRender(document.getElementById('tbSearch').value); } else alert('删除失败:'+ (j.msg||'')); });
+    }));
+}
+
+function loadAndRender(q=''){
+    fetch('/library/api/textbooks?q=' + encodeURIComponent(q)).then(r=>r.json()).then(j=>{ if(j.status==='success') renderCards(j.data); });
+}
+
+document.getElementById('tbSearch').addEventListener('input', (e)=>{ loadAndRender(e.target.value); });
+loadAndRender();
+
+// Inject edit modal markup
+const modalMarkup = `
+<div id="tbModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center">
+  <div class="bg-white rounded-xl p-6 w-full max-w-lg">
+    <h3 class="text-lg font-bold mb-3">编辑教材</h3>
+    <input type="hidden" id="modal_tb_id" />
+    <div class="space-y-3">
+      <div>
+        <label for="modal_tb_title" class="text-sm font-medium">书名</label>
+        <input id="modal_tb_title" class="w-full rounded-xl border p-2" />
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="modal_tb_author" class="text-sm font-medium">作者</label>
+          <input id="modal_tb_author" class="w-full rounded-xl border p-2" />
+        </div>
+        <div>
+          <label for="modal_tb_publisher" class="text-sm font-medium">出版社</label>
+          <input id="modal_tb_publisher" class="w-full rounded-xl border p-2" />
+        </div>
+      </div>
+      <div>
+        <label for="modal_tb_isbn" class="text-sm font-medium">ISBN</label>
+        <input id="modal_tb_isbn" class="w-full rounded-xl border p-2" />
+      </div>
+      <div>
+        <label for="modal_tb_catalog" class="text-sm font-medium">教材目录</label>
+        <textarea id="modal_tb_catalog" class="w-full rounded-xl border p-2" rows="4"></textarea>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button id="modal_cancel" class="px-4 py-2 rounded-xl border">取消</button>
+      <button id="modal_save" class="px-4 py-2 rounded-xl bg-brand-600 text-white">保存</button>
+    </div>
+  </div>
+</div>`;
+document.body.insertAdjacentHTML('beforeend', modalMarkup);
+
+document.getElementById('modal_cancel').addEventListener('click', ()=>{
+    document.getElementById('tbModal').classList.add('hidden');
+});
+
+document.getElementById('modal_save').addEventListener('click', ()=>{
+    const id = document.getElementById('modal_tb_id').value;
+    const payload = {
+        title: document.getElementById('modal_tb_title').value,
+        author: document.getElementById('modal_tb_author').value,
+        publisher: document.getElementById('modal_tb_publisher').value,
+        isbn: document.getElementById('modal_tb_isbn').value,
+        catalog: document.getElementById('modal_tb_catalog').value
+    };
+    fetch('/library/api/textbooks/' + id, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)})
+        .then(r=>r.json()).then(j=>{
+            if (j.status === 'success'){
+                alert('保存成功'); document.getElementById('tbModal').classList.add('hidden'); loadAndRender(document.getElementById('tbSearch').value);
+            } else {
+                alert('保存失败: ' + (j.msg||''));
+            }
+        });
+});
+</script>
+{% endblock %}
+

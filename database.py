@@ -78,12 +78,38 @@ class Database:
                            id             INTEGER PRIMARY KEY AUTOINCREMENT,
                            name           TEXT,
                            course         TEXT,
+                           semester       TEXT DEFAULT '',       -- 新增：学期，例如 2025-2026-1
+                           hours          INTEGER DEFAULT 0,    -- 学时
+                           credits        REAL    DEFAULT 0.0,  -- 学分
+                           description    TEXT,                  -- 课程简介
                            workspace_path TEXT,
                            strategy       TEXT DEFAULT 'server_config_2025',
                            created_by     INTEGER DEFAULT 1,
                            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                        )
                        ''')
+
+        # 如果数据库是升级场景，classes 表可能已存在，需要添加新列
+        try:
+            existing_cols = [r['name'] for r in conn.execute("PRAGMA table_info(classes)").fetchall()]
+            add_cols = []
+            if 'semester' not in existing_cols:
+                add_cols.append("ALTER TABLE classes ADD COLUMN semester TEXT DEFAULT ''")
+            if 'hours' not in existing_cols:
+                add_cols.append("ALTER TABLE classes ADD COLUMN hours INTEGER DEFAULT 0")
+            if 'credits' not in existing_cols:
+                add_cols.append("ALTER TABLE classes ADD COLUMN credits REAL DEFAULT 0.0")
+            if 'description' not in existing_cols:
+                add_cols.append("ALTER TABLE classes ADD COLUMN description TEXT")
+
+            for a in add_cols:
+                try:
+                    cursor.execute(a)
+                except Exception:
+                    # ignore if cannot add (e.g., already present in some schemas)
+                    pass
+        except Exception:
+            pass
 
         # 3. 学生表 (批改业务)
         cursor.execute('''
@@ -193,6 +219,32 @@ class Database:
                            cohort_tag    TEXT,                 -- 批次标签，如 2401, 240
                            uploaded_by   INTEGER,              -- 上传者ID
                            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                       )
+                       ''')
+
+        # 额外表：教材表
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS textbooks
+                       (
+                           id INTEGER PRIMARY KEY AUTOINCREMENT,
+                           title TEXT NOT NULL,
+                           author TEXT,
+                           publisher TEXT,
+                           isbn TEXT,
+                           meta_info TEXT,
+                           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                       )
+                       ''')
+
+        # 课堂与教材的多对多关联表
+        cursor.execute('''
+                       CREATE TABLE IF NOT EXISTS class_textbooks
+                       (
+                           id INTEGER PRIMARY KEY AUTOINCREMENT,
+                           class_id INTEGER NOT NULL,
+                           textbook_id INTEGER NOT NULL,
+                           FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+                           FOREIGN KEY (textbook_id) REFERENCES textbooks(id) ON DELETE CASCADE
                        )
                        ''')
 
@@ -873,6 +925,18 @@ class Database:
         row = conn.execute("SELECT * FROM classes WHERE id=?", (class_id,)).fetchone()
         return dict(row) if row else None
 
+    def get_class_with_textbooks(self, class_id):
+        """Return class record together with linked textbooks list"""
+        conn = self.get_connection()
+        cls = conn.execute("SELECT * FROM classes WHERE id=?", (class_id,)).fetchone()
+        if not cls:
+            return None
+        textbooks = conn.execute(
+            "SELECT t.* FROM textbooks t JOIN class_textbooks ct ON t.id=ct.textbook_id WHERE ct.class_id=?",
+            (class_id,)
+        ).fetchall()
+        return {**dict(cls), 'textbooks': [dict(t) for t in textbooks]}
+
     def create_class(self, name, course, strategy, user_id, workspace_path=""):
         conn = self.get_connection()
         cur = conn.cursor()
@@ -880,6 +944,92 @@ class Database:
                     (name, course, workspace_path, strategy, user_id))
         conn.commit()
         return cur.lastrowid
+
+    def update_class_details(self, class_id, semester=None, hours=None, credits=None, description=None):
+        conn = self.get_connection()
+        updates = []
+        params = []
+        if semester is not None:
+            updates.append('semester = ?')
+            params.append(semester)
+        if hours is not None:
+            updates.append('hours = ?')
+            params.append(hours)
+        if credits is not None:
+            updates.append('credits = ?')
+            params.append(credits)
+        if description is not None:
+            updates.append('description = ?')
+            params.append(description)
+
+        if not updates:
+            return False
+
+        sql = 'UPDATE classes SET ' + ', '.join(updates) + ' WHERE id = ?'
+        params.append(class_id)
+        conn.execute(sql, params)
+        conn.commit()
+        return True
+
+    # Textbook helpers
+    def create_textbook(self, title, author=None, publisher=None, isbn=None, meta_info=None):
+        conn = self.get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO textbooks (title, author, publisher, isbn, meta_info) VALUES (?, ?, ?, ?, ?)',
+            (title, author, publisher, isbn, meta_info)
+        )
+        conn.commit()
+        return cur.lastrowid
+
+    def get_textbooks(self):
+        conn = self.get_connection()
+        return [dict(r) for r in conn.execute('SELECT * FROM textbooks ORDER BY created_at DESC').fetchall()]
+
+    def add_class_textbook(self, class_id, textbook_id):
+        conn = self.get_connection()
+        conn.execute('INSERT INTO class_textbooks (class_id, textbook_id) VALUES (?, ?)', (class_id, textbook_id))
+        conn.commit()
+        return True
+
+    def delete_class_textbooks(self, class_id):
+        """Remove all textbook links for a class"""
+        conn = self.get_connection()
+        conn.execute('DELETE FROM class_textbooks WHERE class_id=?', (class_id,))
+        conn.commit()
+        return True
+
+    def update_textbook(self, textbook_id, title=None, author=None, publisher=None, isbn=None, meta_info=None):
+        conn = self.get_connection()
+        updates = []
+        params = []
+        if title is not None:
+            updates.append('title=?'); params.append(title)
+        if author is not None:
+            updates.append('author=?'); params.append(author)
+        if publisher is not None:
+            updates.append('publisher=?'); params.append(publisher)
+        if isbn is not None:
+            updates.append('isbn=?'); params.append(isbn)
+        if meta_info is not None:
+            updates.append('meta_info=?'); params.append(meta_info)
+
+        if not updates:
+            return False
+
+        sql = 'UPDATE textbooks SET ' + ', '.join(updates) + ' WHERE id = ?'
+        params.append(textbook_id)
+        conn.execute(sql, params)
+        conn.commit()
+        return True
+
+    def delete_textbook(self, textbook_id):
+        conn = self.get_connection()
+        # remove associations first
+        conn.execute('DELETE FROM class_textbooks WHERE textbook_id=?', (textbook_id,))
+        conn.execute('DELETE FROM textbooks WHERE id=?', (textbook_id,))
+        conn.commit()
+        return True
 
     def delete_class(self, class_id):
         conn = self.get_connection()
